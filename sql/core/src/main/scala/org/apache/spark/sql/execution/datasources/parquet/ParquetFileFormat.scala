@@ -25,6 +25,7 @@ import scala.collection.mutable
 import scala.util.{Failure, Try}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
+import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.parquet.filter2.compat.FilterCompat
@@ -261,14 +262,7 @@ class ParquetFileFormat
       assert(file.partitionValues.numFields == partitionSchema.size)
 
       val filePath = new Path(new URI(file.filePath))
-      val split =
-        new org.apache.parquet.hadoop.ParquetInputSplit(
-          filePath,
-          file.start,
-          file.start + file.length,
-          file.length,
-          Array.empty,
-          null)
+      val split = new FileSplit(filePath, file.start, file.length, Array.empty[String])
 
       val sharedConf = broadcastedHadoopConf.value.value
 
