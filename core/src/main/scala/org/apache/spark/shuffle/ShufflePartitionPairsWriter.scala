@@ -18,20 +18,22 @@
 package org.apache.spark.shuffle
 
 import java.io.{Closeable, IOException, OutputStream}
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.Checksum
 
+import org.apache.spark.TaskContext
 import org.apache.spark.io.MutableCheckedOutputStream
 import org.apache.spark.serializer.{SerializationStream, SerializerInstance, SerializerManager}
 import org.apache.spark.shuffle.api.ShufflePartitionWriter
-import org.apache.spark.storage.{BlockId, TimeTrackingOutputStream}
+import org.apache.spark.storage.{BlockId, DiskBlockManager, SpilledFile, TimeTrackingOutputStream}
 import org.apache.spark.util.Utils
-import org.apache.spark.util.collection.PairsWriter
+import org.apache.spark.util.collection.{PairsWriter, WritablePartitionedIterator}
 
 /**
  * A key-value writer inspired by {@link DiskBlockObjectWriter} that pushes the bytes to an
  * arbitrary partition writer instead of writing to local disk through the block manager.
  */
-private[spark] class ShufflePartitionPairsWriter(
+private[spark] class ShufflePartitionPairsWriter (
     partitionWriter: ShufflePartitionWriter,
     serializerManager: SerializerManager,
     serializerInstance: SerializerInstance,
@@ -61,6 +63,14 @@ private[spark] class ShufflePartitionPairsWriter(
     objOut.writeKey(key)
     objOut.writeValue(value)
     recordWritten()
+  }
+
+  override def spillMemoryIteratorToStorage(inMemoryIterator: WritablePartitionedIterator,
+                                            diskBlockManager: DiskBlockManager, numPartitions: Int,
+                                            diskBytesSpilled: AtomicLong, serializerBatchSize: Long,
+                                            context: Option[TaskContext] = None): SpilledFile = {
+    // do nothing
+    SpilledFile(null, null, Array.empty, Array.empty, None)
   }
 
   private def open(): Unit = {
@@ -142,5 +152,12 @@ private[spark] class ShufflePartitionPairsWriter(
     val bytesWrittenDiff = numBytesWritten - curNumBytesWritten
     writeMetrics.incBytesWritten(bytesWrittenDiff)
     curNumBytesWritten = numBytesWritten
+  }
+
+  override def spillMemoryOnlyMapToStorage(inMemoryIterator: Iterator[(Any, Any)],
+          diskBlockManager: DiskBlockManager, diskBytesSpilled: AtomicLong,
+           serializerBatchSize: Long, context: Option[TaskContext]): Iterator[(Any, Any)] = {
+    // to do nothing
+    Iterator.empty
   }
 }

@@ -118,6 +118,7 @@ private[spark] class ApplicationDataRecord(
     val attemptId: String,
     val submitHost: String,
     val queue: String,
+    val executorNum: Long = 0,
     val diagnosis: String = "",
     val startTime: Long = 0,
     val endTime: Long = 0,

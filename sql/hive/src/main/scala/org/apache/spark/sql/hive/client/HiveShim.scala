@@ -76,14 +76,16 @@ private[client] sealed abstract class Shim {
 
   def setDataLocation(table: Table, loc: String): Unit
 
-  def getAllPartitions(hive: Hive, table: Table): Seq[Partition]
+  def getAllPartitions(hive: Hive, table: Table,
+                       includeUnCommit: Option[Boolean] = None): Seq[Partition]
 
   def getPartitionsByFilter(
       hive: Hive,
       table: Table,
       predicates: Seq[Expression],
       timeZoneId: String,
-      catalogTable: CatalogTable): Seq[Partition]
+      catalogTable: CatalogTable,
+      includeUnCommit: Option[Boolean] = None): Seq[Partition]
 
   def getCommandProcessor(token: String, conf: HiveConf): CommandProcessor
 
@@ -356,7 +358,8 @@ private[client] class Shim_v0_12 extends Shim with Logging {
     }
   }
 
-  override def getAllPartitions(hive: Hive, table: Table): Seq[Partition] =
+  override def getAllPartitions(hive: Hive, table: Table,
+                                includeUnCommit: Option[Boolean] = None): Seq[Partition] =
     getAllPartitionsMethod.invoke(hive, table).asInstanceOf[JSet[Partition]].asScala.toSeq
 
   override def getPartitionsByFilter(
@@ -364,12 +367,13 @@ private[client] class Shim_v0_12 extends Shim with Logging {
       table: Table,
       predicates: Seq[Expression],
       timeZoneId: String,
-      catalogTable: CatalogTable): Seq[Partition] = {
+      catalogTable: CatalogTable,
+      includeUnCommit: Option[Boolean] = None): Seq[Partition] = {
     // getPartitionsByFilter() doesn't support binary comparison ops in Hive 0.12.
     // See HIVE-4888.
     logDebug("Hive 0.12 doesn't support predicate pushdown to metastore. " +
       "Please use Hive 0.13 or higher.")
-    getAllPartitions(hive, table)
+    getAllPartitions(hive, table, includeUnCommit)
   }
 
   override def getCommandProcessor(token: String, conf: HiveConf): CommandProcessor =
@@ -523,13 +527,15 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
     findMethod(
       classOf[Hive],
       "getAllPartitionsOf",
-      classOf[Table])
+      classOf[Table],
+      JBoolean.TYPE)
   private lazy val getPartitionsByFilterMethod =
     findMethod(
       classOf[Hive],
       "getPartitionsByFilter",
       classOf[Table],
-      classOf[String])
+      classOf[String],
+      JBoolean.TYPE)
   private lazy val getCommandProcessorMethod =
     findStaticMethod(
       classOf[CommandProcessorFactory],
@@ -576,8 +582,12 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
     hive.createPartitions(addPartitionDesc)
   }
 
-  override def getAllPartitions(hive: Hive, table: Table): Seq[Partition] =
-    getAllPartitionsMethod.invoke(hive, table).asInstanceOf[JSet[Partition]].asScala.toSeq
+  override def getAllPartitions(hive: Hive, table: Table,
+                                includeUnCommit: Option[Boolean] = None): Seq[Partition] = {
+    val c: Boolean = includeUnCommit.getOrElse(false)
+    getAllPartitionsMethod.invoke(hive, table, c: JBoolean)
+      .asInstanceOf[JSet[Partition]].asScala.toSeq
+  }
 
   private def toHiveFunction(f: CatalogFunction, db: String): HiveFunction = {
     val resourceUris = f.resources.map { resource =>
@@ -899,14 +909,15 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
       table: Table,
       predicates: Seq[Expression],
       timeZoneId: String,
-      catalogTable: CatalogTable): Seq[Partition] = {
+      catalogTable: CatalogTable,
+      includeUnCommit: Option[Boolean] = None): Seq[Partition] = {
     // Hive getPartitionsByFilter() takes a string that represents partition
     // predicates like "str_key=\"value\" and int_key=1 ..."
     val filter = convertFilters(table, predicates, timeZoneId)
 
     val partitions =
       if (filter.isEmpty) {
-        prunePartitionsFastFallback(hive, table, timeZoneId, catalogTable, predicates)
+        prunePartitionsFastFallback(hive, table, timeZoneId, catalogTable, predicates, includeUnCommit)
       } else {
         logDebug(s"Hive metastore filter is '$filter'.")
         val tryDirectSqlConfVar = HiveConf.ConfVars.METASTORE_TRY_DIRECT_SQL
@@ -919,8 +930,9 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
           // Hive may throw an exception when calling this method in some circumstances, such as
           // when filtering on a non-string partition column when the hive config key
           // hive.metastore.try.direct.sql is false
-          getPartitionsByFilterMethod.invoke(hive, table, filter)
-            .asInstanceOf[JArrayList[Partition]]
+          val c: Boolean = includeUnCommit.getOrElse(false)
+          getPartitionsByFilterMethod
+            .invoke(hive, table, filter, c: JBoolean).asInstanceOf[JArrayList[Partition]]
         } catch {
           case ex: InvocationTargetException if ex.getCause.isInstanceOf[MetaException] &&
               !tryDirectSql =>
@@ -935,7 +947,7 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
               s"${SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK_ON_EXCEPTION.key} " +
               " to false and let the query fail instead.", ex)
             // HiveShim clients are expected to handle a superset of the requested partitions
-            prunePartitionsFastFallback(hive, table, timeZoneId, catalogTable, predicates)
+            prunePartitionsFastFallback(hive, table, timeZoneId, catalogTable, predicates, includeUnCommit)
           case ex: InvocationTargetException if ex.getCause.isInstanceOf[MetaException] && tryDirectSql =>
             throw new RuntimeException("Caught Hive MetaException attempting to get partition " +
             "metadata by filter from Hive. You can set the Spark configuration setting " +
@@ -953,7 +965,8 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
       table: Table,
       timeZoneId: String,
       catalogTable: CatalogTable,
-      predicates: Seq[Expression]): java.util.Collection[Partition] = {
+      predicates: Seq[Expression],
+      includeUnCommit: Option[Boolean] = None): java.util.Collection[Partition] = {
     // Because there is no way to know whether the partition properties has timeZone,
     // client-side filtering cannot be used with TimeZoneAwareExpression.
     def hasTimeZoneAwareExpression(e: Expression): Boolean = {
@@ -966,7 +979,9 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
     if (!SQLConf.get.metastorePartitionPruningFastFallback ||
         predicates.isEmpty ||
         predicates.exists(hasTimeZoneAwareExpression)) {
-      getAllPartitionsMethod.invoke(hive, table).asInstanceOf[JSet[Partition]]
+      val c: Boolean = includeUnCommit.getOrElse(false)
+      getAllPartitionsMethod.invoke(hive, table, c: JBoolean)
+        .asInstanceOf[JSet[Partition]]
     } else {
       try {
         val partitionSchema = CharVarcharUtils.replaceCharVarcharWithStringInSchema(
@@ -991,12 +1006,14 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
           val spec = PartitioningUtils.parsePathFragment(p)
           boundPredicate.eval(toRow(spec))
         }
-        hive.getPartitionsByNames(table, partNames.asJava)
+        hive.getPartitionsByNames(table, partNames.asJava, includeUnCommit.getOrElse(false))
       } catch {
         case ex: InvocationTargetException if ex.getCause.isInstanceOf[MetaException] =>
           logWarning("Caught Hive MetaException attempting to get partition metadata by " +
             "filter from client side. Falling back to fetching all partition metadata", ex)
-          getAllPartitionsMethod.invoke(hive, table).asInstanceOf[JSet[Partition]]
+          val c: Boolean = includeUnCommit.getOrElse(false)
+          getAllPartitionsMethod.invoke(hive, table, c: JBoolean)
+            .asInstanceOf[JSet[Partition]]
       }
     }
   }

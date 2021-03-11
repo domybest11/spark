@@ -14,26 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.spark.storage
 
-import java.io.File
+import java.io.IOException
 
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, LocalFileSystem, Path}
 
-/**
- * References a particular segment of a file (potentially the entire file),
- * based off an offset and a length.
- */
-private[spark] class FileSegment(val file: File, val offset: Long, val length: Long,
-                                 path: Option[Path] = None) {
-  require(offset >= 0, s"File segment offset cannot be negative (got $offset)")
-  require(length >= 0, s"File segment length cannot be negative (got $length)")
-  override def toString: String = {
-     if (path.isDefined) {
-       "(name=%s, offset=%d, length=%d)".format(path.get.getName, offset, length)
-     } else {
-       "(name=%s, offset=%d, length=%d)".format(file.getName, offset, length)
-     }
+import org.apache.spark.internal.Logging
+
+object ShuffleStorageUtils extends  Logging{
+
+  @throws[IOException]
+  def getFileSystemForPath(path: Path, conf: Configuration): FileSystem = {
+    try {
+      val fs = path.getFileSystem(conf)
+      if (fs.isInstanceOf[LocalFileSystem]) {
+        logDebug(s"$path is local file system")
+        return fs.asInstanceOf[LocalFileSystem].getRawFileSystem
+      }
+      fs
+    } catch {
+      case e: IOException =>
+        logError(s"Fail to get filesystem of $path.")
+        throw e
+    }
   }
+
 }

@@ -156,7 +156,6 @@ object SparkEnv extends Logging {
   def get: SparkEnv = {
     env
   }
-
   /**
    * Create a SparkEnv for the driver.
    */

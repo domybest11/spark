@@ -17,12 +17,16 @@
 
 package org.apache.spark.scheduler
 
+import java.util.concurrent.atomic.AtomicLong
+
+import scala.collection.mutable
+
 import org.apache.commons.lang3.StringUtils
+
+import org.apache.spark.{SPARK_VERSION, SparkConf}
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ApplicationDataRecord, KafkaProducerUtil, Utils}
-import org.apache.spark.{SPARK_VERSION, SparkConf}
 
-import scala.collection.mutable.HashMap
 
 private[spark] class AppListener(
     appId: String,
@@ -30,8 +34,9 @@ private[spark] class AppListener(
     sparkConf: SparkConf)
   extends SparkListener with Logging {
 
-  private val sqlRules = new HashMap[String, Int]()
+  private val sqlRules = new mutable.HashMap[String, Int]()
   private var maxRequestYarnTime = 0L
+  private val executors = new AtomicLong()
 
   override def onApplicationStart(event: SparkListenerApplicationStart): Unit = {
     val startTime: Long = event.time
@@ -41,6 +46,7 @@ private[spark] class AppListener(
       appAttemptId.getOrElse("0"),
       sparkConf.get("spark.submit.host", ""),
       sparkConf.get("spark.yarn.queue", ""),
+      executors.get(),
       "",
       startTime = startTime,
       driverHost = sparkConf.get("spark.driver.host", ""),
@@ -64,6 +70,7 @@ private[spark] class AppListener(
       appAttemptId.getOrElse("0"),
       sparkConf.get("spark.submit.host", ""),
       sparkConf.get("spark.yarn.queue", ""),
+      executors.get(),
       "",
       endTime = endTime,
       driverHost = sparkConf.get("spark.driver.host", ""),
@@ -74,6 +81,11 @@ private[spark] class AppListener(
       maxRequestYarnTime = maxRequestYarnTime,
       ruleNames = sqlRules
     ))
+  }
+
+
+  override def onExecutorAdded(executorAdded: SparkListenerExecutorAdded): Unit = {
+    executors.getAndAdd(1)
   }
 
   override def onOtherEvent(event: SparkListenerEvent): Unit = event match {

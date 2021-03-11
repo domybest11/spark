@@ -151,4 +151,6 @@ private[spark] object CoarseGrainedClusterMessages {
   case class RequestQueryLog(fetchSize: Int) extends CoarseGrainedClusterMessage
 
   case class RequestQueryStdout(fetchSize: Int) extends CoarseGrainedClusterMessage
+
+  case class RequestQueryLogRegister(host: String) extends CoarseGrainedClusterMessage
 }

@@ -831,7 +831,7 @@ private[spark] class ApplicationMaster(
     extends ThreadSafeRpcEndpoint with Logging {
     var logReader: BufferedReader = _
     var stdoutReader: BufferedReader = _
-    val clients = new mutable.HashSet[RpcAddress]
+    val clients = new mutable.HashSet[String]
 
     var lastConnectedTime: Long = Long.MaxValue
     val timer: Timer = new Timer
@@ -849,16 +849,8 @@ private[spark] class ApplicationMaster(
       }
     }
 
-    override def onConnected(remoteAddress: RpcAddress): Unit = {
-      clients.add(remoteAddress)
-      if (waitClientConnectedLatch.getCount > 0) {
-        waitClientConnectedLatch.countDown()
-      }
-      lastConnectedTime = System.currentTimeMillis()
-    }
-
     override def onNetworkError(cause: Throwable, remoteAddress: RpcAddress): Unit = {
-      if (clients.contains(remoteAddress)) {
+      if (clients.contains(remoteAddress.host)) {
         logError(s"Error connecting to client ($remoteAddress). Cause was: $cause")
         finish(FinalApplicationStatus.FAILED,
           ApplicationMaster.EXIT_CLIENT_NETWORK_ERROR_OR_DISCONNECTED,
@@ -868,7 +860,6 @@ private[spark] class ApplicationMaster(
 
     override def onStart(): Unit = {
       val containerLog = System.getProperty("spark.yarn.app.container.log.dir")
-      lastConnectedTime = System.currentTimeMillis()
       logReader = new BufferedReader(
         new InputStreamReader(new FileInputStream(
           new File(containerLog + "/stderr")
@@ -879,6 +870,7 @@ private[spark] class ApplicationMaster(
           new File(containerLog + "/stdout")
         ))
       )
+      waitClientConnectedLatch.countDown()
       timer.schedule(timerTask, sparkConf.get(REPORT_INTERVAL), sparkConf.get(REPORT_INTERVAL))
     }
 
@@ -892,11 +884,19 @@ private[spark] class ApplicationMaster(
       timer.cancel()
     }
 
+    override def receive: PartialFunction[Any, Unit] = {
+      case RequestQueryLogRegister(client) =>
+        logInfo(s"connected with $client")
+        lastConnectedTime = System.currentTimeMillis()
+    }
+
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
       case RequestQueryLog(fetchSize) =>
+        lastConnectedTime = System.currentTimeMillis()
         val lines = getLog(logReader, fetchSize)
         context.reply(lines.mkString("\n"))
       case RequestQueryStdout(fetchSize) =>
+        lastConnectedTime = System.currentTimeMillis()
         val lines = getLog(stdoutReader, fetchSize)
         context.reply(lines.mkString("\n"))
     }

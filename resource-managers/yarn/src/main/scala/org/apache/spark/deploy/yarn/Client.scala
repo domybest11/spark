@@ -60,7 +60,7 @@ import org.apache.spark.internal.config.Python._
 import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle, YarnCommandBuilderUtils}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef, RpcEnv}
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RequestQueryLog, RequestQueryStdout}
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RequestQueryLog, RequestQueryLogRegister, RequestQueryStdout}
 import org.apache.spark.util.{CallerContext, ThreadUtils, TraceReporter, Utils, YarnContainerInfoHelper}
 
 import scala.concurrent.duration.DurationLong
@@ -1187,7 +1187,7 @@ private[spark] class Client(
     var amPort: Int = -1
     val clientRpcEnv = RpcEnv
       .create("client", Utils.localHostName(), 0,
-        sparkConf, new SecurityManager(sparkConf), true)
+        sparkConf, new SecurityManager(sparkConf), clientMode = true)
 
     var retryCount = 0
     while (retryCount < maxRetry) {
@@ -1222,9 +1222,10 @@ private[spark] class Client(
           if (report.getRpcPort > 0) {
             amHost = report.getHost
             amPort = report.getRpcPort
-            logInfo(s"App Query log connect to host: $amHost port:$amPort")
             queryLogEndPointRef =
-              clientRpcEnv.setupEndpointRef(RpcAddress(amHost, amPort),"QueryLog");
+              clientRpcEnv.setupEndpointRef(RpcAddress(amHost, amPort),"QueryLog")
+            queryLogEndPointRef.send(RequestQueryLogRegister(Utils.localHostName()))
+            logInfo(s"App Query log connect to host: $amHost port:$amPort")
             amInitialized = true
           }
         }

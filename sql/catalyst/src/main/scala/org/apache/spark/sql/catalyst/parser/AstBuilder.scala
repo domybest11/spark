@@ -2019,6 +2019,14 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
   }
 
   /**
+   * Returns whether the pattern is a regex expression (instead of a normal
+   * string). Normal string is a string with all alphabets/digits and "_".
+   */
+  private def isRegex(pattern: String): Boolean = {
+    pattern.exists(p => !Character.isLetterOrDigit(p) && p != '_')
+  }
+
+  /**
    * Create a dereference expression. The return type depends on the type of the parent.
    * If the parent is an [[UnresolvedAttribute]], it can be a [[UnresolvedAttribute]] or
    * a [[UnresolvedRegex]] for regex quoted in ``; if the parent is some other expression,
@@ -2030,7 +2038,8 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
       case unresolved_attr @ UnresolvedAttribute(nameParts) =>
         ctx.fieldName.getStart.getText match {
           case escapedIdentifier(columnNameRegex)
-            if conf.supportQuotedRegexColumnName && canApplyRegex(ctx) =>
+            if conf.supportQuotedRegexColumnName &&
+              isRegex(columnNameRegex) && canApplyRegex(ctx) =>
             UnresolvedRegex(columnNameRegex, Some(unresolved_attr.name),
               conf.caseSensitiveAnalysis)
           case _ =>
@@ -2048,7 +2057,8 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
   override def visitColumnReference(ctx: ColumnReferenceContext): Expression = withOrigin(ctx) {
     ctx.getStart.getText match {
       case escapedIdentifier(columnNameRegex)
-        if conf.supportQuotedRegexColumnName && canApplyRegex(ctx) =>
+        if conf.supportQuotedRegexColumnName &&
+          isRegex(columnNameRegex) && canApplyRegex(ctx) =>
         UnresolvedRegex(columnNameRegex, None, conf.caseSensitiveAnalysis)
       case _ =>
         UnresolvedAttribute.quoted(ctx.getText)
@@ -3114,6 +3124,7 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
     checkDuplicateClauses(ctx.commentSpec(), "COMMENT", ctx)
     checkDuplicateClauses(ctx.bucketSpec(), "CLUSTERED BY", ctx)
     checkDuplicateClauses(ctx.locationSpec, "LOCATION", ctx)
+    checkDuplicateClauses(ctx.TBLPROPERTIES, "LIFECYCLE", ctx)
 
     if (ctx.skewSpec.size > 0) {
       operationNotAllowed("CREATE TABLE ... SKEWED BY", ctx)
@@ -3123,7 +3134,15 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
       Option(ctx.partitioning).map(visitPartitionFieldList).getOrElse((Nil, Nil))
     val bucketSpec = ctx.bucketSpec().asScala.headOption.map(visitBucketSpec)
     val properties = Option(ctx.tableProps).map(visitPropertyKeyValues).getOrElse(Map.empty)
-    val cleanedProperties = cleanTableProperties(ctx, properties)
+    val lifeCycleProp = Option(ctx.lifeCycle).map(lifeCycleContext => {
+      val lifeCycle = if (lifeCycleContext.value.INTEGER_VALUE != null) {
+        Integer.valueOf(lifeCycleContext.value.INTEGER_VALUE().getText)
+      } else {
+        throw new ParseException(s"table life cycle format error", ctx)
+      }
+      Map("table.retention.period" -> lifeCycle.toString)
+    }).getOrElse(Map.empty)
+    val cleanedProperties = cleanTableProperties(ctx, properties ++ lifeCycleProp)
     val options = Option(ctx.options).map(visitPropertyKeyValues).getOrElse(Map.empty)
     val location = visitLocationSpecList(ctx.locationSpec())
     val (cleanedOptions, newLocation) = cleanTableOptions(ctx, options, location)
@@ -3599,6 +3618,26 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
     } else {
       AlterTableSetPropertiesStatement(identifier, cleanedTableProperties)
     }
+  }
+
+  /**
+   * Parse [[AlterTableSetLifeCycleStatement]] commands.
+   *
+   * For example:
+   * {{{
+   *   ALTER TABLE table SET LIFECYCLE tableLifCycle;
+   * }}}
+   */
+  override def visitSetTableLifeCycle(
+      ctx: SetTableLifeCycleContext): LogicalPlan = withOrigin(ctx) {
+    val identifier = visitMultipartIdentifier(ctx.multipartIdentifier)
+    val value = ctx.tableLifCycle.value
+    val lifeCycleDay = if (value.INTEGER_VALUE != null) {
+      Integer.valueOf(value.INTEGER_VALUE().getText)
+    } else {
+      throw new ParseException(s"table life cycle format error", ctx)
+    }
+    AlterTableSetLifeCycleStatement(identifier, lifeCycleDay)
   }
 
   /**

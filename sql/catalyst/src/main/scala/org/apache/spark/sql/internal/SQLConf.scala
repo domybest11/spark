@@ -3134,6 +3134,13 @@ object SQLConf {
       .checkValue(_ >= 0, "The value must be non-negative.")
       .createWithDefault(8)
 
+  val INCLUDE_UN_COMMIT_PART =
+    buildConf("spark.sql.includeUnCommitPart")
+      .internal()
+      .doc("if true, get partition which is not commit for lake house")
+      .booleanConf
+      .createOptional
+
   val OPTIMIZE_NULL_AWARE_ANTI_JOIN =
     buildConf("spark.sql.optimizeNullAwareAntiJoin")
       .internal()

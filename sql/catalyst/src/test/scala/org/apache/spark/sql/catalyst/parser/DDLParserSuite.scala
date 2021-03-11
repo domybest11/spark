@@ -553,6 +553,24 @@ class DDLParserSuite extends AnalysisTest {
     }
   }
 
+  test("create table - LIFECYCLE") {
+    val createSql = "CREATE TABLE my_tab PARTITIONED BY (part string) LIFECYCLE 1"
+    val expectedTableSpec = TableSpec(
+      Seq("my_tab"),
+      Some(new StructType().add("part", StringType)),
+      Seq(IdentityTransform(FieldReference("part"))),
+      None,
+      Map("table.retention.period" -> "1"),
+      None,
+      Map.empty[String, String],
+      None,
+      None,
+      None)
+    Seq(createSql).foreach { sql =>
+      testCreateOrReplaceDdl(sql, expectedTableSpec, expectedIfNotExists = false)
+    }
+  }
+
   test("Unsupported skew clause - create/replace table") {
     intercept("CREATE TABLE my_tab (id bigint) SKEWED BY (id) ON (1,2,3)",
       "CREATE TABLE ... SKEWED BY")
@@ -791,6 +809,15 @@ class DDLParserSuite extends AnalysisTest {
       parsePlan(sql3_table),
       AlterTableUnsetPropertiesStatement(
         Seq("table_name"), Seq("comment", "test"), ifExists = true))
+  }
+
+  test("alter table: alter table life cycle") {
+    val sql1_table = "ALTER TABLE table_name SET LIFECYCLE 1"
+
+    comparePlans(
+      parsePlan(sql1_table),
+      AlterTableSetLifeCycleStatement(
+        Seq("table_name"), 1))
   }
 
   test("alter table: add column") {
