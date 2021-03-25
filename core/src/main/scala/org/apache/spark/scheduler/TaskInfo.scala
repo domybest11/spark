@@ -21,6 +21,8 @@ import org.apache.spark.TaskState
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.annotation.DeveloperApi
 
+import scala.collection.mutable.ListBuffer
+
 /**
  * :: DeveloperApi ::
  * Information about a running task attempt inside a TaskSet.
@@ -53,6 +55,8 @@ class TaskInfo(
    * same name but different IDs to exist in a task.
    */
   def accumulables: Seq[AccumulableInfo] = _accumulables
+
+  val accumulable = ListBuffer[AccumulableInfo]()
 
   private[this] var _accumulables: Seq[AccumulableInfo] = Nil
 
