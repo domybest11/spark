@@ -29,7 +29,7 @@ import scala.collection.Map
 import scala.collection.immutable
 import scala.collection.mutable.HashMap
 import scala.language.implicitConversions
-import scala.reflect.{ClassTag, classTag}
+import scala.reflect.{classTag, ClassTag}
 import scala.util.control.NonFatal
 
 import com.google.common.collect.MapMaker
@@ -52,6 +52,7 @@ import org.apache.spark.internal.config.UI._
 import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.metrics.source.JVMCPUSource
+import org.apache.spark.mysql.{AsyncExecution, CallChain}
 import org.apache.spark.partial.{ApproximateEvaluator, PartialResult}
 import org.apache.spark.rdd._
 import org.apache.spark.resource._
@@ -66,8 +67,8 @@ import org.apache.spark.status.{AppStatusSource, AppStatusStore}
 import org.apache.spark.status.api.v1.ThreadStackTrace
 import org.apache.spark.storage._
 import org.apache.spark.storage.BlockManagerMessages.TriggerThreadDump
-import org.apache.spark.ui.jobs.JobProgressListener
 import org.apache.spark.ui.{ConsoleProgressBar, SparkUI}
+import org.apache.spark.ui.jobs.JobProgressListener
 import org.apache.spark.util._
 import org.apache.spark.util.logging.DriverLogger
 
@@ -316,7 +317,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] val executorEnvs = HashMap[String, String]()
 
   // Set SPARK_USER for user who is running SparkContext.
-  val sparkUser = Utils.getCurrentUserName()
+  var sparkUser = Utils.getCurrentUserName()
 
   private[spark] def schedulerBackend: SchedulerBackend = _schedulerBackend
 
@@ -450,6 +451,7 @@ class SparkContext(config: SparkConf) extends Logging {
       }
     }
 
+    ConfigurationUtil.initConfiguration()
     _listenerBus = new LiveListenerBus(_conf)
     _jobProgressListener = new JobProgressListener(_conf)
     _listenerBus.addToSharedQueue(_jobProgressListener)
@@ -923,6 +925,8 @@ class SparkContext(config: SparkConf) extends Logging {
       path: String,
       minPartitions: Int = defaultMinPartitions): RDD[String] = withScope {
     assertNotStopped()
+    AsyncExecution.AsycnHandle(new CallChain.Event(path, AsyncExecution.getSparkAppName(conf),
+      "path"))
     hadoopFile(path, classOf[TextInputFormat], classOf[LongWritable], classOf[Text],
       minPartitions).map(pair => pair._2.toString).setName(path)
   }

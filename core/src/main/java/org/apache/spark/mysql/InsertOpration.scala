@@ -15,28 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.spark.scheduler
+package org.apache.spark.mysql
 
-import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
+object InsertOpration {
 
-import org.apache.spark.TaskContext
+  def apply(stype: String, etlRespository: CallChain.EtlRespository)
+  = new OprationImpl().apply(etlRespository, stype)
 
-/**
- * A Task implementation that fails to serialize.
- */
-private[spark] class NotSerializableFakeTask(myId: Int, stageId: Int)
-  extends Task[Array[Byte]]("", stageId, 0, 0) {
+  def apply(stype: String, adhocRespository: CallChain.AdhocRespository)
+  = new OprationImpl().apply(adhocRespository, stype)
 
-  override def runTask(context: TaskContext): Array[Byte] = Array.empty[Byte]
-  override def preferredLocations: Seq[TaskLocation] = Seq[TaskLocation]()
+  def apply(content: String, adhocRespository: CallChain.AdhocRespository, line: Boolean)
+  = new OprationImpl().apply(adhocRespository, content, true)
 
-  @throws(classOf[IOException])
-  private def writeObject(out: ObjectOutputStream): Unit = {
-    if (stageId == 0) {
-      throw new IllegalStateException("Cannot serialize")
-    }
-  }
+  def apply(content: String, etlRespository: CallChain.EtlRespository, line: Boolean)
+  = new OprationImpl().apply(etlRespository, content, true)
 
-  @throws(classOf[IOException])
-  private def readObject(in: ObjectInputStream): Unit = {}
 }

@@ -30,6 +30,7 @@ import org.apache.spark.annotation.{DeveloperApi, Experimental, Stable, Unstable
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.{ConfigEntry, EXECUTOR_ALLOW_SPARK_CONTEXT}
+import org.apache.spark.mysql.{AsyncExecution, CallChain}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.scheduler.{SparkListener, SparkListenerApplicationEnd}
 import org.apache.spark.sql.catalog.Catalog
@@ -608,6 +609,8 @@ class SparkSession private(
    * @since 2.0.0
    */
   def sql(sqlText: String): DataFrame = withActive {
+    AsyncExecution.AsycnHandle(new CallChain.Event(sqlText,
+      AsyncExecution.getSparkAppName(sparkContext.conf), "sql"))
     val tracker = new QueryPlanningTracker
     val plan = tracker.measurePhase(QueryPlanningTracker.PARSING) {
       sessionState.sqlParser.parsePlan(sqlText)

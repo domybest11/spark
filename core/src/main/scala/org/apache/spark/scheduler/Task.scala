@@ -56,6 +56,7 @@ import org.apache.spark.util._
  *                  at the same time for a barrier stage.
  */
 private[spark] abstract class Task[T](
+    val user: String,
     val stageId: Int,
     val stageAttemptId: Int,
     val partitionId: Int,

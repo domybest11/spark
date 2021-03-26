@@ -824,6 +824,10 @@ private[spark] class DAGScheduler(
       return new JobWaiter[U](this, jobId, 0, resultHandler)
     }
 
+    if (properties != null) {
+      properties.setProperty("user", Utils.getCurrentUserName())
+    }
+
     assert(partitions.nonEmpty)
     val func2 = func.asInstanceOf[(TaskContext, Iterator[_]) => _]
     val waiter = new JobWaiter[U](this, jobId, partitions.size, resultHandler)
@@ -890,6 +894,7 @@ private[spark] class DAGScheduler(
       timeout: Long,
       properties: Properties): PartialResult[R] = {
     val jobId = nextJobId.getAndIncrement()
+    properties.setProperty("user", Utils.getCurrentUserName())
     if (rdd.partitions.isEmpty) {
       // Return immediately if the job is running 0 tasks
       val time = clock.getTimeMillis()
@@ -1397,6 +1402,7 @@ private[spark] class DAGScheduler(
         return
     }
 
+    val user = if (properties == null) "" else properties.getProperty("user")
     val tasks: Seq[Task[_]] = try {
       val serializedTaskMetrics = closureSerializer.serialize(stage.latestInfo.taskMetrics).array()
       stage match {
@@ -1406,7 +1412,7 @@ private[spark] class DAGScheduler(
             val locs = taskIdToLocations(id)
             val part = partitions(id)
             stage.pendingPartitions += id
-            new ShuffleMapTask(stage.id, stage.latestInfo.attemptNumber,
+            new ShuffleMapTask(user, stage.id, stage.latestInfo.attemptNumber,
               taskBinary, part, locs, properties, serializedTaskMetrics, Option(jobId),
               Option(sc.applicationId), sc.applicationAttemptId, stage.rdd.isBarrier())
           }
@@ -1416,7 +1422,7 @@ private[spark] class DAGScheduler(
             val p: Int = stage.partitions(id)
             val part = partitions(p)
             val locs = taskIdToLocations(id)
-            new ResultTask(stage.id, stage.latestInfo.attemptNumber,
+            new ResultTask(user, stage.id, stage.latestInfo.attemptNumber,
               taskBinary, part, locs, id, properties, serializedTaskMetrics,
               Option(jobId), Option(sc.applicationId), sc.applicationAttemptId,
               stage.rdd.isBarrier())

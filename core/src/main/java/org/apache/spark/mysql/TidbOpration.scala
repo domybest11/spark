@@ -15,28 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.spark.scheduler
+package org.apache.spark.mysql
 
-import java.io.{IOException, ObjectInputStream, ObjectOutputStream}
+abstract class TidbOpration {
 
-import org.apache.spark.TaskContext
+  def insertSqlOrPath(adhoc: CallChain.AdhocRespository, stype: String): Unit
 
-/**
- * A Task implementation that fails to serialize.
- */
-private[spark] class NotSerializableFakeTask(myId: Int, stageId: Int)
-  extends Task[Array[Byte]]("", stageId, 0, 0) {
+  def insertSqlOrPath(etl: CallChain.EtlRespository, stype: String): Unit
 
-  override def runTask(context: TaskContext): Array[Byte] = Array.empty[Byte]
-  override def preferredLocations: Seq[TaskLocation] = Seq[TaskLocation]()
+  def insertBloodLineage(etl: CallChain.EtlRespository, content: String): Unit
 
-  @throws(classOf[IOException])
-  private def writeObject(out: ObjectOutputStream): Unit = {
-    if (stageId == 0) {
-      throw new IllegalStateException("Cannot serialize")
-    }
-  }
+  def insertBloodLineage(adhoc: CallChain.AdhocRespository, content: String): Unit
 
-  @throws(classOf[IOException])
-  private def readObject(in: ObjectInputStream): Unit = {}
+
 }

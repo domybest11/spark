@@ -22,6 +22,7 @@ import java.lang.Thread.UncaughtExceptionHandler
 import java.lang.management.ManagementFactory
 import java.net.{URI, URL}
 import java.nio.ByteBuffer
+import java.security.PrivilegedExceptionAction
 import java.util.{Locale, Properties}
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
@@ -35,6 +36,8 @@ import scala.concurrent.duration._
 import scala.util.control.NonFatal
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
+import org.apache.hadoop.fs.FileSystem
+import org.apache.hadoop.security.UserGroupInformation
 import org.slf4j.MDC
 
 import org.apache.spark._
@@ -489,12 +492,38 @@ private[spark] class Executor(
         } else 0L
         var threwException = true
         val value = Utils.tryWithSafeFinally {
-          val res = task.run(
-            taskAttemptId = taskId,
-            attemptNumber = taskDescription.attemptNumber,
-            metricsSystem = env.metricsSystem,
-            resources = taskDescription.resources,
-            plugins = plugins)
+          val res = if (conf.getBoolean("spark.proxyuser.enabled", false)
+            && task.user != null && !task.user.isEmpty) {
+            val currentUser = UserGroupInformation.getCurrentUser
+            val proxyUser = UserGroupInformation.createProxyUser(task.user, currentUser)
+            try {
+              proxyUser.doAs(new PrivilegedExceptionAction[Any] { // proxyUser
+                def run: Any = {
+                  task.run(
+                    taskAttemptId = taskId,
+                    attemptNumber = taskDescription.attemptNumber,
+                    metricsSystem = env.metricsSystem,
+                    resources = taskDescription.resources,
+                    plugins = plugins)
+                }
+              })
+            } finally {
+              try {
+                FileSystem.closeAllForUGI(proxyUser)
+              } catch {
+                case e: Exception =>
+                  logWarning(e.getMessage)
+              }
+            }
+          } else {
+            task.run(
+              taskAttemptId = taskId,
+              attemptNumber = taskDescription.attemptNumber,
+              metricsSystem = env.metricsSystem,
+              resources = taskDescription.resources,
+              plugins = plugins)
+          }
+
           threwException = false
           res
         } {
