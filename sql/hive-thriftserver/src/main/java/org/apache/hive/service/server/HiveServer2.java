@@ -24,6 +24,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
+import org.apache.curator.framework.imps.DefaultACLProvider;
 import org.apache.hadoop.hive.common.JvmPauseMonitor;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hive.common.util.HiveStringUtils;
@@ -37,7 +38,6 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.curator.framework.CuratorFramework;
 import org.apache.curator.framework.CuratorFrameworkFactory;
-import org.apache.curator.framework.api.ACLProvider;
 import org.apache.curator.framework.recipes.nodes.PersistentEphemeralNode;
 import org.apache.curator.retry.ExponentialBackoffRetry;
 import org.apache.hadoop.hive.ql.util.ZooKeeperHiveHelper;
@@ -51,8 +51,6 @@ import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
-import org.apache.zookeeper.ZooDefs;
-import org.apache.zookeeper.data.ACL;
 import org.json.JSONObject;
 import scala.runtime.AbstractFunction0;
 import scala.runtime.BoxedUnit;
@@ -348,33 +346,6 @@ public class HiveServer2 extends CompositeService {
         }
     }
 
-    /**
-     * ACLProvider for providing appropriate ACLs to CuratorFrameworkFactory
-     */
-    private final ACLProvider zooKeeperAclProvider = new ACLProvider() {
-
-        @Override
-        public List<ACL> getDefaultAcl() {
-            List<ACL> nodeAcls = new ArrayList<ACL>();
-            //if (UserGroupInformation.isSecurityEnabled()) {
-                // Read all to the world
-             //   nodeAcls.addAll(ZooDefs.Ids.READ_ACL_UNSAFE);
-                // Create/Delete/Write/Admin to the authenticated user
-             //   nodeAcls.add(new ACL(ZooDefs.Perms.ALL, ZooDefs.Ids.AUTH_IDS));
-            //} else {
-                // ACLs for znodes on a non-kerberized cluster
-                // Create/Read/Delete/Write/Admin to the world
-                nodeAcls.addAll(ZooDefs.Ids.OPEN_ACL_UNSAFE);
-            //}
-            return nodeAcls;
-        }
-
-        @Override
-        public List<ACL> getAclForPath(String path) {
-            return getDefaultAcl();
-        }
-    };
-
     private void setDeregisteredWithZooKeeper(boolean deregisteredWithZooKeeper) {
         this.deregisteredWithZooKeeper = deregisteredWithZooKeeper;
     }
@@ -434,7 +405,7 @@ public class HiveServer2 extends CompositeService {
         // Use the zooKeeperAclProvider to create appropriate ACLs
         zooKeeperClient =
                 CuratorFrameworkFactory.builder().connectString(zooKeeperEnsemble)
-                        .sessionTimeoutMs(sessionTimeout).aclProvider(zooKeeperAclProvider)
+                        .sessionTimeoutMs(sessionTimeout).aclProvider(new DefaultACLProvider())
                         .retryPolicy(new ExponentialBackoffRetry(baseSleepTime, maxRetries)).build();
         zooKeeperClient.start();
         String parentPath = new StringBuilder(ZooKeeperHiveHelper.ZOOKEEPER_PATH_SEPARATOR)
