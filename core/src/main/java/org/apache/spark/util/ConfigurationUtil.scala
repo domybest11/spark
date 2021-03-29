@@ -4,10 +4,9 @@
  */
 package org.apache.spark.util
 
-import java.io.IOException
 import java.net.InetAddress
 import java.util._
-import java.util.concurrent.{Executors, TimeUnit}
+import java.util.concurrent.Executors
 
 import com.bilibili.config.DeployConfig
 import com.bilibili.config.transport.ConfigTransportConfig
@@ -166,3 +165,42 @@ object ConfigurationUtil extends Logging {
     params.setToken(deployConfig.getToken)
     params
   }
+
+  private def isBlank(s: String) = StringUtils.isBlank(s)
+
+  private def get(map: java.util.Map[String, String], name: String) = map.getOrDefault(name, EMPTY)
+
+  /**
+    * Stop the cleaning thread and wait until the thread has finished running its current task.
+    */
+  def stop(): Unit = {
+    logInfo("Shutting down ConfigurationUtil executor runner.")
+    try {
+      executor.shutdownNow()
+    } catch {
+      case e: InterruptedException =>
+        logWarning("Interrupted while ConfigurationUtil executor to shutdown.", e)
+    }
+  }
+}
+
+/**
+ * 每一分钟清理一次过期缓存
+ */
+class RefreshConfigThread extends Runnable with Logging {
+
+  override def run(): Unit = {
+    try {
+      while (true) {
+        Thread.sleep(ConfigurationUtil.FIVE_MINUTE)
+        val switch = ConfigurationUtil
+          .getSparkCenterConfiguration.getProperty("spark_on_off", "off")
+        if (switch.equals("on")) {
+          ConfigurationUtil.refreshConfiguration()
+        }
+      }
+    } catch {
+      case e: InterruptedException => logInfo("refresh config thread interrupted ", e)
+    }
+  }
+}

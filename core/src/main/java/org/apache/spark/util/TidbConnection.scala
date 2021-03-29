@@ -61,13 +61,14 @@ class TidbConnection extends Logging {
     }
   }
 
-  private def getValue(key: String): Option[String] = Option(ConfigurationUtil.getSparkCenterConfiguration.getProperty(key))
+  private def getValue(key: String): Option[String] =
+    Option(ConfigurationUtil.getSparkCenterConfiguration.getProperty(key))
 
   private def checkArg(list: List[Option[String]]): Unit = list.map(l => check(l))
 
   private def check(arg: Option[String]): Unit = {
     arg match {
-      case Some(s) => s
+      case Some(_) =>
       case None => throw new Exception(arg + " is null")
     }
   }
