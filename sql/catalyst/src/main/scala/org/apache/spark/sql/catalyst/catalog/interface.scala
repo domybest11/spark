@@ -243,7 +243,7 @@ case class CatalogTable(
     lastAccessTime: Long = -1,
     createVersion: String = "",
     properties: Map[String, String] = Map.empty,
-    stats: Option[CatalogStatistics] = None,
+    var stats: Option[CatalogStatistics] = None,
     viewText: Option[String] = None,
     comment: Option[String] = None,
     unsupportedFeatures: Seq[String] = Seq.empty,

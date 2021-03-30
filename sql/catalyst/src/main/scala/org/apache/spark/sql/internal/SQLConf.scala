@@ -380,7 +380,7 @@ object SQLConf {
       "the files of data.")
     .version("1.1.0")
     .bytesConf(ByteUnit.BYTE)
-    .createWithDefaultString("10MB")
+    .createWithDefaultString("25MB")
 
   val LIMIT_SCALE_UP_FACTOR = buildConf("spark.sql.limit.scaleUpFactor")
     .internal()
@@ -2363,6 +2363,10 @@ object SQLConf {
 
   object Replaced {
     val MAPREDUCE_JOB_REDUCES = "mapreduce.job.reduces"
+  }
+
+  object HiveVars {
+    val MAPJOIN_THRESHOLD = "hive.mapjoin.smalltable.filesize"
   }
 
   val CSV_PARSER_COLUMN_PRUNING = buildConf("spark.sql.csv.parser.columnPruning.enabled")
