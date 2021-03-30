@@ -309,6 +309,12 @@ abstract class RDD[T: ClassTag](
     }
   }
 
+  def setPartitions(patitions: Array[Partition]): Unit = {
+    if (patitions != null) {
+      partitions_ = patitions
+    }
+  }
+
   /**
    * Returns the number of partitions of this RDD.
    */
