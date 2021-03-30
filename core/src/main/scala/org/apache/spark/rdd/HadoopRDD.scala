@@ -284,7 +284,13 @@ class HadoopRDD[K, V](
 
       reader =
         try {
-          inputFormat.getRecordReader(split.inputSplit.value, jobConf, Reporter.NULL)
+          if (split.inputSplit.value.getLength != 0) {
+            inputFormat.getRecordReader(split.inputSplit.value, jobConf, Reporter.NULL)
+          } else {
+            logWarning(s"Skipped the file size 0 file: ${split.inputSplit}")
+            finished = true
+            null
+          }
         } catch {
           case e: FileNotFoundException if ignoreMissingFiles =>
             logWarning(s"Skipped missing file: ${split.inputSplit}", e)
