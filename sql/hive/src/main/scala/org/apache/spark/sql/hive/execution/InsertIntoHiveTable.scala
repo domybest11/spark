@@ -17,12 +17,19 @@
 
 package org.apache.spark.sql.hive.execution
 
+import java.util
 import java.util.Locale
 
+import scala.collection.JavaConverters._
+
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.ql.ErrorMsg
+import org.apache.hadoop.hive.ql.exec.Utilities
+import org.apache.hadoop.hive.ql.io.HiveOutputFormat
 import org.apache.hadoop.hive.ql.plan.TableDesc
+import org.apache.hadoop.io.Writable
+import org.apache.hadoop.mapred.{FileOutputFormat, JobConf}
 
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
@@ -36,6 +43,9 @@ import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hive.HiveShim.{ShimFileSinkDesc => FileSinkDesc}
 import org.apache.spark.sql.hive.client.HiveClientImpl
 import org.apache.spark.sql.hive.client.hive._
+import org.apache.spark.sql.hive.merge.MergeUtils
+import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.util.{RpcUtils, SerializableJobConf}
 
 
 /**
@@ -98,7 +108,7 @@ case class InsertIntoHiveTable(
       hiveQlTable.getMetadata
     )
     val tableLocation = hiveQlTable.getDataLocation
-    val tmpLocation = getExternalTmpPath(sparkSession, hadoopConf, tableLocation)
+    var tmpLocation = getExternalTmpPath(sparkSession, hadoopConf, tableLocation)
 
     try {
       processInsert(sparkSession, externalCatalog, hadoopConf, tableDesc, tmpLocation, child)
@@ -119,6 +129,76 @@ case class InsertIntoHiveTable(
     // does not return anything for insert operations.
     // TODO: implement hive compatibility as rules.
     Seq.empty[Row]
+  }
+
+
+  private def mergeFile(
+    path: Path,
+    fs: FileSystem,
+    fileSinkConf: FileSinkDesc,
+    conf: SerializableJobConf,
+    directRenamePathList: java.util.List[String],
+    speculationEnabled: Boolean,
+    retryWaitMs: Long,
+    avgConditionSize: Long,
+    targetFileSize: Long,
+    sparkSession: SparkSession): Unit = {
+    val hiveOutputFormat: HiveOutputFormat[AnyRef, Writable] = conf.value.getOutputFormat
+      .asInstanceOf[HiveOutputFormat[AnyRef, Writable]]
+    val extension = Utilities.getFileExtension(conf.value,
+      fileSinkConf.getCompressed, hiveOutputFormat)
+    val outputClassName = fileSinkConf.getTableInfo.getOutputFileFormatClassName
+    val outputDir = path.toString
+    var tmpMergeLocation = MergeUtils.getExternalMergeTmpPath(path, conf.value)
+    val tmpMergeLocationDir = tmpMergeLocation.toString
+    fileSinkConf.dir = tmpMergeLocation.toString
+    val waitTime = retryWaitMs
+    val numDynamicPartitions = partition.values.count(_.isEmpty)
+    if (numDynamicPartitions > 0) {
+      val mergeRules = MergeUtils.generateDynamicMergeRule(fs, path,
+        conf.value, avgConditionSize, targetFileSize, directRenamePathList)
+      sparkSession.sparkContext.union(mergeRules.map { r =>
+        val groupSize = Math.ceil(r.files.size * 1d / r.numFiles).toInt
+        val groupedFiles = r.files.toArray.grouped(groupSize).map(x => (r.path, x)).toArray
+        MergeUtils.mergePathRDD(sparkSession.sparkContext, groupedFiles, groupedFiles.size)
+      }).foreach { case (partOutputDir, files) =>
+        val tmpPartMergeLocationDir = partOutputDir.replace("-ext-10000", MergeUtils.TEMP_DIR)
+        MergeUtils.mergeAction(conf, outputClassName, files, partOutputDir, tmpPartMergeLocationDir,
+          extension, waitTime)
+      }
+      if (speculationEnabled) {
+        mergeRules.foreach { r =>
+          val specFiles = fs.listStatus(
+            new Path(r.path.toString.replace("-ext-10000", MergeUtils.TEMP_DIR)))
+            .filter(!_.getPath.getName.startsWith("part"))
+          specFiles.foreach(f => fs.delete(f.getPath))
+        }
+      }
+    } else {
+      val numFiles = MergeUtils.getTargetFileNum(path, conf.value,
+        avgConditionSize, targetFileSize)
+      if (numFiles > 0) {
+        val files = fs.listStatus(path).filter(_.getLen > 0).map(_.getPath.toString)
+        val groupSize = Math.ceil(files.size * 1d / numFiles).toInt
+        val groupedFiles = files.grouped(groupSize).toArray
+        fileSinkConf.dir = tmpMergeLocation.toString
+        sparkSession.sparkContext.parallelize(groupedFiles, groupedFiles.size).foreach { files =>
+          MergeUtils.mergeAction(conf, outputClassName, files, outputDir, tmpMergeLocationDir,
+            extension, waitTime)
+        }
+        if (speculationEnabled) {
+          val specFiles = fs.listStatus(tmpMergeLocation)
+            .filter(!_.getPath.getName.startsWith("part"))
+          specFiles.foreach(f => fs.delete(f.getPath))
+        }
+        if (conf.value.getBoolean("mapreduce.fileoutputcommitter.marksuccessfuljobs", true)) {
+          fs.createNewFile(new Path(tmpMergeLocationDir + "/_SUCCESS"))
+        }
+      } else {
+        tmpMergeLocation = path;
+      }
+    }
+    FileOutputFormat.setOutputPath(conf.value, tmpMergeLocation)
   }
 
   private def processInsert(
@@ -211,6 +291,61 @@ case class InsertIntoHiveTable(
       outputLocation = tmpLocation.toString,
       partitionAttributes = partitionAttributes)
 
+    val speculationEnabled = sparkSession.sparkContext.conf.getBoolean("spark.speculation", false)
+    val outputFormatClass = fileSinkConf.getTableInfo.getOutputFileFormatClassName
+    val avgConditionSize: Long = sparkSession.conf.get(SQLConf.MERGE_SMALLFILE_SIZE)
+    val outputAverageSize = sparkSession.conf.get(SQLConf.MERGE_FILE_PER_TASK)
+    val retryWaitMs: Long = RpcUtils.retryWaitMs(sparkSession.sparkContext.conf)
+    val mergeHiveFiles = sparkSession.sessionState.conf.mergeHiveFiles
+    val targetFileSize = Math.max(avgConditionSize, outputAverageSize)
+    val jobConf = new JobConf(hadoopConf)
+    jobConf.setOutputFormat(fileSinkConf.getTableInfo.getOutputFileFormatClass)
+    jobConf.set(MergeUtils.SCHEMA, table.dataSchema.json)
+    FileOutputFormat.setOutputPath(jobConf, tmpLocation)
+
+    if (mergeHiveFiles && targetFileSize > 0 &&
+      MergeUtils.SUPPORTED_FORMAT.contains(outputFormatClass)) {
+      val directRenamePathList = new java.util.ArrayList[String]()
+      val rollbackPathList = new java.util.ArrayList[String]()
+      val fs = tmpLocation.getFileSystem(hadoopConf)
+      try {
+        val ignoreLocalWriter = sparkSession.conf.get(SQLConf.MERGE_FILES_IGNORE_LOCAL_WRITE)
+        if (ignoreLocalWriter) {
+          jobConf.setBoolean("fs.hdfs.impl.disable.cache", true)
+          jobConf.setBoolean("fs.viewfs.impl.disable.cache", true)
+          jobConf.setBoolean("dfs.client.avoid.local.write", true)
+        }
+        mergeFile(tmpLocation, fs, fileSinkConf, new SerializableJobConf(jobConf),
+          directRenamePathList, speculationEnabled, retryWaitMs,
+          avgConditionSize, targetFileSize, sparkSession)
+        if (!directRenamePathList.isEmpty) {
+          directRenamePathList.asScala.foreach { path =>
+            val destPathStr = path.replace("-ext-10000", MergeUtils.TEMP_DIR)
+            rollbackPathList.add(path)
+            logInfo("rename [" + path + " to " + destPathStr + "]")
+            val destPath = new Path(destPathStr)
+            if (!fs.exists(destPath.getParent)) {
+              fs.mkdirs(destPath.getParent)
+            }
+            fs.rename(new Path(path), destPath)
+          }
+        }
+      } catch {
+        case ex: Exception =>
+          logInfo("Merge file of " + tmpLocation + " failed!", ex)
+          fileSinkConf.dir = tmpLocation.toString
+          FileOutputFormat.setOutputPath(jobConf, tmpLocation)
+          if (!rollbackPathList.isEmpty) {
+            rollbackPathList.asScala.foreach { path =>
+              val srcPath = path.replace("-ext-10000", MergeUtils.TEMP_DIR)
+              logInfo("rename [" + srcPath + " to "
+                + path + "]")
+              fs.rename(new Path(srcPath), new Path(path))
+            }
+          }
+      }
+    }
+    val outputPath = FileOutputFormat.getOutputPath(jobConf)
     if (partition.nonEmpty) {
       if (numDynamicPartitions > 0) {
         if (overwrite && table.tableType == CatalogTableType.EXTERNAL) {
@@ -256,7 +391,7 @@ case class InsertIntoHiveTable(
         externalCatalog.loadDynamicPartitions(
           db = table.database,
           table = table.identifier.table,
-          tmpLocation.toString,
+          outputPath.toString,
           partitionSpec,
           overwrite,
           numDynamicPartitions)
@@ -327,7 +462,7 @@ case class InsertIntoHiveTable(
           externalCatalog.loadPartition(
             table.database,
             table.identifier.table,
-            tmpLocation.toString,
+            outputPath.toString,
             partitionSpec,
             isOverwrite = doHiveOverwrite,
             inheritTableSpecs = inheritTableSpecs,
@@ -338,7 +473,7 @@ case class InsertIntoHiveTable(
       externalCatalog.loadTable(
         table.database,
         table.identifier.table,
-        tmpLocation.toString, // TODO: URI
+        outputPath.toString, // TODO: URI
         overwrite,
         isSrcLocal = false)
     }

@@ -314,6 +314,16 @@ object SQLConf {
     .booleanConf
     .createWithDefault(true)
 
+  val MERGE_FILE_PER_TASK = buildConf("spark.sql.hive.merge.size.per.task")
+    .doc("The size of one file")
+    .bytesConf(ByteUnit.BYTE)
+    .createWithDefault(240 * 1024 * 1024)
+
+  val MERGE_SMALLFILE_SIZE = buildConf("spark.sql.hive.merge.smallfile.size")
+    .doc("The average size of smallfile")
+    .bytesConf(ByteUnit.BYTE)
+    .createWithDefault(80 * 1024 * 1024)
+
   val COLUMN_BATCH_SIZE = buildConf("spark.sql.inMemoryColumnarStorage.batchSize")
     .doc("Controls the size of batches for columnar caching.  Larger batch sizes can improve " +
       "memory utilization and compression, but risk OOMs when caching data.")
@@ -336,6 +346,18 @@ object SQLConf {
       .version("3.0.0")
       .booleanConf
       .createWithDefault(false)
+
+  val MERGE_FILES_IGNORE_LOCAL_WRITE =
+    buildConf("spark.sql.mergeFiles.ignoreLocalWrite")
+      .internal()
+      .doc("When true, avoid writing blocks to local node.")
+      .booleanConf
+      .createWithDefault(true)
+
+  val MERGE_HIVEFILES = buildConf("spark.sql.hive.mergeFiles")
+    .doc("Whether to merge files when inserting hive tables.")
+    .booleanConf
+    .createWithDefault(false)
 
   val CACHE_VECTORIZED_READER_ENABLED =
     buildConf("spark.sql.inMemoryColumnarStorage.enableVectorizedReader")
@@ -3241,6 +3263,10 @@ class SQLConf extends Serializable with Logging {
   def cacheVectorizedReaderEnabled: Boolean = getConf(CACHE_VECTORIZED_READER_ENABLED)
 
   def defaultNumShufflePartitions: Int = getConf(SHUFFLE_PARTITIONS)
+
+  def mergeHiveFiles: Boolean = getConf(MERGE_HIVEFILES)
+
+  def mergeFileSize: Long = getConf(MERGE_FILE_PER_TASK)
 
   def numShufflePartitions: Int = {
     if (adaptiveExecutionEnabled && coalesceShufflePartitionsEnabled) {

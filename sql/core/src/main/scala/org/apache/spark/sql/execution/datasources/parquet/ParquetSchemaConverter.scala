@@ -52,8 +52,11 @@ class ParquetToSparkSchemaConverter(
     assumeInt96IsTimestamp = conf.isParquetINT96AsTimestamp)
 
   def this(conf: Configuration) = this(
-    assumeBinaryIsString = conf.get(SQLConf.PARQUET_BINARY_AS_STRING.key).toBoolean,
-    assumeInt96IsTimestamp = conf.get(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key).toBoolean)
+  assumeBinaryIsString = conf.getBoolean(SQLConf.PARQUET_BINARY_AS_STRING.key,
+    SQLConf.PARQUET_BINARY_AS_STRING.defaultValue.get),
+  assumeInt96IsTimestamp = conf.getBoolean(SQLConf.PARQUET_INT96_AS_TIMESTAMP.key,
+    SQLConf.PARQUET_INT96_AS_TIMESTAMP.defaultValue.get)
+  )
 
 
   /**
@@ -309,9 +312,11 @@ class SparkToParquetSchemaConverter(
     outputTimestampType = conf.parquetOutputTimestampType)
 
   def this(conf: Configuration) = this(
-    writeLegacyParquetFormat = conf.get(SQLConf.PARQUET_WRITE_LEGACY_FORMAT.key).toBoolean,
-    outputTimestampType = SQLConf.ParquetOutputTimestampType.withName(
-      conf.get(SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE.key)))
+      writeLegacyParquetFormat = conf.get(SQLConf.PARQUET_WRITE_LEGACY_FORMAT.key,
+        SQLConf.PARQUET_WRITE_LEGACY_FORMAT.defaultValue.get.toString).toBoolean,
+      outputTimestampType = SQLConf.ParquetOutputTimestampType.withName(
+        conf.get(SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE.key,
+        SQLConf.PARQUET_OUTPUT_TIMESTAMP_TYPE.defaultValueString)))
 
   /**
    * Converts a Spark SQL [[StructType]] to a Parquet [[MessageType]].
