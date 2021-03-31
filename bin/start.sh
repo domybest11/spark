@@ -55,7 +55,7 @@ QUEUE=`echo $RESPONSE | python -c 'import json,sys;obj=json.load(sys.stdin);obj2
 echo " queue is $QUEUE "
 
 readonly _APP_NAME=SparkThriftServer
-readonly SPARK_HOME=/data/app/jssz-spark24-ess
+readonly SPARK_HOME=/data/app/jssz-spark31-ess
 PORT=10003
 
 # 启动spark thrift server

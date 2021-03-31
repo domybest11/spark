@@ -9,4 +9,4 @@ cd ${SPARK_HOME}
 # Copied from sbin/start-shuffle-service.sh
 . "${SPARK_HOME}/sbin/spark-config.sh"
 . "${SPARK_HOME}/bin/load-spark-env.sh"
-exec "${SPARK_HOME}/sbin"/spark-daemon.sh start org.apache.spark.deploy.ExternalShuffleService 1
+exec "${SPARK_HOME}/sbin"/spark-daemon.sh run org.apache.spark.deploy.ExternalShuffleService 1

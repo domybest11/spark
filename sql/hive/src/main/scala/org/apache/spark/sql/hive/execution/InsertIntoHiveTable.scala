@@ -195,7 +195,7 @@ case class InsertIntoHiveTable(
           fs.createNewFile(new Path(tmpMergeLocationDir + "/_SUCCESS"))
         }
       } else {
-        tmpMergeLocation = path;
+        tmpMergeLocation = path
       }
     }
     FileOutputFormat.setOutputPath(conf.value, tmpMergeLocation)
