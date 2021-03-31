@@ -401,6 +401,23 @@ class SparkContext(config: SparkConf) extends Logging {
     }
     if (!_conf.contains("spark.app.name")) {
       throw new SparkException("An application name must be set in your configuration")
+    } else {
+      val prefix =
+        if (_conf.contains("spark.app.name.prefix")) {
+          _conf.get("spark.app.name.prefix") + "_"
+        } else {
+          ""
+        }
+
+      val suffix =
+        if (_conf.contains("spark.app.name.suffix")) {
+          _conf.get("spark.app.name.suffix") + "_"
+        } else {
+          ""
+        }
+
+      val newName = s"$prefix${_conf.get("spark.app.name")}$suffix"
+      _conf.setAppName(newName)
     }
 
     _driverLogger = DriverLogger(_conf)
