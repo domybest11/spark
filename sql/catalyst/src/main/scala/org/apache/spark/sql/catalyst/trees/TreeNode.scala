@@ -27,13 +27,14 @@ import org.json4s.JsonAST._
 import org.json4s.JsonDSL._
 import org.json4s.jackson.JsonMethods._
 
+import org.apache.spark.broadcast.BroadcastMode
 import org.apache.spark.sql.catalyst.{AliasIdentifier, IdentifierWithDatabase}
 import org.apache.spark.sql.catalyst.ScalaReflection._
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogStorageFormat, CatalogTable, CatalogTableType, FunctionResource}
 import org.apache.spark.sql.catalyst.errors._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.JoinType
-import org.apache.spark.sql.catalyst.plans.physical.{BroadcastMode, Partitioning}
+import org.apache.spark.sql.catalyst.plans.physical.Partitioning
 import org.apache.spark.sql.catalyst.util.StringUtils.PlanStringConcat
 import org.apache.spark.sql.catalyst.util.truncatedString
 import org.apache.spark.sql.internal.SQLConf
@@ -824,7 +825,7 @@ abstract class TreeNode[BaseType <: TreeNode[BaseType]] extends Product {
     case catalog: CatalogTable => true
     case partition: Partitioning => true
     case resource: FunctionResource => true
-    case broadcast: BroadcastMode => true
+    case broadcast: BroadcastMode[_] => true
     case table: CatalogTableType => true
     case storage: CatalogStorageFormat => true
     case _ => false

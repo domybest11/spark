@@ -21,7 +21,7 @@ import scala.reflect.ClassTag
 
 import org.apache.spark.SecurityManager
 import org.apache.spark.SparkConf
-
+import org.apache.spark.rdd.RDD
 /**
  * An interface for all the broadcast implementations in Spark (to allow
  * multiple broadcast implementations). SparkContext uses a BroadcastFactory
@@ -43,4 +43,19 @@ private[spark] trait BroadcastFactory {
   def unbroadcast(id: Long, removeFromDriver: Boolean, blocking: Boolean): Unit
 
   def stop(): Unit
+
+  /**
+   * Creates a new broadcast variable which is broadcasted on executors without collecting first
+   * to the driver.
+   *
+   * @param rdd the RDD to be broadcasted among executors
+   * @param mode the broadcast mode used to transform the result of RDD to broadcasted object
+   * @param isLocal whether we are in local mode (single JVM process)
+   * @param id unique id representing this broadcast variable
+   */
+  def newBroadcastOnExecutor[T: ClassTag, U: ClassTag](
+      rdd: RDD[T],
+      mode: BroadcastMode[T],
+      isLocal: Boolean,
+      id: Long): Broadcast[U]
 }
