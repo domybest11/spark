@@ -21,13 +21,14 @@ import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Future => JFutu
 import java.util.concurrent.atomic.AtomicLong
 
 import org.apache.spark.SparkContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.Tests.IS_TESTING
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.execution.ui.{SparkListenerSQLExecutionEnd, SparkListenerSQLExecutionStart}
 import org.apache.spark.sql.internal.StaticSQLConf.SQL_EVENT_TRUNCATE_LENGTH
 import org.apache.spark.util.Utils
 
-object SQLExecution {
+object SQLExecution extends Logging {
 
   val EXECUTION_ID_KEY = "spark.sql.execution.id"
 
@@ -68,6 +69,9 @@ object SQLExecution {
     val executionId = SQLExecution.nextExecutionId
     sc.setLocalProperty(EXECUTION_ID_KEY, executionId.toString)
     executionIdToQueryExecution.put(executionId, queryExecution)
+    sc.uiWebUrl.foreach { url =>
+      logInfo(s"SQL execution DAG is $url/SQL/execution/?id=$executionId")
+    }
     try {
       // sparkContext.getCallSite() would first try to pick up any call site that was previously
       // set, then fall back to Utils.getCallSite(); call Utils.getCallSite() directly on
