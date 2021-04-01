@@ -41,6 +41,8 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
     new ConcurrentHashMap[String, MessageLoop]
   private val endpointRefs: ConcurrentMap[RpcEndpoint, RpcEndpointRef] =
     new ConcurrentHashMap[RpcEndpoint, RpcEndpointRef]
+  private val endpointsIsStopped: ConcurrentMap[String, Boolean] =
+    new ConcurrentHashMap[String, Boolean]
 
   private val shutdownLatch = new CountDownLatch(1)
   private lazy val sharedLoop = new SharedMessageLoop(nettyEnv.conf, this, numUsableCores)
@@ -109,6 +111,7 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
         return
       }
       unregisterRpcEndpoint(rpcEndpointRef.name)
+      endpointsIsStopped.putIfAbsent(rpcEndpointRef.name, true)
     }
   }
 
@@ -172,6 +175,8 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
       val loop = endpoints.get(endpointName)
       if (stopped) {
         Some(new RpcEnvStoppedException())
+      } else if (endpointsIsStopped.get(endpointName)) {
+        Some(new RpcEndpointStoppedException(endpointName))
       } else if (loop == null) {
         Some(new SparkException(s"Could not find $endpointName."))
       } else {
