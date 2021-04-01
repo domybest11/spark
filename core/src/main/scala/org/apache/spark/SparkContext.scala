@@ -63,7 +63,7 @@ import org.apache.spark.scheduler.cluster.StandaloneSchedulerBackend
 import org.apache.spark.scheduler.local.LocalSchedulerBackend
 import org.apache.spark.shuffle.ShuffleDataIOUtils
 import org.apache.spark.shuffle.api.ShuffleDriverComponents
-import org.apache.spark.status.{AppStatusSource, AppStatusStore}
+import org.apache.spark.status.{AppStatusSource, AppStatusStore, MetricsListener}
 import org.apache.spark.status.api.v1.ThreadStackTrace
 import org.apache.spark.storage._
 import org.apache.spark.storage.BlockManagerMessages.TriggerThreadDump
@@ -228,6 +228,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _archives: Seq[String] = _
   private var _shutdownHookRef: AnyRef = _
   private var _statusStore: AppStatusStore = _
+  private var _metricsListener: MetricsListener = _
   private var _heartbeater: Heartbeater = _
   private var _resources: immutable.Map[String, ResourceInformation] = _
   private var _shuffleDriverComponents: ShuffleDriverComponents = _
@@ -477,8 +478,11 @@ class SparkContext(config: SparkConf) extends Logging {
     // Initialize the app status store and listener before SparkEnv is created so that it gets
     // all events.
     val appStatusSource = AppStatusSource.createSource(conf)
-    _statusStore = AppStatusStore.createLiveStore(conf, appStatusSource)
+    _statusStore = AppStatusStore.createLiveStore(_conf, appStatusSource)
     listenerBus.addToStatusQueue(_statusStore.listener.get)
+    // Initialize the metrics listener
+    _metricsListener = MetricsListener.createLiveRecord(config)
+    listenerBus.addToStatusQueue(_metricsListener)
 
     // Create the Spark execution environment (cache, map output tracker, etc)
     _env = createSparkEnv(_conf, isLocal, listenerBus)
@@ -2104,6 +2108,9 @@ class SparkContext(config: SparkConf) extends Logging {
       }
       _dagScheduler = null
     }
+    if (_metricsListener != null) {
+      _metricsListener.close()
+    }
     if (_listenerBusStarted) {
       Utils.tryLogNonFatalError {
         listenerBus.stop()
@@ -2152,6 +2159,7 @@ class SparkContext(config: SparkConf) extends Logging {
     ResourceProfile.clearDefaultProfile()
     // Unset YARN mode system env variable, to allow switching between cluster types.
     SparkContext.clearActiveContext()
+    ConfigurationUtil.stop()
     logInfo("Successfully stopped SparkContext")
   }
 
