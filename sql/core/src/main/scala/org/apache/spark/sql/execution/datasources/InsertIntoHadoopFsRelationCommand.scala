@@ -84,6 +84,7 @@ case class InsertIntoHadoopFsRelationCommand(
       sparkSession.sessionState.conf.caseSensitiveAnalysis)
 
     val hadoopConf = sparkSession.sessionState.newHadoopConfWithOptions(options)
+    hadoopConf.set("mapreduce.task.attempt.id", sparkSession.sparkContext.getConf.getAppId)
     val fs = outputPath.getFileSystem(hadoopConf)
     val qualifiedOutputPath = outputPath.makeQualified(fs.getUri, fs.getWorkingDirectory)
 

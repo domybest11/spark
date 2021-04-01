@@ -94,7 +94,7 @@ case class InsertIntoHiveTable(
   override def run(sparkSession: SparkSession, child: SparkPlan): Seq[Row] = {
     val externalCatalog = sparkSession.sharedState.externalCatalog
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
-
+    hadoopConf.set("mapreduce.task.attempt.id", sparkSession.sparkContext.getConf.getAppId)
     val hiveQlTable = HiveClientImpl.toHiveTable(table)
     // Have to pass the TableDesc object to RDD.mapPartitions and then instantiate new serializer
     // instances within the closure, since Serializer is not serializable while TableDesc is.
