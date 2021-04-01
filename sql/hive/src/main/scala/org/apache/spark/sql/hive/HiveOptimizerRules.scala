@@ -120,7 +120,7 @@ case class DependencyCollect(sparkSession: SparkSession) extends Rule[LogicalPla
         case a@InsertIntoHiveTable(table: CatalogTable, _, _, _, _, _) =>
           writeTables += s"${fillBlankDatabase(table)}.${table.identifier.table}"
           a
-        case i@InsertIntoTable(table: HiveTableRelation, _, _, _, _) =>
+        case i@InsertIntoStatement(table: HiveTableRelation, _, _, _, _, _) =>
           writeTables += s"${table.tableMeta.database}.${table.tableMeta.identifier.table}"
           i
         case c@CreateTable(table: CatalogTable, _, _) =>
