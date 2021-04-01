@@ -1042,6 +1042,10 @@ private[hive] object HiveClientImpl extends Logging {
    * Converts the native table metadata representation format CatalogTable to Hive's Table.
    */
   def toHiveTable(table: CatalogTable, userName: Option[String] = None): HiveTable = {
+    var user: Option[String] = userName
+    if (SessionState.getSessionConf.getBoolean("spark.proxyuser.enabled", false)) {
+      user = Option.apply(UserGroupInformation.getCurrentUser.getShortUserName)
+    }
     val hiveTable = new HiveTable(table.database, table.identifier.table)
     hiveTable.setTableType(toHiveTableType(table.tableType))
     // For EXTERNAL_TABLE, we also need to set EXTERNAL field in the table properties.
@@ -1056,7 +1060,7 @@ private[hive] object HiveClientImpl extends Logging {
     }
     hiveTable.setFields(schema.asJava)
     hiveTable.setPartCols(partCols.asJava)
-    Option(table.owner).filter(_.nonEmpty).orElse(userName).foreach(hiveTable.setOwner)
+    Option(table.owner).filter(_.nonEmpty).orElse(user).foreach(hiveTable.setOwner)
     hiveTable.setCreateTime(MILLISECONDS.toSeconds(table.createTime).toInt)
     hiveTable.setLastAccessTime(MILLISECONDS.toSeconds(table.lastAccessTime).toInt)
     table.storage.locationUri.map(CatalogUtils.URIToString).foreach { loc =>
