@@ -759,7 +759,8 @@ private[spark] class Client(
       // Also upload metrics.properties to distributed cache if exists in classpath.
       // If user specify this file using --files then executors will use the one
       // from --files instead.
-      for { prop <- Seq("log4j.properties", "metrics.properties")
+      for { prop <- Seq("log4j.properties", "log4j-driver.properties",
+        "log4j-executor.properties", "metrics.properties")
             url <- Option(Utils.getContextOrSparkClassLoader.getResource(prop))
             if url.getProtocol == "file" } {
         val file = new File(url.getPath())
