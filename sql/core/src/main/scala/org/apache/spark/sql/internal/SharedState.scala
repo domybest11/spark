@@ -32,6 +32,7 @@ import org.apache.spark.{SparkConf, SparkContext, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.CacheManager
+import org.apache.spark.sql.execution.status.{SqlAppStatusScheduler, SqlAppStoreStatusStoreV1}
 import org.apache.spark.sql.execution.streaming.StreamExecution
 import org.apache.spark.sql.execution.ui.{SQLAppStatusListener, SQLAppStatusStore, SQLTab, StreamingQueryStatusStore}
 import org.apache.spark.sql.internal.StaticSQLConf._
@@ -94,11 +95,26 @@ private[sql] class SharedState(
    * [[org.apache.spark.scheduler.SparkListenerEvent]]s.
    */
   val statusStore: SQLAppStatusStore = {
-    val kvStore = sparkContext.statusStore.store.asInstanceOf[ElementTrackingStore]
-    val listener = new SQLAppStatusListener(conf, kvStore, live = true)
-    sparkContext.listenerBus.addToStatusQueue(listener)
-    val statusStore = new SQLAppStatusStore(kvStore, Some(listener))
-    sparkContext.ui.foreach(new SQLTab(statusStore, _))
+    var statusStore: SQLAppStatusStore = null
+    val enableThriftServer = sparkContext.conf.getBoolean("spark.thriftserver.model.enabled", false)
+    if (enableThriftServer) {
+      val kvStore = sparkContext.statusStore.store.asInstanceOf[ElementTrackingStore]
+      val listener = new SQLAppStatusListener(sparkContext.conf, kvStore, live = true)
+      sparkContext.listenerBus.addToStatusQueue(listener)
+      statusStore = new SQLAppStatusStore(kvStore, Some(listener))
+      sparkContext.ui.foreach(new SQLTab(statusStore, _))
+    } else {
+      val sqlAppStatusScheduler = new SqlAppStatusScheduler(sparkContext)
+      val kvStore = sparkContext.statusStore.store.asInstanceOf[ElementTrackingStore]
+      val listener = new SQLAppStatusListener(sparkContext.conf, kvStore, live = true,
+        Some(sqlAppStatusScheduler._executionInfoQueue))
+      sparkContext.listenerBus.addToStatusQueue(listener)
+      statusStore = new SQLAppStatusStore(kvStore, Some(listener))
+      sparkContext.ui.foreach(new SQLTab(statusStore, _))
+      val sqlAppStatusStoreV1 = new SqlAppStoreStatusStoreV1(Some(statusStore),
+        Some(sparkContext.statusStore), sparkContext.conf)
+      sqlAppStatusScheduler.start(sqlAppStatusStoreV1)
+    }
     statusStore
   }
 

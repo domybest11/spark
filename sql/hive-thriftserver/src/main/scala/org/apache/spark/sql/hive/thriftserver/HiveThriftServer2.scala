@@ -18,7 +18,10 @@
 package org.apache.spark.sql.hive.thriftserver
 
 import java.util.Locale
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
+
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import org.apache.hadoop.hive.common.ServerUtils
 import org.apache.hadoop.hive.conf.HiveConf
@@ -33,6 +36,8 @@ import org.apache.spark.internal.config.UI.UI_ENABLED
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.hive.thriftserver.ReflectionUtils._
+import org.apache.spark.sql.hive.thriftserver.status.{SQLJobData, ThriftServerAppStatusScheduler,
+  ThriftServerSqlAppStatusStore}
 import org.apache.spark.sql.hive.thriftserver.ui._
 import org.apache.spark.status.ElementTrackingStore
 import org.apache.spark.util.{ShutdownHookManager, Utils}
@@ -70,8 +75,15 @@ object HiveThriftServer2 extends Logging {
   private def createListenerAndUI(server: HiveThriftServer2, sc: SparkContext): Unit = {
     val kvStore = sc.statusStore.store.asInstanceOf[ElementTrackingStore]
     eventManager = new HiveThriftServer2EventManager(sc)
-    listener = new HiveThriftServer2Listener(kvStore, sc.conf, Some(server))
+    // listener = new HiveThriftServer2Listener(kvStore, sc.conf, Some(server))
+    val thriftServerSqlStatusStore = new ThriftServerSqlAppStatusStore(
+      Some(SparkSQLEnv.sqlContext.sharedState.statusStore),
+      Some(SparkSQLEnv.sparkContext.statusStore), SparkSQLEnv.sparkContext.conf)
+    server.appStatusScheduler.start(thriftServerSqlStatusStore)
+    listener = new HiveThriftServer2Listener(kvStore, sc.conf, Some(server),
+      server.appStatusScheduler._executionInfoQueue)
     sc.listenerBus.addToStatusQueue(listener)
+    server.appStatusScheduler.setThriftServerListener(listener)
     uiTab = if (sc.getConf.get(UI_ENABLED)) {
       Some(new ThriftServerTab(new HiveThriftServer2AppStatusStore(kvStore, Some(listener)),
         ThriftServerTab.getSparkUI(sc)))
@@ -127,6 +139,7 @@ private[hive] class HiveThriftServer2(sqlContext: SQLContext)
   // state is tracked internally so that the server only attempts to shut down if it successfully
   // started, and then once only.
   private val started = new AtomicBoolean(false)
+  val appStatusScheduler = new ThriftServerAppStatusScheduler()
 
   override def init(hiveConf: HiveConf): Unit = {
     val sparkSqlCliService = new SparkSQLCLIService(this, sqlContext)
@@ -169,6 +182,11 @@ private[hive] class HiveThriftServer2(sqlContext: SQLContext)
         ConfVars.HIVE_SERVER2_SUPPORT_DYNAMIC_SERVICE_DISCOVERY)) {
         invoke(classOf[HiveServer2], this, "removeServerInstanceFromZooKeeper")
       }
+      appStatusScheduler._executionInfoQueue.put(ThriftServerAppStatusScheduler.POISON_PILL)
+      if (Thread.currentThread() != appStatusScheduler.sendOnceMetricKafkaThread) {
+        appStatusScheduler.sendOnceMetricKafkaThread.join()
+      }
+      appStatusScheduler.sinkService.shutdown()
 
       super.stop()
     }

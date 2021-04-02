@@ -17,7 +17,7 @@
 package org.apache.spark.sql.execution.ui
 
 import java.util.{Arrays, Date, NoSuchElementException}
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
@@ -36,7 +36,9 @@ import org.apache.spark.util.collection.OpenHashMap
 class SQLAppStatusListener(
     conf: SparkConf,
     kvstore: ElementTrackingStore,
-    live: Boolean) extends SparkListener with Logging {
+    live: Boolean,
+    executionQueue: Option[LinkedBlockingQueue[SQLExecutionUIData]] = None)
+  extends SparkListener with Logging {
 
   // How often to flush intermediate state of a live execution to the store. When replaying logs,
   // never flush (only do the very last write).
@@ -321,6 +323,21 @@ class SQLAppStatusListener(
     exec.physicalPlanDescription = physicalPlanDescription
     exec.metrics = sqlPlanMetrics
     exec.submissionTime = time
+    if (executionQueue.isDefined) {
+      val executionUIData = new SQLExecutionUIData(
+        exec.executionId,
+        exec.description,
+        exec.details,
+        exec.physicalPlanDescription,
+        exec.metrics,
+        exec.submissionTime,
+        exec.completionTime,
+        exec.jobs,
+        exec.stages,
+        exec.metricsValues
+      )
+      executionQueue.get.offer(executionUIData)
+    }
     update(exec)
   }
 
@@ -366,6 +383,23 @@ class SQLAppStatusListener(
         exec.metricsValues = aggregateMetrics(exec)
         removeStaleMetricsData(exec)
         exec.endEvents.incrementAndGet()
+        if (executionQueue.isDefined) {
+          val executionUIData = new SQLExecutionUIData(
+            exec.executionId,
+            exec.description,
+            exec.details,
+            exec.physicalPlanDescription,
+            exec.metrics,
+            exec.submissionTime,
+            exec.completionTime,
+            exec.jobs,
+            exec.stages,
+            exec.metricsValues
+          )
+          exec.finishAndReport = true
+          executionUIData.finishAndReport = true
+          executionQueue.get.offer(executionUIData)
+        }
         update(exec, force = true)
       }
     }
@@ -431,7 +465,15 @@ class SQLAppStatusListener(
     }
 
     val view = kvstore.view(classOf[SQLExecutionUIData]).index("completionTime").first(0L)
-    val toDelete = KVUtils.viewToSeq(view, countToDelete.toInt)(_.completionTime.isDefined)
+
+    var toDelete : Seq[SQLExecutionUIData] = null
+    if (executionQueue.isDefined) {
+      toDelete = KVUtils.viewToSeq(view, countToDelete.toInt)(executionUIData =>
+        executionUIData.completionTime.isDefined && executionUIData.finishAndReport)
+    } else {
+      toDelete = KVUtils.viewToSeq(view, countToDelete.toInt)(_.completionTime.isDefined)
+    }
+
     toDelete.foreach { e =>
       kvstore.delete(e.getClass(), e.executionId)
       kvstore.delete(classOf[SparkPlanGraphWrapper], e.executionId)
@@ -458,9 +500,10 @@ private class LiveExecutionData(val executionId: Long) extends LiveEntity {
   // Just in case job end and execution end arrive out of order, keep track of how many
   // end events arrived so that the listener can stop tracking the execution.
   val endEvents = new AtomicInteger()
+  @volatile var finishAndReport = false
 
   override protected def doUpdate(): Any = {
-    new SQLExecutionUIData(
+    val sqlExecutionUIData = new SQLExecutionUIData(
       executionId,
       description,
       details,
@@ -471,6 +514,8 @@ private class LiveExecutionData(val executionId: Long) extends LiveEntity {
       jobs,
       stages,
       metricsValues)
+    sqlExecutionUIData.finishAndReport = finishAndReport
+    sqlExecutionUIData
   }
 
 }

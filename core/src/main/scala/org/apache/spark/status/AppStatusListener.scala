@@ -65,6 +65,11 @@ private[spark] class AppStatusListener(
    */
   private val liveUpdateMinFlushPeriod = conf.get(LIVE_ENTITY_UPDATE_MIN_FLUSH_PERIOD)
 
+  /**
+   * Periodically clear the live entity to avoid premature removal of the live entity in memory.
+   */
+  private val liveEntityCleanUpPeriod = conf.get(LIVE_ENTITY_CLEAN_UP_PERIOD)
+
   private val maxTasksPerStage = conf.get(MAX_RETAINED_TASKS_PER_STAGE)
   private val maxGraphRootNodes = conf.get(MAX_RETAINED_ROOT_NODES)
 
@@ -86,6 +91,12 @@ private[spark] class AppStatusListener(
 
   /** The last time when flushing `LiveEntity`s. This is to avoid flushing too frequently. */
   private var lastFlushTimeNs = System.nanoTime()
+
+  /** The last time when cleaning up Jobs. This is to avoid cleaning up Jobs too frequently. */
+  private var lastCleanUpJob = System.nanoTime()
+
+  /** The last time when cleaning up Stages. This is to avoid cleaning up Stages too frequently. */
+  private var lastCleanUpStage = System.nanoTime()
 
   kvstore.addTrigger(classOf[ExecutorSummaryWrapper], conf.get(MAX_RETAINED_DEAD_EXECUTORS))
     { count => cleanupExecutors(count) }
@@ -1232,7 +1243,8 @@ private[spark] class AppStatusListener(
 
   private def cleanupJobs(count: Long): Unit = {
     val countToDelete = calculateNumberToRemove(count, conf.get(MAX_RETAINED_JOBS))
-    if (countToDelete <= 0L) {
+    if (countToDelete <= 0L
+      || System.nanoTime() - lastCleanUpJob <= liveEntityCleanUpPeriod) {
       return
     }
 
@@ -1241,11 +1253,13 @@ private[spark] class AppStatusListener(
       j.info.status != JobExecutionStatus.RUNNING && j.info.status != JobExecutionStatus.UNKNOWN
     }
     toDelete.foreach { j => kvstore.delete(j.getClass(), j.info.jobId) }
+    lastCleanUpJob = System.nanoTime()
   }
 
   private def cleanupStages(count: Long): Unit = {
     val countToDelete = calculateNumberToRemove(count, conf.get(MAX_RETAINED_STAGES))
-    if (countToDelete <= 0L) {
+    if (countToDelete <= 0L
+      || System.nanoTime() - lastCleanUpStage <= liveEntityCleanUpPeriod) {
       return
     }
 
@@ -1290,6 +1304,7 @@ private[spark] class AppStatusListener(
 
     // Delete tasks for all stages in one pass, as deleting them for each stage individually is slow
     kvstore.removeAllByIndexValues(classOf[TaskDataWrapper], TaskIndexNames.STAGE, stageIds)
+    lastCleanUpStage = System.nanoTime()
   }
 
   private def cleanupTasks(stage: LiveStage): Unit = {

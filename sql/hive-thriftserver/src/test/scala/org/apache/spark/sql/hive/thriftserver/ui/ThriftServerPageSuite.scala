@@ -53,7 +53,7 @@ class ThriftServerPageSuite extends SparkFunSuite with BeforeAndAfter {
     val statusStore = new HiveThriftServer2AppStatusStore(kvstore, Some(listener))
 
     listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionid", "user",
-      System.currentTimeMillis()))
+      System.currentTimeMillis(), "sessionType"))
     listener.onOtherEvent(SparkListenerThriftServerOperationStart("id", "sessionid",
       "dummy query", "groupid", System.currentTimeMillis(), "user"))
     listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "dummy plan"))

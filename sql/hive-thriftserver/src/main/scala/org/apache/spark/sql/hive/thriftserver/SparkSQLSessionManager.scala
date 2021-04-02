@@ -57,8 +57,13 @@ private[hive] class SparkSQLSessionManager(hiveServer: HiveServer2, sqlContext: 
           delegationToken)
     try {
       val session = super.getSession(sessionHandle)
+      val sessionType = if (session.getHiveConf.get("spark.app.name") != null) {
+        session.getHiveConf.get("spark.app.name")
+      } else {
+        ""
+      }
       HiveThriftServer2.eventManager.onSessionCreated(
-        session.getIpAddress, sessionHandle.getSessionId.toString, session.getUsername)
+        session.getIpAddress, sessionHandle.getSessionId.toString, session.getUsername, sessionType)
       val ctx = if (sqlContext.conf.hiveThriftServerSingleSession) {
         sqlContext
       } else {

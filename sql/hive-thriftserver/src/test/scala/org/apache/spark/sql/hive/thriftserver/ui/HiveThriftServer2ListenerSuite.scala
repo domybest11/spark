@@ -47,7 +47,7 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
       listener: HiveThriftServer2Listener) = createAppStatusStore(live)
 
       listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId",
-        "user", System.currentTimeMillis()))
+        "user", System.currentTimeMillis(), "sessionType"))
       listener.onOtherEvent(SparkListenerThriftServerOperationStart("id", "sessionId",
         "dummy query", "groupId", System.currentTimeMillis(), "user"))
       listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "dummy plan"))
@@ -91,16 +91,16 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
       listener: HiveThriftServer2Listener) = createAppStatusStore(true)
       var time = 0
       listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId1",
-        "user", time))
+        "user", time, "sessionType1"))
       time += 1
       listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId2",
-        "user", time))
+        "user", time, "sessionType2"))
       time += 1
       listener.onOtherEvent(SparkListenerThriftServerSessionClosed("sessionId1", time))
       time += 1
       listener.onOtherEvent(SparkListenerThriftServerSessionClosed("sessionId2", time))
       listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId3",
-        "user", time))
+        "user", time, "sessionType3"))
       time += 1
       listener.onOtherEvent(SparkListenerThriftServerSessionClosed("sessionId3", time))
 
@@ -119,7 +119,7 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
     listener: HiveThriftServer2Listener) = createAppStatusStore(true)
 
     listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId", "user",
-      System.currentTimeMillis()))
+      System.currentTimeMillis(), "sessionType"))
     listener.onOtherEvent(SparkListenerThriftServerOperationStart("id", "sessionId", "dummy query",
       "groupId", System.currentTimeMillis(), "user"))
     listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "dummy plan"))

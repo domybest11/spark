@@ -38,6 +38,12 @@ private[spark] object Status {
     .timeConf(TimeUnit.NANOSECONDS)
     .createWithDefaultString("1s")
 
+  val LIVE_ENTITY_CLEAN_UP_PERIOD = ConfigBuilder("spark.ui.liveEntity.CleanUpPeriod")
+    .doc("Periodically clear the live entity to avoid premature removal of the live entity" +
+      " in memory.")
+    .timeConf(TimeUnit.NANOSECONDS)
+    .createWithDefaultString("120s")
+
   val MAX_RETAINED_JOBS = ConfigBuilder("spark.ui.retainedJobs")
     .version("1.2.0")
     .intConf
