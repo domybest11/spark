@@ -659,7 +659,7 @@ case class HiveHash(children: Seq[Expression]) extends HashExpression[Int] {
 
   override def dataType: DataType = IntegerType
 
-  override def prettyName: String = "hive-hash"
+  override def prettyName: String = "hive_hash"
 
   override protected def hasherClassName: String = classOf[HiveHasher].getName
 
