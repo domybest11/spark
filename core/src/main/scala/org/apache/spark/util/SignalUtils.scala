@@ -16,12 +16,15 @@
  */
 
 package org.apache.spark.util
+import java.io.{ByteArrayOutputStream, PrintStream}
+import java.nio.charset.Charset
 
 import java.util.Collections
 
 import scala.collection.JavaConverters._
 
 import org.apache.commons.lang3.SystemUtils
+import org.apache.hadoop.util.ReflectionUtils
 import org.slf4j.Logger
 import sun.misc.{Signal, SignalHandler}
 
@@ -40,6 +43,11 @@ private[spark] object SignalUtils extends Logging {
     if (!loggerRegistered) {
       Seq("TERM", "HUP", "INT").foreach { sig =>
         SignalUtils.register(sig) {
+          if (sig.equalsIgnoreCase("TERM")) {
+            val buffer = new ByteArrayOutputStream()
+            ReflectionUtils.printThreadInfo(new PrintStream(buffer), "dumpstack")
+            log.info(buffer.toString(Charset.defaultCharset().name()))
+          }
           log.error("RECEIVED SIGNAL " + sig)
           false
         }
