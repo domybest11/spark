@@ -208,6 +208,10 @@ private[spark] class DAGScheduler(
   /** If enabled, FetchFailed will not cause stage retry, in order to surface the problem. */
   private val disallowStageRetryForTest = sc.getConf.get(TEST_NO_STAGE_RETRY)
 
+  private val maxAllowTaskCountInOneStage = sc.getConf.getInt(
+    "spark.max.allow.taskcount.inOneStage", -1
+  )
+
   private val shouldMergeResourceProfiles = sc.getConf.get(config.RESOURCE_PROFILE_MERGE_CONFLICTS)
 
   /**
@@ -1296,6 +1300,15 @@ private[spark] class DAGScheduler(
 
     // Figure out the indexes of partition ids to compute.
     val partitionsToCompute: Seq[Int] = stage.findMissingPartitions()
+
+    if(maxAllowTaskCountInOneStage > 0
+      && partitionsToCompute.size > maxAllowTaskCountInOneStage) {
+      abortStage(stage, "Task creation failed: task total count is too large in one stage, " +
+        s"task count:${partitionsToCompute.size}. " +
+        s"max allow count:${maxAllowTaskCountInOneStage}", None)
+      return
+    }
+
 
     // Use the scheduling pool, job group, description, etc. from an ActiveJob associated
     // with this Stage
