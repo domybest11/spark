@@ -556,6 +556,12 @@ object SQLConf {
       .stringConf
       .createOptional
 
+  val ENABLE_FALL_BACK_TO_SMJ = buildConf("spark.sql.broadcast.fallBackToSMJ")
+    .doc("if broadcast join failed with oom, use smj")
+    .booleanConf
+    .createWithDefault(false)
+
+
   val SUBEXPRESSION_ELIMINATION_ENABLED =
     buildConf("spark.sql.subexpressionElimination.enabled")
       .internal()
@@ -3383,6 +3389,8 @@ class SQLConf extends Serializable with Logging {
 
   def subexpressionEliminationCacheMaxEntries: Int =
     getConf(SUBEXPRESSION_ELIMINATION_CACHE_MAX_ENTRIES)
+
+  def enableFallBackToSMJ: Boolean = getConf(ENABLE_FALL_BACK_TO_SMJ)
 
   def autoBroadcastJoinThreshold: Long = getConf(AUTO_BROADCASTJOIN_THRESHOLD)
 

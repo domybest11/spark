@@ -24,16 +24,15 @@ import java.util.concurrent.{Executors, RejectedExecutionException, TimeUnit}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.hive.metastore.api.FieldSchema
 import org.apache.hadoop.hive.shims.Utils
 import org.apache.hive.service.cli._
 import org.apache.hive.service.cli.operation.ExecuteStatementOperation
 import org.apache.hive.service.cli.session.HiveSession
-
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{DataFrame, Row => SparkRow, SQLContext}
-import org.apache.spark.sql.execution.HiveResult.{getTimeFormatters, toHiveString, TimeFormatters}
+import org.apache.spark.sql.{DataFrame, SQLContext, Row => SparkRow}
+import org.apache.spark.sql.execution.HiveResult.{TimeFormatters, getTimeFormatters, toHiveString}
+import org.apache.spark.sql.execution.command.SetCommand
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.VariableSubstitution
 import org.apache.spark.sql.types._
@@ -46,6 +45,7 @@ private[hive] class SparkExecuteStatementOperation(
     statement: String,
     confOverlay: JMap[String, String],
     runInBackground: Boolean = true,
+    sessionToActivePool: JMap[SessionHandle, String],
     queryTimeout: Long)
   extends ExecuteStatementOperation(parentSession, statement, confOverlay, runInBackground)
   with SparkOperation
@@ -322,8 +322,18 @@ private[hive] class SparkExecuteStatementOperation(
       }
 
       sqlContext.sparkContext.setJobGroup(statementId, substitutorStatement)
+      val pool = sessionToActivePool.get(parentSession.getSessionHandle)
+      if (pool != null) {
+        sqlContext.sparkContext.setLocalProperty("spark.scheduler.pool", pool)
+      }
       result = sqlContext.sql(statement)
       logDebug(result.queryExecution.toString())
+      result.queryExecution.logical match {
+        case SetCommand(Some((SQLConf.THRIFTSERVER_POOL.key, Some(value)))) =>
+          sessionToActivePool.put(parentSession.getSessionHandle, value)
+          logInfo(s"Setting spark.scheduler.pool=$value for future statements in this session.")
+        case _ =>
+      }
       HiveThriftServer2.eventManager.onStatementParsed(statementId,
         result.queryExecution.toString())
       iter = {
@@ -352,13 +362,17 @@ private[hive] class SparkExecuteStatementOperation(
           // This may happen if the execution was cancelled, and then closed from another thread.
           logWarning(s"Ignore exception in terminal state with $statementId: $e")
         } else {
-          logError(s"Error executing query with $statementId, currentState $currentState, ", e)
-          setState(OperationState.ERROR)
-          HiveThriftServer2.eventManager.onStatementError(
-            statementId, e.getMessage, SparkUtils.exceptionString(e))
-          e match {
-            case _: HiveSQLException => throw e
-            case _ => throw new HiveSQLException("Error running query: " + e.toString, e)
+          if (sqlContext.conf.enableFallBackToSMJ &&
+            e.getCause.isInstanceOf[OutOfMemoryError] &&
+            e.getCause.getMessage.contains(
+              "Not enough memory to build and broadcast the table to all worker nodes")) {
+            broadcastOOMFallToSMJ(statementId)
+          } else {
+            logError(s"Error executing query, currentState $currentState, ", e)
+            setState(OperationState.ERROR)
+            HiveThriftServer2.eventManager.onStatementError(
+              statementId, e.getMessage, SparkUtils.exceptionString(e))
+            throw new HiveSQLException(e.toString)
           }
         }
     } finally {
@@ -406,6 +420,56 @@ private[hive] class SparkExecuteStatementOperation(
       sqlContext.sparkContext.cancelJobGroup(statementId)
     }
   }
+
+  private def broadcastOOMFallToSMJ(statementId: String): Unit = {
+    logInfo(s"When the broadcast memory overflows, " +
+      s"it is being converted to SMJ query '$statement' with $statementId")
+    try {
+      sqlContext.setConf("spark.sql.autoBroadcastJoinThreshold", "-1")
+      result = sqlContext.sql(statement)
+      logDebug(result.queryExecution.toString())
+      result.queryExecution.logical match {
+        case SetCommand(Some((SQLConf.THRIFTSERVER_POOL.key, Some(value)))) =>
+          sessionToActivePool.put(parentSession.getSessionHandle, value)
+          logInfo(s"Setting spark.scheduler.pool=$value for future statements in this session.")
+        case _ =>
+      }
+      HiveThriftServer2.eventManager.onStatementParsed(statementId, result.queryExecution.toString())
+      iter = {
+        if (sqlContext.getConf(SQLConf.THRIFTSERVER_INCREMENTAL_COLLECT.key).toBoolean) {
+          resultList = None
+          result.toLocalIterator.asScala
+        } else {
+          resultList = Some(result.collect())
+          resultList.get.iterator
+        }
+      }
+      dataTypes = result.queryExecution.analyzed.output.map(_.dataType).toArray
+    } catch {
+      case e: HiveSQLException =>
+        if (getStatus().getState() == OperationState.CANCELED) {
+          return
+        } else {
+          setState(OperationState.ERROR)
+          HiveThriftServer2.eventManager.onStatementError(
+            statementId, e.getMessage, SparkUtils.exceptionString(e))
+          throw e
+        }
+      // Actually do need to catch Throwable as some failures don't inherit from Exception and
+      // HiveServer will silently swallow them.
+      case e: Throwable =>
+        val currentState = getStatus().getState()
+        logError(s"Error executing query, currentState $currentState, ", e)
+        setState(OperationState.ERROR)
+        HiveThriftServer2.eventManager.onStatementError(
+          statementId, e.getMessage, SparkUtils.exceptionString(e))
+        throw new HiveSQLException(e.toString)
+    }
+    setState(OperationState.FINISHED)
+    HiveThriftServer2.eventManager.onStatementFinish(statementId)
+  }
+
+
 }
 
 object SparkExecuteStatementOperation {

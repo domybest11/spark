@@ -37,7 +37,7 @@ private[thriftserver] class SparkSQLOperationManager()
 
   val handleToOperation = ReflectionUtils
     .getSuperField[JMap[OperationHandle, Operation]](this, "handleToOperation")
-
+  val sessionToActivePool = new ConcurrentHashMap[SessionHandle, String]()
   val sessionToContexts = new ConcurrentHashMap[SessionHandle, SQLContext]()
 
   override def newExecuteStatementOperation(
@@ -52,7 +52,7 @@ private[thriftserver] class SparkSQLOperationManager()
     val conf = sqlContext.sessionState.conf
     val runInBackground = async && conf.getConf(HiveUtils.HIVE_THRIFT_SERVER_ASYNC)
     val operation = new SparkExecuteStatementOperation(
-      sqlContext, parentSession, statement, confOverlay, runInBackground, queryTimeout)
+      sqlContext, parentSession, statement, confOverlay, runInBackground, sessionToActivePool, queryTimeout)
     handleToOperation.put(operation.getHandle, operation)
     logDebug(s"Created Operation for $statement with session=$parentSession, " +
       s"runInBackground=$runInBackground")
