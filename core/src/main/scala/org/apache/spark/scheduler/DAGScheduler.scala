@@ -933,6 +933,10 @@ private[spark] class DAGScheduler(
       throw new SparkException("Can't run submitMapStage on RDD with 0 partitions")
     }
 
+    if (properties != null) {
+      properties.setProperty("user", Utils.getCurrentUserName())
+    }
+
     // We create a JobWaiter with only one "task", which will be marked as complete when the whole
     // map stage has completed, and will be passed the MapOutputStatistics for that stage.
     // This makes it easier to avoid race conditions between the user code and the map output
