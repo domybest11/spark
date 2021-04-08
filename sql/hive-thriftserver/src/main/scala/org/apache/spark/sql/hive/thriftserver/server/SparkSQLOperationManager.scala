@@ -47,6 +47,7 @@ private[thriftserver] class SparkSQLOperationManager()
       async: Boolean,
       queryTimeout: Long): ExecuteStatementOperation = synchronized {
     val sqlContext = sessionToContexts.get(parentSession.getSessionHandle)
+    sqlContext.sessionState.catalog.externalCatalog = sqlContext.sharedState.externalCatalog
     require(sqlContext != null, s"Session handle: ${parentSession.getSessionHandle} has not been" +
       s" initialized or had already closed.")
     val conf = sqlContext.sessionState.conf
