@@ -21,7 +21,7 @@ import java.io.{FileSystem => _, _}
 import java.net.{InetAddress, URI, UnknownHostException}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.util.{Locale, Properties, UUID}
+import java.util.{Calendar, Locale, Properties, UUID}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
 import scala.collection.JavaConverters._
@@ -37,10 +37,12 @@ import org.apache.hadoop.io.Text
 import org.apache.hadoop.mapreduce.MRJobConfig
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.util.StringUtils
+import org.apache.hadoop.ipc.RPC
 import org.apache.hadoop.yarn.api._
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment
 import org.apache.hadoop.yarn.api.protocolrecords._
 import org.apache.hadoop.yarn.api.records._
+import org.apache.hadoop.yarn.client.ClientRMProxy
 import org.apache.hadoop.yarn.client.api.{YarnClient, YarnClientApplication}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationNotFoundException
@@ -58,7 +60,7 @@ import org.apache.spark.internal.config.Python._
 import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle, YarnCommandBuilderUtils}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.RpcEnv
-import org.apache.spark.util.{CallerContext, Utils, YarnContainerInfoHelper}
+import org.apache.spark.util.{CallerContext, Utils, YarnContainerInfoHelper, SQLAppStatusReporter}
 
 private[spark] class Client(
     val args: ClientArguments,
@@ -205,6 +207,9 @@ private[spark] class Client(
       yarnClient.submitApplication(appContext)
       launcherBackend.setAppId(appId.toString)
       reportLauncherState(SparkAppHandle.State.SUBMITTED)
+      val traceId = sparkConf.get("spark.trace.id", "")
+      val queueName = sparkConf.get("spark.yarn.queue", "default")
+      printQueueInfo(hadoopConf, traceId, queueName)
 
       appId
     } catch {
@@ -213,6 +218,104 @@ private[spark] class Client(
           cleanupStagingDir()
         }
         throw e
+    }
+  }
+
+  def printQueueInfo(conf: Configuration, traceId: String, queueName: String): Unit = {
+    var rmClient: ApplicationClientProtocol = null
+    val action = "resource"
+    try {
+      var currentQueueName = queueName
+      rmClient = ClientRMProxy.createRMProxy(conf, classOf[ApplicationClientProtocol])
+      if (!currentQueueName.startsWith("root")) {
+        currentQueueName = "root." + currentQueueName
+      }
+      val reporter = SQLAppStatusReporter.createAppStatusReporter(sparkConf)
+      val queues = currentQueueName.split("\\.")
+      var request = Records.newRecord(classOf[GetQueueInfoRequest])
+      request.setQueueName("root")
+      request.setIncludeApplications(false)
+      request.setIncludeChildQueues(false)
+      request.setRecursive(false)
+      var queueInfo = rmClient.getQueueInfo(request).getQueueInfo
+      var queueStat = queueInfo.getQueueStatistics
+      val cpuUsage = (queueStat.getAllocatedVCores * 100.0) /
+        (queueStat.getAllocatedVCores + queueStat.getAvailableVCores)
+      var queueVCoreUsageStr = s"root队列CPU资源使用率${Math.round(cpuUsage)}%" +
+        s"(${queueStat.getAllocatedVCores} / " +
+        s"${queueStat.getAllocatedVCores + queueStat.getAvailableVCores})"
+      val memoryUsage = (queueStat.getAllocatedMemoryMB * 100.0) /
+        (queueStat.getAllocatedMemoryMB + queueStat.getAvailableMemoryMB)
+      var queueMemoryUsageStr = s"内存资源使用率${Math.round(memoryUsage)}%" +
+        s"(${queueStat.getAllocatedMemoryMB} / " +
+        s"${queueStat.getAllocatedMemoryMB + queueStat.getAvailableMemoryMB})"
+      var usageStr = s"${queueVCoreUsageStr}, ${queueMemoryUsageStr}"
+      if (cpuUsage > 80 || memoryUsage > 80) {
+        usageStr += "。集群比较忙碌，请耐心等待！"
+      }
+      logInfo(usageStr)
+      if (traceId.length > 0) {
+        reporter.postEvent(Some(traceId), action, "", usageStr, System.currentTimeMillis())
+      }
+      // get user queue
+      request.setQueueName(currentQueueName)
+      request.setIncludeApplications(false)
+      request.setIncludeChildQueues(false)
+      request.setRecursive(false)
+      queueInfo = rmClient.getQueueInfo(request).getQueueInfo
+      queueStat = queueInfo.getQueueStatistics
+      val pendingAppStr = s"当前队列等待任务：${queueStat.getNumAppsPending}"
+      queueVCoreUsageStr = s"当前job执行队列${queueName}CPU资源已用${queueStat.getAllocatedVCores}，" +
+        s"等待的资源需求${queueStat.getPendingVCores}"
+      var usedMemory = queueStat.getAllocatedMemoryMB * 1.0 / 1024 / 1024
+      var pendingMemory = queueStat.getPendingMemoryMB * 1.0 / 1024 / 1024
+      queueMemoryUsageStr = s"内存资源已用${usedMemory.formatted("%.2f")}TB，" +
+        s"等待的资源需求${pendingMemory.formatted("%.2f")}TB"
+      val user = UserGroupInformation.getCurrentUser.getUserName
+      val url = s"http://luckbear.bilibili.co/#/resource/compute?queue=$currentQueueName&user=$user"
+      val defailStr = s"<a href='${url}' target='_blank' style='color:#409EFF'>查看详情</a>"
+      usageStr = s"${queueVCoreUsageStr}, ${queueMemoryUsageStr}, ${pendingAppStr}, ${defailStr}"
+      logInfo(usageStr)
+      val hour = Calendar.getInstance.get(Calendar.HOUR_OF_DAY)
+      val hourStart = sparkConf.getInt("spark.job.limit.hour.start", 0)
+      val hourEnd = sparkConf.getInt("spark.job.limit.hour.end", 12)
+      if (queueName.contains("manual") && (hour >= hourStart && hour < hourEnd)) {
+        usageStr += ", 当前时段正在限流!!!"
+      }
+      if (traceId.length > 0) {
+        reporter.postEvent(Some(traceId), action, "", usageStr, System.currentTimeMillis())
+      }
+
+      // get department queue
+      if (queues.length > 2) {
+        request = Records.newRecord(classOf[GetQueueInfoRequest])
+        val dQueueName = queues(0) + "." + queues(1)
+        request.setQueueName(dQueueName)
+        request.setIncludeApplications(false)
+        request.setIncludeChildQueues(false)
+        request.setRecursive(false)
+        queueInfo = rmClient.getQueueInfo(request).getQueueInfo
+        queueStat = queueInfo.getQueueStatistics
+        queueVCoreUsageStr = s"部门队列${dQueueName}CPU资源已用${queueStat.getAllocatedVCores}，" +
+          s"等待的资源需求${queueStat.getPendingVCores}"
+        var usedMemory = queueStat.getAllocatedMemoryMB * 1.0 / 1024 / 1024
+        var pendingMemory = queueStat.getPendingMemoryMB * 1.0 / 1024 / 1024
+        queueMemoryUsageStr = s"内存资源已用${usedMemory.formatted("%.2f")}TB，" +
+          s"等待的资源需求${pendingMemory.formatted("%.2f")}TB"
+        usageStr = queueVCoreUsageStr + ", " + queueMemoryUsageStr
+        logInfo(usageStr)
+        if (traceId.length > 0) {
+          reporter.postEvent(Some(traceId), action, "", usageStr, System.currentTimeMillis())
+        }
+      }
+    } catch {
+      case e: Exception =>
+        logError("Get queue info failed", e)
+    } finally {
+      if (rmClient != null) {
+        RPC.stopProxy(rmClient)
+      }
+      rmClient = null
     }
   }
 

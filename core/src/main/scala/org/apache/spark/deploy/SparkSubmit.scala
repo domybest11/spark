@@ -819,6 +819,7 @@ private[spark] class SparkSubmit extends Logging {
 
     // Ignore invalid spark.driver.host in cluster modes.
     if (deployMode == CLUSTER) {
+      sparkConf.set("spark.submit.host", Utils.localCanonicalHostName())
       sparkConf.remove(DRIVER_HOST_ADDRESS)
     }
 
