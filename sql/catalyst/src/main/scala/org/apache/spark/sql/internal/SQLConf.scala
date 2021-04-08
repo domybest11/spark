@@ -1935,6 +1935,14 @@ object SQLConf {
       .intConf
       .createWithDefault(ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH)
 
+  val COMBINE_HIVE_INPUT_SPLITS_ENABLED =
+    buildConf("spark.sql.combine.hive.input.splits.enabled")
+      .internal()
+      .doc("When this parameter is enabled, it means that when reading the hive table, " +
+        "it will automatically merge small files.")
+      .booleanConf
+      .createWithDefault(false)
+
   val SORT_MERGE_JOIN_EXEC_BUFFER_SPILL_THRESHOLD =
     buildConf("spark.sql.sortMergeJoinExec.buffer.spill.threshold")
       .internal()
@@ -3611,6 +3619,8 @@ class SQLConf extends Serializable with Logging {
   def ansiEnabled: Boolean = getConf(ANSI_ENABLED)
 
   def nestedSchemaPruningEnabled: Boolean = getConf(NESTED_SCHEMA_PRUNING_ENABLED)
+
+  def combineHiveInputSplitsEnabled: Boolean = getConf(COMBINE_HIVE_INPUT_SPLITS_ENABLED)
 
   def serializerNestedSchemaPruningEnabled: Boolean =
     getConf(SERIALIZER_NESTED_SCHEMA_PRUNING_ENABLED)
