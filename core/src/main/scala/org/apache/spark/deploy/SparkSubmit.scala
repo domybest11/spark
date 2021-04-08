@@ -822,6 +822,12 @@ private[spark] class SparkSubmit extends Logging {
       sparkConf.remove(DRIVER_HOST_ADDRESS)
     }
 
+    if (sparkConf.contains("spark.executorEnv.EXECUTOR_PRINCIPAL")) {
+      val principal = sparkConf.get("spark.executorEnv.EXECUTOR_PRINCIPAL")
+        .replace("_HOST", Utils.localCanonicalHostName())
+      sparkConf.set("spark.executorEnv.EXECUTOR_PRINCIPAL", principal)
+    }
+
     // Resolve paths in certain spark properties
     val pathConfigs = Seq(
       JARS.key,
