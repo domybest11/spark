@@ -493,11 +493,6 @@
       <artifactId>commons-crypto</artifactId>
     </dependency>
     <dependency>
-      <groupId>mysql</groupId>
-      <artifactId>mysql-connector-java</artifactId>
-      <version>5.1.47</version>
-    </dependency>
-    <dependency>
       <groupId>org.apache.hudi</groupId>
       <artifactId>hudi-spark-bundle_2.11</artifactId>
       <version>0.5.1-incubating</version>
