@@ -20,6 +20,8 @@ package org.apache.spark.sql.execution
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Future => JFuture}
 import java.util.concurrent.atomic.AtomicLong
 
+import org.apache.commons.lang3.SerializationUtils
+
 import org.apache.spark.SparkContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.Tests.IS_TESTING
@@ -104,7 +106,7 @@ object SQLExecution extends Logging {
             // will be caught and reported in the `SparkListenerSQLExecutionEnd`
             sparkPlanInfo = SparkPlanInfo.fromSparkPlan(queryExecution.executedPlan),
             time = System.currentTimeMillis(),
-            sc.getLocalProperties,
+            SerializationUtils.clone(sc.getLocalProperties),
             sc.getLocalProperty("spark.trace.sqlIdentifier")))
           body
         } catch {
