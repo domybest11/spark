@@ -178,7 +178,8 @@ private[hive] class HiveClientImpl(
     // got changed. We reset it to clientLoader.ClassLoader here.
     state.getConf.setClassLoader(clientLoader.classLoader)
     val tokenProvider = new HiveDelegationTokenProvider()
-    if (tokenProvider.delegationTokensRequired(sparkConf, hiveAndHadoopConf._2)) {
+    val useSasl = hiveConf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL)
+    if (useSasl && tokenProvider.delegationTokensRequired(sparkConf, hiveAndHadoopConf._2)) {
       val credentials = new Credentials()
       val principalKey = "hive.metastore.kerberos.principal"
       val principal = hiveConf.getTrimmed(principalKey, "")
