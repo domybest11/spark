@@ -21,6 +21,8 @@ import java.io.Closeable
 import java.util.concurrent.TimeUnit._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
+import org.apache.commons.lang3.SerializationUtils
+
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
@@ -44,6 +46,7 @@ import org.apache.spark.sql.connector.ExternalCommandRunner
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.command.ExternalCommandExecutor
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
+import org.apache.spark.sql.execution.ui.{SparkListenerSQLAnalysisEnd, SparkListenerSQLAnalysisStart}
 import org.apache.spark.sql.internal._
 import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
 import org.apache.spark.sql.sources.BaseRelation
@@ -611,11 +614,26 @@ class SparkSession private(
   def sql(sqlText: String): DataFrame = withActive {
     AsyncExecution.AsycnHandle(new CallChain.Event(sqlText,
       AsyncExecution.getSparkAppName(sparkContext.conf), "sql"))
+    sharedState
+    sparkContext.setLocalProperty("spark.trace.sqlIdentifier", sqlText)
+    val copyOfProperties = SerializationUtils.clone(sparkContext.getLocalProperties)
+    sparkContext.listenerBus.post(SparkListenerSQLAnalysisStart(sqlText, System.currentTimeMillis(),
+      copyOfProperties))
     val tracker = new QueryPlanningTracker
     val plan = tracker.measurePhase(QueryPlanningTracker.PARSING) {
       sessionState.sqlParser.parsePlan(sqlText)
     }
-    Dataset.ofRows(self, plan, tracker)
+    try {
+      val dataFrame = Dataset.ofRows(self, plan, tracker)
+      sparkContext.listenerBus.post(SparkListenerSQLAnalysisEnd(sqlText, System.currentTimeMillis(),
+        copyOfProperties))
+      dataFrame
+    } catch {
+      case e: Throwable =>
+        sparkContext.listenerBus.post(SparkListenerSQLAnalysisEnd(sqlText,
+          System.currentTimeMillis(), copyOfProperties, Option(e.getMessage)))
+        throw e
+    }
   }
 
   /**

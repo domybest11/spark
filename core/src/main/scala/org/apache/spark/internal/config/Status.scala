@@ -69,6 +69,26 @@ private[spark] object Status {
     .intConf
     .createWithDefault(Int.MaxValue)
 
+  val TRACE_REPORTER_ENABLED = ConfigBuilder("spark.traceReporter.enabled")
+    .booleanConf
+    .createWithDefault(false)
+
+  val TRACE_REPORTER_APP = ConfigBuilder("spark.traceReporter.app")
+    .stringConf
+    .createWithDefault("task_trace")
+
+  val TRACE_REPORTER_SOURCE = ConfigBuilder("spark.traceReporter.source")
+    .stringConf
+    .createWithDefault("spark_trace")
+
+  val TRACE_REPORTER_LOG_ID = ConfigBuilder("spark.traceReporter.logId")
+    .stringConf
+    .createWithDefault(null)
+
+  val TRACE_REPORTER_LANCER_URL = ConfigBuilder("spark.lancer.url")
+    .stringConf
+    .createWithDefault(null)
+
   val METRICS_APP_STATUS_SOURCE_ENABLED =
     ConfigBuilder("spark.metrics.appStatusSource.enabled")
       .doc("Whether Dropwizard/Codahale metrics " +

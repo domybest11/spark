@@ -103,7 +103,9 @@ object SQLExecution extends Logging {
             // `queryExecution.executedPlan` triggers query planning. If it fails, the exception
             // will be caught and reported in the `SparkListenerSQLExecutionEnd`
             sparkPlanInfo = SparkPlanInfo.fromSparkPlan(queryExecution.executedPlan),
-            time = System.currentTimeMillis()))
+            time = System.currentTimeMillis(),
+            sc.getLocalProperties,
+            sc.getLocalProperty("spark.trace.sqlIdentifier")))
           body
         } catch {
           case e: Throwable =>
@@ -126,6 +128,7 @@ object SQLExecution extends Logging {
     } finally {
       executionIdToQueryExecution.remove(executionId)
       sc.setLocalProperty(EXECUTION_ID_KEY, oldExecutionId)
+      sc.setLocalProperty("spark.trace.sqlIdentifier", null)
     }
   }
 

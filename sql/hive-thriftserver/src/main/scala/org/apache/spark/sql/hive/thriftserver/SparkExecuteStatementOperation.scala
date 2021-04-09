@@ -338,6 +338,14 @@ private[hive] class SparkExecuteStatementOperation(
         parentSession.getSessionState.getConf.setClassLoader(executionHiveClassLoader)
       }
 
+      val traceId = sqlContext.sparkSession.conf.getOption("archer.trace.id")
+        .orElse(Option(parentSession.getHiveConf.get("archer.trace.id")))
+      if (traceId.isDefined) {
+        logInfo(s"Query with trace id $traceId")
+        sqlContext.sparkContext.setLocalProperty("spark.trace.id", traceId.get)
+      }
+      sqlContext.sparkContext.setLocalProperty("spark.trace.ignored",
+        if (statement.toUpperCase.startsWith("SET")) "true" else "false")
       sqlContext.sparkContext.setJobGroup(statementId, substitutorStatement)
       result = sqlContext.sql(statement)
       logDebug(result.queryExecution.toString())

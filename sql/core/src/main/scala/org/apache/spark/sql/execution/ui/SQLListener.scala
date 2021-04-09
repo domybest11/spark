@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.execution.ui
 
+import java.util.Properties
+
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.JavaType
 import com.fasterxml.jackson.databind.`type`.TypeFactory
@@ -47,7 +49,9 @@ case class SparkListenerSQLExecutionStart(
     details: String,
     physicalPlanDescription: String,
     sparkPlanInfo: SparkPlanInfo,
-    time: Long)
+    time: Long,
+    properties: Properties = null,
+    sqlText: String = null)
   extends SparkListenerEvent
 
 @DeveloperApi
@@ -82,6 +86,20 @@ case class SparkListenerDriverAccumUpdates(
     @JsonDeserialize(contentConverter = classOf[LongLongTupleConverter])
     accumUpdates: Seq[(Long, Long)])
   extends SparkListenerEvent
+
+case class SparkListenerSQLAnalysisStart(
+    sqlText: String,
+    time: Long,
+    properties: Properties = null)
+  extends SparkListenerEvent
+
+case class SparkListenerSQLAnalysisEnd(
+    sqlText: String,
+    time: Long,
+    properties: Properties = null,
+    failureReason: Option[String] = None)
+  extends SparkListenerEvent
+
 
 /**
  * Jackson [[Converter]] for converting an (Int, Int) tuple into a (Long, Long) tuple.
