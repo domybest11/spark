@@ -650,6 +650,16 @@ private[spark] class AppStatusListener(
       return
     }
 
+    event.taskInfo.accumulables.foreach { acc =>
+      if (acc.name.contains(TaskMetrics.DATA_SKEW_KEYS)) {
+        val skewKeys = acc.update.get.asInstanceOf[java.util.List[(String, String)]]
+        if (!skewKeys.isEmpty) {
+          logInfo(s"Task completion event found data skew keys ${skewKeys.toString}" +
+            s" in stage ${event.stageId} task ${event.taskInfo.taskId}")
+        }
+      }
+    }
+
     val now = System.nanoTime()
 
     val metricsDelta = liveTasks.remove(event.taskInfo.taskId).map { task =>
@@ -939,6 +949,14 @@ private[spark] class AppStatusListener(
           esummary.metrics = LiveEntityHelpers.addMetrics(esummary.metrics, delta)
           maybeUpdate(esummary, now)
         }
+
+        accumUpdates.foreach {acc => if (acc.name.contains(TaskMetrics.DATA_SKEW_KEYS)) {
+          val skewKeys = acc.update.get.asInstanceOf[java.util.List[(String, String)]]
+          if (!skewKeys.isEmpty) {
+            logInfo(s"Executor heartbeat found data skew keys ${skewKeys.toString}" +
+              s" in stage $sid task $taskId")
+          }
+        }}
       }
     }
 

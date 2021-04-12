@@ -91,14 +91,18 @@ case class SparkListenerSQLAnalysisStart(
     sqlText: String,
     time: Long,
     properties: Properties = null)
-  extends SparkListenerEvent
+  extends SparkListenerEvent {
+  override protected[spark] def logEvent: Boolean = false
+}
 
 case class SparkListenerSQLAnalysisEnd(
     sqlText: String,
     time: Long,
     properties: Properties = null,
     failureReason: Option[String] = None)
-  extends SparkListenerEvent
+  extends SparkListenerEvent {
+  override protected[spark] def logEvent: Boolean = false
+}
 
 
 /**

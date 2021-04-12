@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.util.control.Breaks.{break, breakable}
 
 import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.apache.spark.internal.Logging
@@ -31,6 +32,8 @@ import org.apache.spark.sql.execution.SQLExecution
 import org.apache.spark.sql.execution.metric._
 import org.apache.spark.sql.internal.StaticSQLConf._
 import org.apache.spark.status.{ElementTrackingStore, KVUtils, LiveEntity}
+import org.apache.spark.util.SQLAppStatusReporter
+import org.apache.spark.util.SQLAppStatusReporter.Msg
 import org.apache.spark.util.collection.OpenHashMap
 
 class SQLAppStatusListener(
@@ -421,7 +424,6 @@ class SQLAppStatusListener(
           if (exec.jobs.values.toStream.contains(JobExecutionStatus.FAILED)) {
             status = JobExecutionStatus.FAILED
           }
-          logError(s"onExecutionStart ${exec.sqlIdentifier.get}")
           reporter.postProcess(exec.traceId, s"sql-execution_${event.executionId}", "",
             status, s"${Msg.EXECUTE.toString}(${exec.sqlIdentifier.get})", event.time)
         }
