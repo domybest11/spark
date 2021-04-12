@@ -818,7 +818,7 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
   val autoDetectDataSkewEnabled: Boolean =
     conf.getBoolean("spark.sql.autoDetectDataSkewEnabled", false)
   val targetPartitionSize: Long =
-    conf.getLong("spark.sql.adaptive.shuffle.targetPostShuffleInputSize", 1024 * 1024)
+    conf.getLong("spark.sql.adaptive.shuffle.targetPostShuffleInputSize", 64 * 1024 * 1024)
   val SKEWNESS_MULTIPLIER: Double = conf.getDouble("spark.sql.autoDetectDataSkewMultiplier", 2)
 
   override def getMapSizesByExecutorId(
