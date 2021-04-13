@@ -419,9 +419,6 @@ private[hive] class SparkExecuteStatementOperation(
     if (statementId != null) {
       sqlContext.sparkContext.cancelJobGroup(statementId)
     }
-    if (sqlContext.sparkSession.eventReporter != null) {
-      sqlContext.sparkSession.eventReporter.close()
-    }
   }
 
   private def broadcastOOMFallToSMJ(statementId: String): Unit = {
