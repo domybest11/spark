@@ -16,15 +16,18 @@
  */
 package org.apache.spark.sql.hive.io;
 
-import org.apache.hadoop.hive.ql.exec.Utilities;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hive.ql.io.orc.OrcInputFormat;
-import org.apache.hadoop.hive.ql.io.parquet.read.ParquetRecordReaderWrapper;
 import org.apache.hadoop.mapred.*;
 
 
 import java.io.IOException;
 
 public class MapredOrcInputFormat extends FileInputFormat {
+
+  private static final Log LOG = LogFactory.getLog(MapredOrcInputFormat.class);
 
   private final OrcInputFormat realInput;
 
@@ -41,6 +44,7 @@ public class MapredOrcInputFormat extends FileInputFormat {
   public RecordReader getRecordReader(InputSplit inputSplit, JobConf jobConf, Reporter reporter)
       throws IOException {
     try {
+      LOG.info("Current file split: "+ inputSplit.toString());
       return realInput.getRecordReader(inputSplit, jobConf, reporter);
     } catch (Exception e) {
       throw new RuntimeException("Cannot create a RecordReaderWrapper", e);

@@ -302,6 +302,15 @@ private[hive] class SparkExecuteStatementOperation(
   }
 
   private def execute(): Unit = {
+    val traceId = sqlContext.sparkSession.conf.getOption("archer.trace.id")
+      .orElse(Option(parentSession.getHiveConf.get("archer.trace.id")))
+    if (traceId.isDefined) {
+      logInfo(s"Query with trace id $traceId")
+      sqlContext.sparkContext.setLocalProperty("spark.trace.id", traceId.get)
+    }
+    sqlContext.sparkContext.setLocalProperty("spark.trace.ignored",
+      if (statement.toUpperCase.startsWith("SET")) "true" else "false")
+    sqlContext.sparkContext.setJobGroup(statementId, substitutorStatement)
     try {
       synchronized {
         if (getStatus.getState.isTerminal) {
@@ -320,8 +329,6 @@ private[hive] class SparkExecuteStatementOperation(
       if (!runInBackground) {
         parentSession.getSessionState.getConf.setClassLoader(executionHiveClassLoader)
       }
-
-      sqlContext.sparkContext.setJobGroup(statementId, substitutorStatement)
       val pool = sessionToActivePool.get(parentSession.getSessionHandle)
       if (pool != null) {
         sqlContext.sparkContext.setLocalProperty("spark.scheduler.pool", pool)
@@ -366,12 +373,12 @@ private[hive] class SparkExecuteStatementOperation(
             e.getCause.isInstanceOf[OutOfMemoryError] &&
             e.getCause.getMessage.contains(
               "Not enough memory to build and broadcast the table to all worker nodes")) {
-            broadcastOOMFallToSMJ(statementId)
+            broadcastOOMFallToSMJ(statementId, traceId.getOrElse(""))
           } else {
             logError(s"Error executing query, currentState $currentState, ", e)
             setState(OperationState.ERROR)
             HiveThriftServer2.eventManager.onStatementError(
-              statementId, e.getMessage, SparkUtils.exceptionString(e))
+              statementId, traceId.getOrElse("") ,e.getMessage, SparkUtils.exceptionString(e))
             throw new HiveSQLException(e.toString)
           }
         }
@@ -421,7 +428,7 @@ private[hive] class SparkExecuteStatementOperation(
     }
   }
 
-  private def broadcastOOMFallToSMJ(statementId: String): Unit = {
+  private def broadcastOOMFallToSMJ(statementId: String, traceId: String): Unit = {
     logInfo(s"When the broadcast memory overflows, " +
       s"it is being converted to SMJ query '$statement' with $statementId")
     try {
@@ -452,7 +459,7 @@ private[hive] class SparkExecuteStatementOperation(
         } else {
           setState(OperationState.ERROR)
           HiveThriftServer2.eventManager.onStatementError(
-            statementId, e.getMessage, SparkUtils.exceptionString(e))
+            statementId, traceId, e.getMessage, SparkUtils.exceptionString(e))
           throw e
         }
       // Actually do need to catch Throwable as some failures don't inherit from Exception and
@@ -462,7 +469,7 @@ private[hive] class SparkExecuteStatementOperation(
         logError(s"Error executing query, currentState $currentState, ", e)
         setState(OperationState.ERROR)
         HiveThriftServer2.eventManager.onStatementError(
-          statementId, e.getMessage, SparkUtils.exceptionString(e))
+          statementId, traceId, e.getMessage, SparkUtils.exceptionString(e))
         throw new HiveSQLException(e.toString)
     }
     setState(OperationState.FINISHED)

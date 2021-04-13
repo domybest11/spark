@@ -83,6 +83,9 @@ private[spark] class SparkSubmit extends Logging {
     val uninitLog = initializeLogIfNecessary(true, silent = true)
 
     val appArgs = parseArguments(args)
+    appArgs.sparkProperties.foreach(entry => {
+      System.setProperty(entry._1, entry._2)
+    })
     if (appArgs.verbose) {
       logInfo(appArgs.toString)
     }

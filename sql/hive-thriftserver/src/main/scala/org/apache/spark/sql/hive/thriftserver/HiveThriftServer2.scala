@@ -25,17 +25,20 @@ import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
 import org.apache.hive.service.cli.thrift.{ThriftBinaryCLIService, ThriftHttpCLIService}
 import org.apache.hive.service.server.HiveServer2
-
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.collector.FailureJobCollector
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.UI.UI_ENABLED
+import org.apache.spark.metrics.event.LogErrorWrapEvent
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.hive.thriftserver.ReflectionUtils._
 import org.apache.spark.sql.hive.thriftserver.ui._
 import org.apache.spark.status.ElementTrackingStore
 import org.apache.spark.util.{ShutdownHookManager, Utils}
+import org.apache.spark.internal.config.Status._
+import org.apache.spark.sql.hive.thriftserver.status.ThriftServerAppStatusScheduler
 
 /**
  * The main entry point for the Spark SQL port of HiveServer2.  Starts up a `SparkSQLContext` and a
@@ -63,14 +66,27 @@ object HiveThriftServer2 extends Logging {
     server.init(executionHive.conf)
     server.start()
     logInfo("HiveThriftServer2 started")
-    createListenerAndUI(server, sqlContext.sparkContext)
+    createListenerAndUI(server, sqlContext.sparkContext, sqlContext)
     server
   }
 
-  private def createListenerAndUI(server: HiveThriftServer2, sc: SparkContext): Unit = {
+  private def createListenerAndUI(server: HiveThriftServer2, sc: SparkContext, sqlContext: SQLContext): Unit = {
     val kvStore = sc.statusStore.store.asInstanceOf[ElementTrackingStore]
     eventManager = new HiveThriftServer2EventManager(sc)
-    listener = new HiveThriftServer2Listener(kvStore, sc.conf, Some(server))
+    var failureJobCollector: FailureJobCollector[LogErrorWrapEvent] = null
+    if (SparkSQLEnv.sparkContext.conf.get(FAILURE_JOB_COLLECTOR)) {
+      failureJobCollector =
+        new FailureJobCollector[LogErrorWrapEvent](SparkSQLEnv.sparkContext.getConf,
+          "SparkThriftSever")
+      failureJobCollector.setPOISON_PILL(new LogErrorWrapEvent());
+      failureJobCollector.start()
+      listener = new HiveThriftServer2Listener(kvStore, sc.conf, Some(server), true,
+        server.appStatusScheduler._executionInfoQueue, Some(failureJobCollector.getLogErrorQueue))
+    } else {
+      listener = new HiveThriftServer2Listener(kvStore, sc.conf, Some(server), true,
+        server.appStatusScheduler._executionInfoQueue, None)
+    }
+
     sc.listenerBus.addToStatusQueue(listener)
     uiTab = if (sc.getConf.get(UI_ENABLED)) {
       Some(new ThriftServerTab(new HiveThriftServer2AppStatusStore(kvStore, Some(listener)),
@@ -127,7 +143,7 @@ private[hive] class HiveThriftServer2(sqlContext: SQLContext)
   // state is tracked internally so that the server only attempts to shut down if it successfully
   // started, and then once only.
   private val started = new AtomicBoolean(false)
-
+  val appStatusScheduler = new ThriftServerAppStatusScheduler()
   override def init(hiveConf: HiveConf): Unit = {
     val sparkSqlCliService = new SparkSQLCLIService(this, sqlContext)
     setSuperField(this, "cliService", sparkSqlCliService)

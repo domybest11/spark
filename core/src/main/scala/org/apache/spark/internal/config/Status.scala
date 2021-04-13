@@ -63,6 +63,10 @@ private[spark] object Status {
     .intConf
     .createWithDefault(Int.MaxValue)
 
+  val FAILURE_JOB_COLLECTOR = ConfigBuilder("spark.failureJobCollector.enabled")
+    .booleanConf
+    .createWithDefault(false)
+
   val METRICS_APP_STATUS_SOURCE_ENABLED =
     ConfigBuilder("spark.metrics.appStatusSource.enabled")
       .doc("Whether Dropwizard/Codahale metrics " +
