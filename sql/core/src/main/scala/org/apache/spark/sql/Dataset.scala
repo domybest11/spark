@@ -3686,10 +3686,12 @@ class Dataset[T] private[sql](
       action(qe.executedPlan)
       val needReport = sparkSession.sparkContext
         .conf.getBoolean("spark.report.logicalplan", false)
-      if (needReport && !qe.analyzed.isInstanceOf[RunnableCommand]) {
-        sparkSession.sharedState.eventReporter
-          .reportLogicalPlan(qe.analyzed, EventTopic.LogicalPlan)
-
+      val traceId = sparkSession.sparkContext.conf.getOption("spark.trace.id")
+      val appName = sparkSession.sparkContext.conf.getOption("spark.app.name")
+      if (needReport && traceId.isDefined && appName.isDefined
+        && qe.analyzed.isInstanceOf[DataWritingCommand]) {
+        sparkSession.sharedState.eventReporter.reportLogicalPlan(
+          qe.analyzed, EventTopic.LogicalPlan, traceId.get, appName.get)
       }
     }
   }
