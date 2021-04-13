@@ -78,9 +78,11 @@ object HiveResult {
       // We need the types so we can output struct field names
       val types = executedPlan.output.map(_.dataType)
       if (queryExecution != null) {
-        val needReport = queryExecution.sparkSession.sparkContext.conf.getBoolean("spark.report.logicalplan", false)
+        val needReport = queryExecution.sparkSession.sparkContext
+          .conf.getBoolean("spark.report.logicalplan", false)
         if (needReport && !queryExecution.analyzed.isInstanceOf[RunnableCommand]) {
-          queryExecution.sparkSession.eventReporter.report(queryExecution.analyzed.toJSON, EventTopic.LogicalPlan)
+          queryExecution.sparkSession.sharedState
+            .eventReporter.report(queryExecution.analyzed.toJSON, EventTopic.LogicalPlan)
         }
       }
       // Reformat to match hive tab delimited output.

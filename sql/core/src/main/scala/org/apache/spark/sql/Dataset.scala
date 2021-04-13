@@ -3686,7 +3686,7 @@ class Dataset[T] private[sql](
       action(qe.executedPlan)
       val needReport = sparkSession.sparkContext.conf.getBoolean("spark.report.logicalplan", false)
       if (needReport && !qe.analyzed.isInstanceOf[RunnableCommand]) {
-        sparkSession.eventReporter.report(qe.analyzed.toJSON, EventTopic.LogicalPlan)
+        sparkSession.sharedState.eventReporter.report(qe.analyzed.toJSON, EventTopic.LogicalPlan)
       }
     }
   }
