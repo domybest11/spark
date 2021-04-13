@@ -32,10 +32,10 @@ class HiveResultSuite extends SharedSparkSession {
         val dates = Seq("2018-12-28", "1582-10-03", "1582-10-04", "1582-10-15")
         val df = dates.toDF("a").selectExpr("cast(a as date) as b")
         val executedPlan1 = df.queryExecution.executedPlan
-        val result = hiveResultString(executedPlan1)
+        val result = hiveResultString(executedPlan1, null)
         assert(result == dates)
         val executedPlan2 = df.selectExpr("array(b)").queryExecution.executedPlan
-        val result2 = hiveResultString(executedPlan2)
+        val result2 = hiveResultString(executedPlan2, null)
         assert(result2 == dates.map(x => s"[$x]"))
       }
     }
@@ -49,10 +49,10 @@ class HiveResultSuite extends SharedSparkSession {
       "1582-10-15 01:02:03")
     val df = timestamps.toDF("a").selectExpr("cast(a as timestamp) as b")
     val executedPlan1 = df.queryExecution.executedPlan
-    val result = hiveResultString(executedPlan1)
+    val result = hiveResultString(executedPlan1, null)
     assert(result == timestamps)
     val executedPlan2 = df.selectExpr("array(b)").queryExecution.executedPlan
-    val result2 = hiveResultString(executedPlan2)
+    val result2 = hiveResultString(executedPlan2, null)
     assert(result2 == timestamps.map(x => s"[$x]"))
   }
 
@@ -67,13 +67,13 @@ class HiveResultSuite extends SharedSparkSession {
     Seq(2, 6, 18).foreach { scala =>
       val executedPlan =
         df.selectExpr(s"CAST(value AS decimal(38, $scala))").queryExecution.executedPlan
-      val result = hiveResultString(executedPlan)
+      val result = hiveResultString(executedPlan, null)
       assert(result.head.split("\\.").last.length === scala)
     }
 
     val executedPlan = Seq(java.math.BigDecimal.ZERO).toDS()
       .selectExpr(s"CAST(value AS decimal(38, 8))").queryExecution.executedPlan
-    val result = hiveResultString(executedPlan)
+    val result = hiveResultString(executedPlan, null)
     assert(result.head === "0.00000000")
   }
 
@@ -85,7 +85,7 @@ class HiveResultSuite extends SharedSparkSession {
             spark.sql(s"CREATE TABLE $ns.$tbl (id bigint) USING $source")
             val df = spark.sql(s"SHOW TABLES FROM $ns")
             val executedPlan = df.queryExecution.executedPlan
-            assert(hiveResultString(executedPlan).head == tbl)
+            assert(hiveResultString(executedPlan, null).head == tbl)
           }
       }
     }
@@ -102,7 +102,7 @@ class HiveResultSuite extends SharedSparkSession {
             val expected = "id                  " +
               "\tbigint              " +
               "\tcol1                "
-            assert(hiveResultString(executedPlan).head == expected)
+            assert(hiveResultString(executedPlan, null).head == expected)
           }
       }
     }

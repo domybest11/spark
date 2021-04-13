@@ -135,6 +135,15 @@ class SparkSession private(
     existingSharedState.getOrElse(new SharedState(sparkContext, initialSessionOptions))
   }
 
+  lazy val eventReporter: SparkEventKafkaReporter = {
+    val needReport = sparkContext.conf.getBoolean("spark.report.logicalplan", false)
+    if (needReport) {
+      new SparkEventKafkaReporter(sparkContext.conf)
+    } else {
+      null
+    }
+  }
+
   /**
    * State isolated across sessions, including SQL configurations, temporary tables, registered
    * functions, and everything else that accepts a [[org.apache.spark.sql.internal.SQLConf]].

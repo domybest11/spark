@@ -1279,6 +1279,10 @@ class SparkContext(config: SparkConf) extends Logging {
     // See SPARK-11227 for details.
     FileSystem.getLocal(conf)
 
+    if (null != _conf.getAppId && _conf.getAppId.nonEmpty) {
+      hadoopConfiguration.set("mapreduce.task.attempt.id", _conf.getAppId)
+    }
+
     // Add necessary security credentials to the JobConf. Required to access secure HDFS.
     val jconf = new JobConf(conf)
     SparkHadoopUtil.get.addCredentials(jconf)

@@ -184,7 +184,7 @@ class ExpressionInfoSuite extends SparkFunSuite with SharedSparkSession {
             case exampleRe(sql, output) =>
               val df = clonedSpark.sql(sql)
               val actual = unindentAndTrim(
-                hiveResultString(df.queryExecution.executedPlan).mkString("\n"))
+                hiveResultString(df.queryExecution.executedPlan, null).mkString("\n"))
               val expected = unindentAndTrim(output)
               assert(actual === expected)
             case _ =>
