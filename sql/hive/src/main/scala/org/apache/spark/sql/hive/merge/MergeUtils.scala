@@ -25,6 +25,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.common.FileUtils
+import org.apache.hadoop.hive.ql.CompilationOpContext
 import org.apache.hadoop.hive.ql.exec.{AbstractFileMergeOperator, OrcFileMergeOperator, RCFileMergeOperator}
 import org.apache.hadoop.hive.ql.io.orc.OrcFileStripeMergeRecordReader
 import org.apache.hadoop.hive.ql.io.rcfile.merge.RCFileBlockMergeRecordReader
@@ -91,9 +92,10 @@ object MergeUtils extends Logging {
       conf: Configuration): AbstractFileMergeOperator[T] = {
     val mergeOperator: AbstractFileMergeOperator[T] = outputFormat match {
       case ORC =>
-        new OrcFileMergeOperator().asInstanceOf[AbstractFileMergeOperator[T]]
+        new OrcFileMergeOperator(new CompilationOpContext)
+          .asInstanceOf[AbstractFileMergeOperator[T]]
       case RC =>
-        new RCFileMergeOperator().asInstanceOf[AbstractFileMergeOperator[T]]
+        new RCFileMergeOperator(new CompilationOpContext).asInstanceOf[AbstractFileMergeOperator[T]]
       case PARQUET =>
         val schema = DataType.fromJson(conf.get(SCHEMA)).asInstanceOf[StructType]
         new ParquetFileMergeOperator(conf, schema).asInstanceOf[AbstractFileMergeOperator[T]]
@@ -112,13 +114,21 @@ object MergeUtils extends Logging {
     while (attempts < maxRetries) {
       attempts += 1
       try {
-        if (fs.exists(taskPath) || fs.rename(attemptPath, taskPath)) {
+        if (fs.exists(taskPath)) {
+          log.info("[commit merge task] taskPath already exists, taskPath:" + taskPath)
+          return
+        } else if (fs.rename(attemptPath, taskPath)) {
+          log.info("[commit merge task] rename attemptPath to taskPath successfully! attemptPath:"
+            + attemptPath + " taskPath:" + taskPath)
           return
         }
       } catch {
-        case ie: InterruptedException => throw ie
+        case ie: InterruptedException =>
+          log.error("get InterruptedException", ie)
+          throw ie
         case e: Exception =>
           lastException = e
+          log.error("get Exception", e)
           e.printStackTrace()
       }
 
@@ -255,12 +265,12 @@ object MergeUtils extends Logging {
   case class DynamicMergeRule(path: String, files: Seq[String], numFiles: Int)
 
   def generateDynamicMergeRule(fs: FileSystem,
-                                path: Path,
-                                conf: Configuration,
-                                avgConditionSize: Long,
-                                targetFileSize: Long,
-                                directRenamePathList
-                                : java.util.List[String]): Seq[DynamicMergeRule] = {
+      path: Path,
+      conf: Configuration,
+      avgConditionSize: Long,
+      targetFileSize: Long,
+      directRenamePathList
+      : java.util.List[String]): Seq[DynamicMergeRule] = {
     val tmpDynamicPartInfos = getTmpDynamicPartPathInfo(fs, path, conf)
     logDebug("[generateDynamicMergeRule] partInfo size: " + tmpDynamicPartInfos.size)
     val avgMergeSize: Long = if (!tmpDynamicPartInfos.isEmpty) {
@@ -298,7 +308,7 @@ object MergeUtils extends Logging {
                   extension: String, waitTime: Long): Unit = {
     val jobConf = conf.value
     val context = TaskContext.get()
-    val taskId = "%06d".format(context.partitionId()) + "_" + context.attemptNumber()
+    val taskId = "_" + "%06d".format(context.partitionId()) + "_" + context.attemptNumber()
     val fs = FileSystem.get(jobConf)
     val tmpMergeLocationPath = new Path(tmpMergeLocationDir)
     if (!fs.exists(tmpMergeLocationPath)) {

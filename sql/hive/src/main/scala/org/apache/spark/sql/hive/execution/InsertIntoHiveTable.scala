@@ -171,7 +171,10 @@ case class InsertIntoHiveTable(
           val specFiles = fs.listStatus(
             new Path(r.path.toString.replace("-ext-10000", MergeUtils.TEMP_DIR)))
             .filter(!_.getPath.getName.startsWith("part"))
-          specFiles.foreach(f => fs.delete(f.getPath))
+          specFiles.foreach(f => {
+            logInfo("delete speculative task output temp file, path:" +
+              f.getPath)
+            fs.delete(f.getPath)})
         }
       }
     } else {
