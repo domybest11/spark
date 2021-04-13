@@ -30,6 +30,8 @@ import org.apache.spark.status.api.v1.JacksonMessageWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
@@ -91,7 +93,7 @@ public class SparkEventKafkaReporter {
     kafkaProducer = new KafkaProducer<>(kafkaProps);
   }
 
-  public void reportLogicalPlan(LogicalPlan analyzed, EventTopic topic) {
+  public void reportLogicalPlan(LogicalPlan analyzed, EventTopic topic, String traceId, String appName) {
     String logicalPlanString = null;
     try {
       logicalPlanString = analyzed.toJSON();
@@ -103,7 +105,12 @@ public class SparkEventKafkaReporter {
       }
     }
     if (logicalPlanString != null) {
-      report(logicalPlanString, topic);
+      Map<String, String> message = new HashMap<String, String>();
+      message.put("traceId", traceId);
+      message.put("applicationName", appName);
+      message.put("logicalPlan", logicalPlanString);
+      report(message, topic);
+
     }
   }
 

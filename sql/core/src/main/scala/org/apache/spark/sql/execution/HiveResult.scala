@@ -21,10 +21,9 @@ import java.nio.charset.StandardCharsets
 import java.sql.{Date, Timestamp}
 import java.time.{Instant, LocalDate, ZoneOffset}
 
-import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.util.{DateFormatter, DateTimeUtils, TimestampFormatter}
-import org.apache.spark.sql.execution.SparkEventKafkaReporter.EventTopic
-import org.apache.spark.sql.execution.command.{DescribeCommandBase, ExecutedCommandExec, RunnableCommand, ShowTablesCommand, ShowViewsCommand}
+import org.apache.spark.sql.execution.command.{DescribeCommandBase, ExecutedCommandExec, ShowTablesCommand, ShowViewsCommand}
 import org.apache.spark.sql.execution.datasources.v2.{DescribeTableExec, ShowTablesExec}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
@@ -77,14 +76,6 @@ object HiveResult {
       val result: Seq[Seq[Any]] = other.executeCollectPublic().map(_.toSeq).toSeq
       // We need the types so we can output struct field names
       val types = executedPlan.output.map(_.dataType)
-      if (queryExecution != null) {
-        val needReport = queryExecution.sparkSession.sparkContext
-          .conf.getBoolean("spark.report.logicalplan", false)
-        if (needReport && !queryExecution.analyzed.isInstanceOf[RunnableCommand]) {
-          queryExecution.sparkSession.sharedState
-            .eventReporter.report(queryExecution.analyzed.toJSON, EventTopic.LogicalPlan)
-        }
-      }
       // Reformat to match hive tab delimited output.
       result.map(_.zip(types).map(e => toHiveString(e, false, timeFormatters)))
         .map(_.mkString("\t"))
