@@ -22,6 +22,7 @@ import java.net.URI
 import java.util.{Arrays, Locale, Properties, ServiceLoader, UUID}
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+
 import javax.ws.rs.core.UriBuilder
 
 import scala.collection.JavaConverters._
@@ -29,9 +30,8 @@ import scala.collection.Map
 import scala.collection.immutable
 import scala.collection.mutable.HashMap
 import scala.language.implicitConversions
-import scala.reflect.{classTag, ClassTag}
+import scala.reflect.{ClassTag, classTag}
 import scala.util.control.NonFatal
-
 import com.google.common.collect.MapMaker
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -39,7 +39,6 @@ import org.apache.hadoop.io.{ArrayWritable, BooleanWritable, BytesWritable, Doub
 import org.apache.hadoop.mapred.{FileInputFormat, InputFormat, JobConf, SequenceFileInputFormat, TextInputFormat}
 import org.apache.hadoop.mapreduce.{InputFormat => NewInputFormat, Job => NewHadoopJob}
 import org.apache.hadoop.mapreduce.lib.input.{FileInputFormat => NewFileInputFormat}
-
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.broadcast.{Broadcast, BroadcastMode}
 import org.apache.spark.deploy.{LocalSparkCluster, SparkHadoopUtil}
@@ -51,6 +50,7 @@ import org.apache.spark.internal.config.Tests._
 import org.apache.spark.internal.config.UI._
 import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.io.CompressionCodec
+import org.apache.spark.metrics.sink.KafkaHttpSink
 import org.apache.spark.metrics.source.JVMCPUSource
 import org.apache.spark.mysql.{AsyncExecution, CallChain}
 import org.apache.spark.partial.{ApproximateEvaluator, PartialResult}
@@ -63,7 +63,7 @@ import org.apache.spark.scheduler.cluster.StandaloneSchedulerBackend
 import org.apache.spark.scheduler.local.LocalSchedulerBackend
 import org.apache.spark.shuffle.ShuffleDataIOUtils
 import org.apache.spark.shuffle.api.ShuffleDriverComponents
-import org.apache.spark.status.{AppStatusSource, AppStatusStore, MetricsListener}
+import org.apache.spark.status.{AppMaxUsedResourceWrap, AppStatusSource, AppStatusStore, MetricsListener}
 import org.apache.spark.status.api.v1.ThreadStackTrace
 import org.apache.spark.storage._
 import org.apache.spark.storage.BlockManagerMessages.TriggerThreadDump
@@ -233,6 +233,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _resources: immutable.Map[String, ResourceInformation] = _
   private var _shuffleDriverComponents: ShuffleDriverComponents = _
   private var _plugins: Option[PluginContainer] = None
+  private var _kafkaHttpSink: KafkaHttpSink = _
   private var _resourceProfileManager: ResourceProfileManager = _
 
   /* ------------------------------------------------------------------------------------- *
@@ -282,6 +283,16 @@ class SparkContext(config: SparkConf) extends Logging {
   }
 
   private[spark] def env: SparkEnv = _env
+
+  private val BYTE_TO_MB = 1024 * 1024
+  private val NS_TO_MS = 1000 * 1000
+
+  private var maxDriverUsedMemory: Int = _
+  private var maxDriverUsedCpuPercent: Float = _
+  private var maxExecutorUsedMemory: Int = _
+  private var maxExecutorUsedCpuPercent: Float = _
+  private var curDriverUsedMemory: Int = _
+  private var curDriverUsedCpuPercent: Float = _
 
   // Used to store a URL for each static file/jar together with the file's local timestamp
   private[spark] val addedFiles = new ConcurrentHashMap[String, Long]().asScala
@@ -603,6 +614,13 @@ class SparkContext(config: SparkConf) extends Logging {
       "driver-heartbeater",
       conf.get(EXECUTOR_HEARTBEAT_INTERVAL))
     _heartbeater.start()
+
+    if (_conf.get(METRICS_SINK_USED_MAX_RESOURCE)) {
+      val url = _conf.get(METRICS_SINK_LANCER_URL)
+      val logId = _conf.get(METRICS_SINK_LOG_ID)
+      _kafkaHttpSink = new KafkaHttpSink(url, logId)
+      _kafkaHttpSink.start()
+    }
 
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
     // constructor
@@ -2093,6 +2111,34 @@ class SparkContext(config: SparkConf) extends Logging {
     if (LiveListenerBus.withinListenerThread.value) {
       throw new SparkException(s"Cannot stop SparkContext within listener bus thread.")
     }
+
+    try {
+      if (_kafkaHttpSink != null && _dagScheduler != null) {
+        maxExecutorUsedMemory = dagScheduler.maxExecutorUsedMemMb
+        maxExecutorUsedCpuPercent = dagScheduler.maxExecutorUsedCpuPercent
+
+        val driverAllocatedMemory = conf.get(DRIVER_MEMORY).toInt
+        val driverAllocatedVCores = conf.getInt("spark.driver.cores", 1)
+        val executorAllocatedMemory = conf.get(EXECUTOR_MEMORY).toInt
+        val executorAllocatedVCores = conf.getInt("spark.executor.cores", 1)
+
+        var appAttemptId: Int = 1
+        if (applicationAttemptId.isDefined) {
+          appAttemptId = applicationAttemptId.get.toInt
+        }
+
+        val appMaxUsedResourceWrap = new AppMaxUsedResourceWrap("appMaxUsedResource",
+          applicationId, "spark", appAttemptId, driverAllocatedMemory,
+          driverAllocatedVCores, maxDriverUsedMemory, maxDriverUsedCpuPercent,
+          executorAllocatedMemory, executorAllocatedVCores, maxExecutorUsedMemory,
+          maxExecutorUsedCpuPercent, System.currentTimeMillis())
+        _kafkaHttpSink.produce(appMaxUsedResourceWrap)
+        _kafkaHttpSink.stop()
+      }
+    } catch {
+      case e: Exception => logWarning("Failed send max used resource to kafka, errMsg: ", e)
+    }
+
     // Use the stopping variable to ensure no contention for the stop scenario.
     // Still track the stopped variable for use elsewhere in the code.
     if (!stopped.compareAndSet(false, true)) {
@@ -2632,8 +2678,20 @@ class SparkContext(config: SparkConf) extends Logging {
 
   /** Reports heartbeat metrics for the driver. */
   private def reportHeartBeat(executorMetricsSource: Option[ExecutorMetricsSource]): Unit = {
+    curDriverUsedCpuPercent = getCurDriverUsedCpuPercent
+    if (curDriverUsedCpuPercent > maxDriverUsedCpuPercent) {
+      maxDriverUsedCpuPercent = curDriverUsedCpuPercent
+    }
+
     val currentMetrics = ExecutorMetrics.getCurrentMetrics(env.memoryManager)
     executorMetricsSource.foreach(_.updateMetricsSnapshot(currentMetrics))
+
+    if (executorMetricsSource.get.metricsSnapshot.length == 20) {
+      curDriverUsedMemory = (executorMetricsSource.get.metricsSnapshot(11) / BYTE_TO_MB).toInt
+    }
+    if (curDriverUsedMemory > maxDriverUsedMemory) {
+      maxDriverUsedMemory = curDriverUsedMemory
+    }
 
     val driverUpdates = new HashMap[(Int, Int), ExecutorMetrics]
     // In the driver, we do not track per-stage metrics, so use a dummy stage for the key
@@ -2641,6 +2699,18 @@ class SparkContext(config: SparkConf) extends Logging {
     val accumUpdates = new Array[(Long, Int, Int, Seq[AccumulableInfo])](0)
     listenerBus.post(SparkListenerExecutorMetricsUpdate("driver", accumUpdates,
       driverUpdates))
+  }
+
+  private def getCurDriverUsedCpuPercent: Float = {
+    val jvmCpuSource = _env.metricsSystem.getSourcesByName("JVMCPU")
+    var curJvmCpuTime = 0L
+    if (jvmCpuSource!= null && jvmCpuSource.length == 1) {
+      val jvmCpuGauges = jvmCpuSource.head.metricRegistry.getGauges.get("jvmCpuTime")
+      if (jvmCpuGauges != null) {
+        curJvmCpuTime = jvmCpuGauges.getValue.asInstanceOf[Long] / NS_TO_MS
+      }
+    }
+    curJvmCpuTime.toFloat / (System.currentTimeMillis() - startTime)
   }
 
   // In order to prevent multiple SparkContexts from being active at the same time, mark this

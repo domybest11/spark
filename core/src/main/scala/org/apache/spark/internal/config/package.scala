@@ -278,6 +278,21 @@ package object config {
       .stringConf
       .createWithDefaultString("file,hdfs")
 
+  private[spark] val METRICS_SINK_USED_MAX_RESOURCE =
+    ConfigBuilder("spark.metrics.sink.used.max.resource")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val METRICS_SINK_LANCER_URL =
+    ConfigBuilder("spark.metrics.sink.lancer.url")
+      .stringConf
+      .createWithDefault("http://dataflow.biliapi.com/log/system")
+
+  private[spark] val METRICS_SINK_LOG_ID =
+    ConfigBuilder("spark.metrics.sink.log.id")
+      .stringConf
+      .createWithDefault("007830")
+
   private[spark] val EXECUTOR_JAVA_OPTIONS =
     ConfigBuilder(SparkLauncher.EXECUTOR_EXTRA_JAVA_OPTIONS)
       .withPrepended(SparkLauncher.EXECUTOR_DEFAULT_JAVA_OPTIONS)

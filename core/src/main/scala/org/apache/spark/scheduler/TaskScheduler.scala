@@ -89,7 +89,8 @@ private[spark] trait TaskScheduler {
       execId: String,
       accumUpdates: Array[(Long, Seq[AccumulatorV2[_, _]])],
       blockManagerId: BlockManagerId,
-      executorUpdates: Map[(Int, Int), ExecutorMetrics]): Boolean
+      executorUpdates: Map[(Int, Int), ExecutorMetrics],
+      executorResources: Array[Long]): Boolean
 
   /**
    * Get an application ID associated with the job.

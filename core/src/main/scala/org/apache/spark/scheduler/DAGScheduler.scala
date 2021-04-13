@@ -251,6 +251,12 @@ private[spark] class DAGScheduler(
 
   private val pushBasedShuffleEnabled = Utils.isPushBasedShuffleEnabled(sc.getConf)
 
+  private[spark] var maxExecutorUsedCpuPercent = 0.0f
+  private[spark] var maxExecutorUsedMemMb = 0
+
+  private val BYTE_TO_MB = 1024 * 1024
+  private val NS_TO_MS = 1000 * 1000
+
   /**
    * Called by the TaskSetManager to report task's starting.
    */
@@ -291,9 +297,21 @@ private[spark] class DAGScheduler(
       accumUpdates: Array[(Long, Int, Int, Seq[AccumulableInfo])],
       blockManagerId: BlockManagerId,
       // (stageId, stageAttemptId) -> metrics
-      executorUpdates: mutable.Map[(Int, Int), ExecutorMetrics]): Boolean = {
+      executorUpdates: mutable.Map[(Int, Int), ExecutorMetrics],
+      executorResources: Array[Long]): Boolean = {
     listenerBus.post(SparkListenerExecutorMetricsUpdate(execId, accumUpdates,
       executorUpdates))
+    if (executorResources.length == 3) {
+      val curExecutorUsedCpuPercent =
+        executorResources(2).toFloat / (executorResources(1) * NS_TO_MS)
+      if (curExecutorUsedCpuPercent > maxExecutorUsedCpuPercent) {
+        maxExecutorUsedCpuPercent = curExecutorUsedCpuPercent
+      }
+      val curExecutorUsedMemMb = (executorResources(0) / BYTE_TO_MB).toInt
+      if (curExecutorUsedMemMb > maxExecutorUsedMemMb) {
+        maxExecutorUsedMemMb = curExecutorUsedMemMb
+      }
+    }
     blockManagerMaster.driverHeartbeatEndPoint.askSync[Boolean](
       BlockManagerHeartbeat(blockManagerId), new RpcTimeout(10.minutes, "BlockManagerHeartbeat"))
   }

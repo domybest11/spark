@@ -998,12 +998,19 @@ private[spark] class Executor(
     // list of (task id, accumUpdates) to send back to the driver
     val accumUpdates = new ArrayBuffer[(Long, Seq[AccumulatorV2[_, _]])]()
     val curGCTime = computeTotalGcTime()
+    var curExecutorUsedMemMb = 0L
 
     if (pollOnHeartbeat) {
-      metricsPoller.poll()
+      val executorMetrics = metricsPoller.poll()
+      if (executorMetrics.length == 20) {
+        curExecutorUsedMemMb = executorMetrics(11)
+      }
     }
 
     val executorUpdates = metricsPoller.getExecutorUpdates()
+
+    val executorResources = Array(curExecutorUsedMemMb, executorSource.METRIC_RUN_TIME.getCount,
+      executorSource.METRIC_CPU_TIME.getCount)
 
     for (taskRunner <- runningTasks.values().asScala) {
       if (taskRunner.task != null) {
@@ -1020,7 +1027,7 @@ private[spark] class Executor(
     }
 
     val message = Heartbeat(executorId, accumUpdates.toArray, env.blockManager.blockManagerId,
-      executorUpdates)
+      executorUpdates, executorResources)
     try {
       val response = heartbeatReceiverRef.askSync[HeartbeatResponse](
         message, new RpcTimeout(HEARTBEAT_INTERVAL_MS.millis, EXECUTOR_HEARTBEAT_INTERVAL.key))
