@@ -6,25 +6,19 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.module.scala.DefaultScalaModule;
-
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.spark.SparkConf;
-import org.apache.spark.metrics.event.SimpleWrapEvent;
 import org.apache.spark.metrics.event.WrapEvent;
 import org.apache.spark.status.api.v1.JacksonMessageWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * @author wth
- * @Date:2018/11/15
- * @Time:10:45 AM
- */
+import java.util.Properties;
+import java.util.concurrent.TimeUnit;
+
+
 public class KafkaSink {
 
     private final static Logger LOGGER = LoggerFactory.getLogger(KafkaSink.class);

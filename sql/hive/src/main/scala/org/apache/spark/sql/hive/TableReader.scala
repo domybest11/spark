@@ -331,7 +331,13 @@ class HadoopTableReader(
     val initializeJobConfFunc = HadoopTableReader.initializeLocalJobConfFunc(path, tableDesc) _
     val inputFormatClass = tableDesc.getInputFileFormatClass
       .asInstanceOf[Class[oldInputClass[Writable, Writable]]]
-
+    var inputFormatClassFinal: Class[oldInputClass[Writable, Writable]] = inputFormatClass
+    if(sparkSession.sqlContext.conf.combineHiveInputSplitsEnabled &&
+      HiveTableUtil.combineMap.contains(inputFormatClassFinal.getName)) {
+      inputFormatClassFinal = Utils.classForName(
+        HiveTableUtil.combineMap(inputFormatClassFinal.getName)).
+        asInstanceOf[Class[oldInputClass[Writable, Writable]]]
+    }
     val rdd = new HadoopRDD(
       sparkSession.sparkContext,
       _broadcastedHadoopConf.asInstanceOf[Broadcast[SerializableConfiguration]],
@@ -354,10 +360,16 @@ class HadoopTableReader(
     HadoopTableReader.initializeLocalJobConfFunc(path, tableDesc)(newJobConf)
     val inputFormatClass = tableDesc.getInputFileFormatClass
       .asInstanceOf[Class[newInputClass[Writable, Writable]]]
-
+    var inputFormatClassFinal: Class[newInputClass[Writable, Writable]] = inputFormatClass
+    if(sparkSession.sqlContext.conf.combineHiveInputSplitsEnabled &&
+      HiveTableUtil.combineMap.contains(inputFormatClassFinal.getName)) {
+      inputFormatClassFinal = Utils.classForName(
+        HiveTableUtil.combineMap(inputFormatClassFinal.getName)).
+        asInstanceOf[Class[newInputClass[Writable, Writable]]]
+    }
     val rdd = new NewHadoopRDD(
       sparkSession.sparkContext,
-      inputFormatClass,
+      inputFormatClassFinal,
       classOf[Writable],
       classOf[Writable],
       newJobConf
@@ -370,6 +382,27 @@ class HadoopTableReader(
 }
 
 private[hive] object HiveTableUtil {
+
+  val combineMap = Map(
+    "org.apache.hadoop.mapred.SequenceFileInputFormat" ->
+      "org.apache.hadoop.mapred.lib.CombineSequenceFileInputFormat",
+
+    "org.apache.hadoop.hive.ql.io.RCFileInputFormat" ->
+      "org.apache.spark.sql.hive.io.CombineRCFileInputFormat",
+
+    "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat" ->
+      "org.apache.spark.sql.hive.io.CombineParquetInputFormat",
+
+    "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat" ->
+      "org.apache.spark.sql.hive.io.CombineOrcInputFormat",
+
+    "org.apache.hadoop.mapred.TextInputFormat" ->
+      "org.apache.hadoop.mapred.lib.CombineTextInputFormat",
+
+    "org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat" ->
+      "org.apache.spark.sql.hive.io.CombineAvroContainerInputFormat"
+  )
+
 
   // copied from PlanUtils.configureJobPropertiesForStorageHandler(tableDesc)
   // that calls Hive.get() which tries to access metastore, but it's not valid in runtime

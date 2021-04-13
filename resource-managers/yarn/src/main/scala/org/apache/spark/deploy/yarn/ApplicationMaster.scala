@@ -848,6 +848,10 @@ object ApplicationMaster extends Logging {
   private var master: ApplicationMaster = _
 
   def main(args: Array[String]): Unit = {
+    Utils.getPropertiesFromFile(args.filter(_.contains("__spark_conf__")).head)
+      .foreach(entry => {
+        System.setProperty(entry._1, entry._2)
+      })
     SignalUtils.registerLogger(log)
     val amArgs = new ApplicationMasterArguments(args)
     val sparkConf = new SparkConf()

@@ -71,7 +71,7 @@ import org.apache.spark.ui.{ConsoleProgressBar, SparkUI}
 import org.apache.spark.ui.jobs.JobProgressListener
 import org.apache.spark.util._
 import org.apache.spark.util.logging.DriverLogger
-
+import org.apache.spark.internal.config.Status._
 /**
  * Main entry point for Spark functionality. A SparkContext represents the connection to a Spark
  * cluster, and can be used to create RDDs, accumulators and broadcast variables on that cluster.
@@ -640,6 +640,9 @@ class SparkContext(config: SparkConf) extends Logging {
 
     _applicationId = _taskScheduler.applicationId()
     _applicationAttemptId = _taskScheduler.applicationAttemptId()
+    if (_conf.get(FAILURE_JOB_COLLECTOR)) {
+      System.setProperty("spark.app.id", _applicationId)
+    }
     _conf.set("spark.app.id", _applicationId)
     if (_conf.get(UI_REVERSE_PROXY)) {
       val proxyUrl = _conf.get(UI_REVERSE_PROXY_URL.key, "").stripSuffix("/") +
@@ -1349,6 +1352,10 @@ class SparkContext(config: SparkConf) extends Logging {
     // This is a hack to enforce loading hdfs-site.xml.
     // See SPARK-11227 for details.
     FileSystem.getLocal(conf)
+
+    if (null != _conf.getAppId && _conf.getAppId.nonEmpty) {
+      hadoopConfiguration.set("mapreduce.task.attempt.id", _conf.getAppId)
+    }
 
     // Add necessary security credentials to the JobConf. Required to access secure HDFS.
     val jconf = new JobConf(conf)

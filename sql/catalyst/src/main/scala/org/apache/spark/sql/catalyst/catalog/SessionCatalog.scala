@@ -95,7 +95,7 @@ class SessionCatalog(
     this(externalCatalog, new SimpleFunctionRegistry)
   }
 
-  lazy val externalCatalog = externalCatalogBuilder()
+  var externalCatalog = externalCatalogBuilder()
   lazy val globalTempViewManager = globalTempViewManagerBuilder()
 
   /** List of temporary views, mapping from table name to their logical plan. */

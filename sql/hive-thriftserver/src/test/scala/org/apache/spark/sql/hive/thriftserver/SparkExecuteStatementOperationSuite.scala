@@ -110,7 +110,7 @@ class SparkExecuteStatementOperationSuite extends SparkFunSuite with SharedSpark
       signal: Semaphore,
       finalState: OperationState)
     extends SparkExecuteStatementOperation(sqlContext, hiveSession, statement,
-      new util.HashMap, false, 0) {
+      new util.HashMap, false, null, 0) {
 
     override def cleanup(): Unit = {
       super.cleanup()

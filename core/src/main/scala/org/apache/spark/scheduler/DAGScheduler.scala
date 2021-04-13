@@ -208,6 +208,10 @@ private[spark] class DAGScheduler(
   /** If enabled, FetchFailed will not cause stage retry, in order to surface the problem. */
   private val disallowStageRetryForTest = sc.getConf.get(TEST_NO_STAGE_RETRY)
 
+  private val maxAllowTaskCountInOneStage = sc.getConf.getInt(
+    "spark.max.allow.taskcount.inOneStage", -1
+  )
+
   private val shouldMergeResourceProfiles = sc.getConf.get(config.RESOURCE_PROFILE_MERGE_CONFLICTS)
 
   /**
@@ -952,6 +956,10 @@ private[spark] class DAGScheduler(
       throw new SparkException("Can't run submitMapStage on RDD with 0 partitions")
     }
 
+    if (properties != null) {
+      properties.setProperty("user", Utils.getCurrentUserName())
+    }
+
     // We create a JobWaiter with only one "task", which will be marked as complete when the whole
     // map stage has completed, and will be passed the MapOutputStatistics for that stage.
     // This makes it easier to avoid race conditions between the user code and the map output
@@ -1319,6 +1327,15 @@ private[spark] class DAGScheduler(
 
     // Figure out the indexes of partition ids to compute.
     val partitionsToCompute: Seq[Int] = stage.findMissingPartitions()
+
+    if(maxAllowTaskCountInOneStage > 0
+      && partitionsToCompute.size > maxAllowTaskCountInOneStage) {
+      abortStage(stage, "Task creation failed: task total count is too large in one stage, " +
+        s"task count:${partitionsToCompute.size}. " +
+        s"max allow count:${maxAllowTaskCountInOneStage}", None)
+      return
+    }
+
 
     // Use the scheduling pool, job group, description, etc. from an ActiveJob associated
     // with this Stage

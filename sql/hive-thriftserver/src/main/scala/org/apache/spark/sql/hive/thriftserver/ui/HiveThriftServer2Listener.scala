@@ -27,9 +27,10 @@ import org.apache.hive.service.server.HiveServer2
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.Status.LIVE_ENTITY_UPDATE_PERIOD
+import org.apache.spark.metrics.event.LogErrorWrapEvent
 import org.apache.spark.scheduler._
 import org.apache.spark.sql.hive.thriftserver.HiveThriftServer2.ExecutionState
-import org.apache.spark.sql.hive.thriftserver.status.SQLJobData
+import org.apache.spark.sql.hive.thriftserver.SparkSQLEnv
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.status.{ElementTrackingStore, KVUtils, LiveEntity}
 
@@ -41,7 +42,8 @@ private[thriftserver] class HiveThriftServer2Listener(
     sparkConf: SparkConf,
     server: Option[HiveServer2],
     live: Boolean = true,
-    executionQueue: LinkedBlockingQueue[LiveExecutionData]) extends SparkListener with Logging {
+    val executionQueue: LinkedBlockingQueue[ExecutionInfo],
+    val logErrorQueue: Option[LinkedBlockingQueue[LogErrorWrapEvent]]) extends SparkListener with Logging {
 
   private val sessionList = new ConcurrentHashMap[String, LiveSessionData]()
   private val executionList = new ConcurrentHashMap[String, LiveExecutionData]()
@@ -213,6 +215,12 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.state = ExecutionState.FAILED
         updateLiveStore(executionData)
         executionQueue.offer(executionList.get(e.id))
+        if (logErrorQueue.isDefined) {
+          logErrorQueue.get.offer(new LogErrorWrapEvent("SparkThriftServer", "Error",
+            executionList.get(e.id).statementType, e.traceId,
+            SparkSQLEnv.sparkContext.getConf.get("spark.app.id"),
+            System.currentTimeMillis, e.errorMsg, e.errorTrace))
+        }
       case None => logWarning(s"onOperationError called with unknown operation id: ${e.id}")
     }
 

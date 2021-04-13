@@ -69,6 +69,10 @@ private[spark] object Status {
     .intConf
     .createWithDefault(Int.MaxValue)
 
+  val FAILURE_JOB_COLLECTOR = ConfigBuilder("spark.failureJobCollector.enabled")
+    .booleanConf
+    .createWithDefault(false)
+
   val TRACE_REPORTER_ENABLED = ConfigBuilder("spark.traceReporter.enabled")
     .booleanConf
     .createWithDefault(false)

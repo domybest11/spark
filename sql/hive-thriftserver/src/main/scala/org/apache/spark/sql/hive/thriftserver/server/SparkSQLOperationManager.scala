@@ -40,7 +40,7 @@ private[thriftserver] class SparkSQLOperationManager()
 
   val handleToOperation = ReflectionUtils
     .getSuperField[JMap[OperationHandle, Operation]](this, "handleToOperation")
-
+  val sessionToActivePool = new ConcurrentHashMap[SessionHandle, String]()
   val sessionToContexts = new ConcurrentHashMap[SessionHandle, SQLContext]()
 
   val DEFAULT_JOB_INFO = new JobUIData()
@@ -76,12 +76,13 @@ private[thriftserver] class SparkSQLOperationManager()
       async: Boolean,
       queryTimeout: Long): ExecuteStatementOperation = synchronized {
     val sqlContext = sessionToContexts.get(parentSession.getSessionHandle)
+    sqlContext.sessionState.catalog.externalCatalog = sqlContext.sharedState.externalCatalog
     require(sqlContext != null, s"Session handle: ${parentSession.getSessionHandle} has not been" +
       s" initialized or had already closed.")
     val conf = sqlContext.sessionState.conf
     val runInBackground = async && conf.getConf(HiveUtils.HIVE_THRIFT_SERVER_ASYNC)
     val operation = new SparkExecuteStatementOperation(
-      sqlContext, parentSession, statement, confOverlay, runInBackground, queryTimeout)
+      sqlContext, parentSession, statement, confOverlay, runInBackground, sessionToActivePool, queryTimeout)
     handleToOperation.put(operation.getHandle, operation)
     logDebug(s"Created Operation for $statement with session=$parentSession, " +
       s"runInBackground=$runInBackground")
