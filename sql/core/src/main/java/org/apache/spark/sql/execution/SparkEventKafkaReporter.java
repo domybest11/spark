@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.spark.SparkConf;
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
 import org.apache.spark.status.api.v1.JacksonMessageWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,6 +89,22 @@ public class SparkEventKafkaReporter {
         conf.get("spark.value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer"));
     kafkaProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip");
     kafkaProducer = new KafkaProducer<>(kafkaProps);
+  }
+
+  public void reportLogicalPlan(LogicalPlan analyzed, EventTopic topic) {
+    String logicalPlanString = null;
+    try {
+      logicalPlanString = analyzed.toJSON();
+    } catch (Exception e) {
+      try {
+        logicalPlanString = analyzed.toJSON();
+      } catch (Exception re) {
+        LOGGER.error("Analyzed logical plan to json failed two times", re);
+      }
+    }
+    if (logicalPlanString != null) {
+      report(logicalPlanString, topic);
+    }
   }
 
   public void report(Object event, EventTopic topic) {
