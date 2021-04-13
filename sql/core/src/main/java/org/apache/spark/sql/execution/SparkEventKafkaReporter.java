@@ -86,6 +86,7 @@ public class SparkEventKafkaReporter {
         "org.apache.kafka.common.serialization.StringSerializer"));
     kafkaProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
         conf.get("spark.value.serializer", "org.apache.kafka.common.serialization.ByteArraySerializer"));
+    kafkaProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, "gzip");
     kafkaProducer = new KafkaProducer<>(kafkaProps);
   }
 
