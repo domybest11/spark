@@ -63,7 +63,7 @@ import org.apache.spark.scheduler.cluster.StandaloneSchedulerBackend
 import org.apache.spark.scheduler.local.LocalSchedulerBackend
 import org.apache.spark.shuffle.ShuffleDataIOUtils
 import org.apache.spark.shuffle.api.ShuffleDriverComponents
-import org.apache.spark.status.{AppMaxUsedResourceWrap, AppStatusSource, AppStatusStore, MetricsListener}
+import org.apache.spark.status.{AppMaxUsedResourceWrap, AppStatusSource, AppStatusStore, AppUsedResourceWrap, MetricsListener}
 import org.apache.spark.status.api.v1.ThreadStackTrace
 import org.apache.spark.storage._
 import org.apache.spark.storage.BlockManagerMessages.TriggerThreadDump
@@ -233,7 +233,9 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _resources: immutable.Map[String, ResourceInformation] = _
   private var _shuffleDriverComponents: ShuffleDriverComponents = _
   private var _plugins: Option[PluginContainer] = None
+  private var sinkUsedResourceScheduler: SinkUsedResourceScheduler = _
   private var _kafkaHttpSink: KafkaHttpSink = _
+  private var jvmPauseMonitor: JvmPauseMonitor = _
   private var _resourceProfileManager: ResourceProfileManager = _
 
   /* ------------------------------------------------------------------------------------- *
@@ -622,6 +624,16 @@ class SparkContext(config: SparkConf) extends Logging {
       _kafkaHttpSink.start()
     }
 
+    if (conf.get(CONTAINER_METRICS_COLLECTION_ENABLE)) {
+      val url = _conf.get(METRICS_SINK_LANCER_URL)
+      val logId = _conf.get(METRICS_SINK_LOG_ID)
+      val kafkaHttpSinkUsedResource = new KafkaHttpSink(url, logId)
+      sinkUsedResourceScheduler = new SinkUsedResourceScheduler(
+        sinkUsedResource, "driver-sink-used-resource",
+        kafkaHttpSinkUsedResource, conf.get(CONTAINER_METRICS_COLLECTION_INTERVAL))
+      sinkUsedResourceScheduler.start()
+    }
+
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
     // constructor
     _taskScheduler.start()
@@ -696,6 +708,13 @@ class SparkContext(config: SparkConf) extends Logging {
     _executorAllocationManager.foreach { e =>
       _env.metricsSystem.registerSource(e.executorAllocationManagerSource)
     }
+
+    if (conf.get(JVM_PAUSE_MONITOR_ENABLE)) {
+      jvmPauseMonitor = new JvmPauseMonitor(conf, applicationId,
+        applicationAttemptId.get.toInt, "-1")
+      jvmPauseMonitor.start()
+    }
+
     appStatusSource.foreach(_env.metricsSystem.registerSource(_))
     _plugins.foreach(_.registerMetrics(applicationId))
     // Make sure the context is stopped if the user forgets about it. This avoids leaving
@@ -2112,6 +2131,24 @@ class SparkContext(config: SparkConf) extends Logging {
       throw new SparkException(s"Cannot stop SparkContext within listener bus thread.")
     }
 
+    if (sinkUsedResourceScheduler != null) {
+      try {
+        sinkUsedResourceScheduler.stop()
+      } catch {
+        case NonFatal(e) =>
+          logWarning("Unable to stop sinkUsedResourceScheduler", e)
+      }
+    }
+
+    if (jvmPauseMonitor != null) {
+      try {
+        jvmPauseMonitor.stop()
+      } catch {
+        case NonFatal(e) =>
+          logWarning("Unable to stop jvmPauseMonitor", e)
+      }
+    }
+
     try {
       if (_kafkaHttpSink != null && _dagScheduler != null) {
         maxExecutorUsedMemory = dagScheduler.maxExecutorUsedMemMb
@@ -2699,6 +2736,17 @@ class SparkContext(config: SparkConf) extends Logging {
     val accumUpdates = new Array[(Long, Int, Int, Seq[AccumulableInfo])](0)
     listenerBus.post(SparkListenerExecutorMetricsUpdate("driver", accumUpdates,
       driverUpdates))
+  }
+
+  private def sinkUsedResource(kafkaHttpSink: KafkaHttpSink): Unit = {
+    try {
+      val usedResourceWrap = new AppUsedResourceWrap("appUsedResource", conf.getAppId,
+        applicationAttemptId.get.toInt, "spark", "-1", curDriverUsedMemory,
+        curDriverUsedCpuPercent, System.currentTimeMillis())
+      kafkaHttpSink.produce(usedResourceWrap)
+    } catch {
+      case e: Exception => logWarning("Sink driver used resource failed.", e)
+    }
   }
 
   private def getCurDriverUsedCpuPercent: Float = {

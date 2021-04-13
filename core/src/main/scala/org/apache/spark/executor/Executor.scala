@@ -46,11 +46,13 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.memory.{SparkOutOfMemoryError, TaskMemoryManager}
+import org.apache.spark.metrics.sink.KafkaHttpSink
 import org.apache.spark.metrics.source.JVMCPUSource
 import org.apache.spark.resource.ResourceInformation
 import org.apache.spark.rpc.RpcTimeout
 import org.apache.spark.scheduler._
 import org.apache.spark.shuffle.FetchFailedException
+import org.apache.spark.status.AppUsedResourceWrap
 import org.apache.spark.storage.{StorageLevel, TaskResultBlockId}
 import org.apache.spark.util._
 import org.apache.spark.util.io.ChunkedByteBuffer
@@ -87,6 +89,12 @@ private[spark] class Executor(
   private val EMPTY_BYTE_BUFFER = ByteBuffer.wrap(new Array[Byte](0))
 
   private val conf = env.conf
+
+  private var sinkUsedResourceScheduler: SinkUsedResourceScheduler = _
+  private var jvmPauseMonitor: JvmPauseMonitor = _
+
+  private val BYTE_TO_MB = 1024 * 1024
+  private val NS_TO_MS = 1000 * 1000
 
   // No ip or host:port - just hostname
   Utils.checkHost(executorHostname)
@@ -179,6 +187,22 @@ private[spark] class Executor(
   // Maintains the list of running tasks.
   private val runningTasks = new ConcurrentHashMap[Long, TaskRunner]
 
+  private val appAttemptId = conf.get("spark.yarn.app.attempt.id", "-1")
+  if (conf.get(CONTAINER_METRICS_COLLECTION_ENABLE)) {
+    val url = conf.get(METRICS_SINK_LANCER_URL)
+    val logId = conf.get(METRICS_SINK_LOG_ID)
+    val kafkaHttpSinkUsedResource = new KafkaHttpSink(url, logId)
+    sinkUsedResourceScheduler = new SinkUsedResourceScheduler(
+      sinkUsedResource, "executor-sink-used-resource",
+      kafkaHttpSinkUsedResource, conf.get(CONTAINER_METRICS_COLLECTION_INTERVAL))
+    sinkUsedResourceScheduler.start()
+  }
+
+  if (conf.get(JVM_PAUSE_MONITOR_ENABLE)) {
+    jvmPauseMonitor = new JvmPauseMonitor(conf, conf.getAppId, appAttemptId.toInt, executorId)
+    jvmPauseMonitor.start()
+  }
+
   /**
    * When an executor is unable to send heartbeats to the driver more than `HEARTBEAT_MAX_FAILURES`
    * times, it should kill itself. The default value is 60. For example, if max failures is 60 and
@@ -225,6 +249,8 @@ private[spark] class Executor(
    * successful heartbeat will reset it to 0.
    */
   private var heartbeatFailures = 0
+  private var curExecutorUsedMemMb = 0
+  private var curExecutorUsedCpuPercent = 0.0f
 
   /**
    * Flag to prevent launching new tasks while decommissioned. There could be a race condition
@@ -327,6 +353,22 @@ private[spark] class Executor(
       } catch {
         case NonFatal(e) =>
           logWarning("Unable to stop heartbeater", e)
+      }
+      if (sinkUsedResourceScheduler != null) {
+        try {
+          sinkUsedResourceScheduler.stop()
+        } catch {
+          case NonFatal(e) =>
+            logWarning("Unable to stop sinkUsedResourceScheduler", e)
+        }
+      }
+      if (jvmPauseMonitor != null) {
+        try {
+          jvmPauseMonitor.stop()
+        } catch {
+          case NonFatal(e) =>
+            logWarning("Unable to stop jvmPauseMonitor", e)
+        }
       }
       threadPool.shutdown()
 
@@ -998,12 +1040,11 @@ private[spark] class Executor(
     // list of (task id, accumUpdates) to send back to the driver
     val accumUpdates = new ArrayBuffer[(Long, Seq[AccumulatorV2[_, _]])]()
     val curGCTime = computeTotalGcTime()
-    var curExecutorUsedMemMb = 0L
 
     if (pollOnHeartbeat) {
       val executorMetrics = metricsPoller.poll()
       if (executorMetrics.length == 20) {
-        curExecutorUsedMemMb = executorMetrics(11)
+        curExecutorUsedMemMb = (executorMetrics(11) / BYTE_TO_MB).toInt
       }
     }
 
@@ -1011,6 +1052,11 @@ private[spark] class Executor(
 
     val executorResources = Array(curExecutorUsedMemMb, executorSource.METRIC_RUN_TIME.getCount,
       executorSource.METRIC_CPU_TIME.getCount)
+
+    if (executorSource.METRIC_RUN_TIME.getCount != 0) {
+      curExecutorUsedCpuPercent = executorSource.METRIC_CPU_TIME.getCount.toFloat /
+        (executorSource.METRIC_RUN_TIME.getCount * NS_TO_MS)
+    }
 
     for (taskRunner <- runningTasks.values().asScala) {
       if (taskRunner.task != null) {
@@ -1045,6 +1091,17 @@ private[spark] class Executor(
             s"more than $HEARTBEAT_MAX_FAILURES times")
           System.exit(ExecutorExitCode.HEARTBEAT_FAILURE)
         }
+    }
+  }
+
+  private def sinkUsedResource(kafkaHttpSink: KafkaHttpSink): Unit = {
+    try {
+      val usedResourceWrap = new AppUsedResourceWrap("appUsedResource", conf.getAppId,
+        appAttemptId.toInt, "spark", executorId, curExecutorUsedMemMb,
+        curExecutorUsedCpuPercent, System.currentTimeMillis())
+      kafkaHttpSink.produce(usedResourceWrap)
+    } catch {
+      case e: Exception => logWarning("Sink executor used resource failed.", e)
     }
   }
 }

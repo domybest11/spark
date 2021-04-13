@@ -226,6 +226,7 @@ private[spark] class ApplicationMaster(
         // Set this internal configuration if it is running on cluster mode, this
         // configuration will be checked in SparkContext to avoid misuse of yarn cluster mode.
         System.setProperty("spark.yarn.app.id", appAttemptId.getApplicationId().toString())
+        System.setProperty("spark.yarn.app.attempt.id", appAttemptId.getAttemptId().toString())
 
         Option(appAttemptId.getAttemptId.toString)
       } else {

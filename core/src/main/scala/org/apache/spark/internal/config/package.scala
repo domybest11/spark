@@ -340,6 +340,26 @@ package object config {
     .intConf
     .createOptional
 
+  private[spark] val CONTAINER_METRICS_COLLECTION_ENABLE =
+    ConfigBuilder("spark.container.metrics.collection.enable")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val CONTAINER_METRICS_COLLECTION_INTERVAL =
+    ConfigBuilder("spark.container.metrics.collection.interval")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("60s")
+
+  private[spark] val JVM_PAUSE_MONITOR_ENABLE =
+    ConfigBuilder("spark.jvm.pause.monitor.enable")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val JVM_PAUSE_MONITOR_INTERVAL =
+    ConfigBuilder("spark.jvm.pause.monitor.interval")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("10s")
+
   private[spark] val MEMORY_OFFHEAP_ENABLED = ConfigBuilder("spark.memory.offHeap.enabled")
     .doc("If true, Spark will attempt to use off-heap memory for certain operations. " +
       "If off-heap memory use is enabled, then spark.memory.offHeap.size must be positive.")
