@@ -3683,7 +3683,6 @@ class Dataset[T] private[sql](
   private def withAction[U](name: String, qe: QueryExecution)(action: SparkPlan => U) = {
     SQLExecution.withNewExecutionId(qe, Some(name)) {
       qe.executedPlan.resetMetrics()
-      action(qe.executedPlan)
       val needReport = sparkSession.sparkContext
         .conf.getBoolean("spark.report.logicalplan", false)
       val traceId = sparkSession.sparkContext.conf.getOption("spark.trace.id")
@@ -3693,6 +3692,7 @@ class Dataset[T] private[sql](
         sparkSession.sharedState.eventReporter.reportLogicalPlan(
           qe.analyzed, EventTopic.LogicalPlan, traceId.get, appName.get)
       }
+      action(qe.executedPlan)
     }
   }
 

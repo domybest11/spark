@@ -17,12 +17,12 @@
 
 package org.apache.spark.sql.execution.dynamicpruning
 
+import org.apache.spark.broadcast.BroadcastMode
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.expressions
+import org.apache.spark.sql.catalyst.{expressions, InternalRow}
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeSeq, BindReferences, DynamicPruningExpression, DynamicPruningSubquery, Expression, ListQuery, Literal, PredicateHelper}
 import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight}
 import org.apache.spark.sql.catalyst.plans.logical.Aggregate
-import org.apache.spark.sql.catalyst.plans.physical.BroadcastMode
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.{InSubqueryExec, QueryExecution, SparkPlan, SubqueryBroadcastExec}
 import org.apache.spark.sql.execution.exchange.BroadcastExchangeExec
@@ -40,7 +40,8 @@ case class PlanDynamicPruningFilters(sparkSession: SparkSession)
   /**
    * Identify the shape in which keys of a given plan are broadcasted.
    */
-  private def broadcastMode(keys: Seq[Expression], output: AttributeSeq): BroadcastMode = {
+  private def broadcastMode(keys: Seq[Expression],
+      output: AttributeSeq): BroadcastMode[InternalRow] = {
     val packedKeys = BindReferences.bindReferences(HashJoin.rewriteKeyExpr(keys), output)
     HashedRelationBroadcastMode(packedKeys)
   }
