@@ -57,7 +57,7 @@ class BroadcastExchangeSuite extends SparkPlanTest
 
       // get the exchange physical plan
       val hashExchange = collect(
-        df.queryExecution.executedPlan) { case p: BroadcastExchangeExec => p }.head
+        df.queryExecution.executedPlan) { case p: BroadcastExchangeExec[_] => p }.head
 
       // materialize the future and wait for the job being scheduled
       hashExchange.prepare()
@@ -88,7 +88,7 @@ class BroadcastExchangeSuite extends SparkPlanTest
       val df = spark.range(1).toDF()
       val joinDF = df.join(broadcast(df), "id")
       val broadcastExchangeExec = collect(
-        joinDF.queryExecution.executedPlan) { case p: BroadcastExchangeExec => p }
+        joinDF.queryExecution.executedPlan) { case p: BroadcastExchangeExec[_] => p }
       assert(broadcastExchangeExec.size == 1, "one and only BroadcastExchangeExec")
       assert(joinDF.collect().length == 1)
     }

@@ -17,7 +17,6 @@
 
 package org.apache.spark.sql.hive.execution
 
-import java.util
 import java.util.Locale
 
 import scala.collection.JavaConverters._

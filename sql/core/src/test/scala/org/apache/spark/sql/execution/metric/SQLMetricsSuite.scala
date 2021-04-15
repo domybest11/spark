@@ -747,7 +747,7 @@ class SQLMetricsSuite extends SharedSparkSession with SQLMetricsTestUtils
         val plan = df.queryExecution.executedPlan
 
         val exchanges = plan.collect {
-          case s: BroadcastExchangeExec => s
+          case s: BroadcastExchangeExec[_] => s
         }
 
         assert(exchanges.size === 1)

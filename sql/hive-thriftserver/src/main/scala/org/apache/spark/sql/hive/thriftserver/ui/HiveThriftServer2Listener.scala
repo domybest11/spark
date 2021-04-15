@@ -21,9 +21,7 @@ import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
 import org.apache.hive.service.server.HiveServer2
-
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.Status.LIVE_ENTITY_UPDATE_PERIOD
@@ -31,6 +29,7 @@ import org.apache.spark.metrics.event.LogErrorWrapEvent
 import org.apache.spark.scheduler._
 import org.apache.spark.sql.hive.thriftserver.HiveThriftServer2.ExecutionState
 import org.apache.spark.sql.hive.thriftserver.SparkSQLEnv
+import org.apache.spark.sql.hive.thriftserver.status.SQLJobData
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.status.{ElementTrackingStore, KVUtils, LiveEntity}
 
@@ -42,7 +41,7 @@ private[thriftserver] class HiveThriftServer2Listener(
     sparkConf: SparkConf,
     server: Option[HiveServer2],
     live: Boolean = true,
-    val executionQueue: LinkedBlockingQueue[ExecutionInfo],
+    val executionQueue: LinkedBlockingQueue[LiveExecutionData],
     val logErrorQueue: Option[LinkedBlockingQueue[LogErrorWrapEvent]]) extends SparkListener with Logging {
 
   private val sessionList = new ConcurrentHashMap[String, LiveSessionData]()
@@ -167,7 +166,6 @@ private[thriftserver] class HiveThriftServer2Listener(
     executionData.groupId = e.groupId
     updateLiveStore(executionData)
     executionQueue.offer(executionData)
-
     Option(sessionList.get(e.sessionId)) match {
       case Some(sessionData) =>
         sessionData.totalExecution += 1

@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.hive.thriftserver.status
 
-import java.util.{Date, List => JList}
+import java.util.{List => JList}
 
 import scala.collection.mutable.ListBuffer
 

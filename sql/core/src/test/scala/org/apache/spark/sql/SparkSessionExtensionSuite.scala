@@ -740,11 +740,11 @@ case class PreRuleReplaceAddWithBrokenVersion() extends Rule[SparkPlan] {
           // be replaced.
           val replaced = e.withNewChildren(e.children.map(replaceWithColumnarPlan))
           MyShuffleExchangeExec(replaced.asInstanceOf[ShuffleExchangeExec])
-        case e: BroadcastExchangeExec =>
+        case e: BroadcastExchangeExec[_] =>
           // note that this is not actually columnar but demonstrates that exchanges can
           // be replaced.
           val replaced = e.withNewChildren(e.children.map(replaceWithColumnarPlan))
-          MyBroadcastExchangeExec(replaced.asInstanceOf[BroadcastExchangeExec])
+          MyBroadcastExchangeExec(replaced.asInstanceOf[BroadcastExchangeExec[_]])
         case plan: ProjectExec =>
           new ColumnarProjectExec(plan.projectList.map((exp) =>
             replaceWithColumnarExpression(exp).asInstanceOf[NamedExpression]),
@@ -787,7 +787,7 @@ case class MyShuffleExchangeExec(delegate: ShuffleExchangeExec) extends ShuffleE
  * Custom Exchange used in tests to demonstrate that broadcasts can be replaced regardless of
  * whether AQE is enabled.
  */
-case class MyBroadcastExchangeExec(delegate: BroadcastExchangeExec) extends BroadcastExchangeLike {
+case class MyBroadcastExchangeExec(delegate: BroadcastExchangeExec[_]) extends BroadcastExchangeLike {
   override def runId: UUID = delegate.runId
   override def relationFuture: java.util.concurrent.Future[Broadcast[Any]] =
     delegate.relationFuture

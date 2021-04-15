@@ -18,11 +18,7 @@
 package org.apache.spark.sql.hive.thriftserver
 
 import java.util.Locale
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
-
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
 import org.apache.hadoop.hive.common.ServerUtils
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
@@ -38,8 +34,6 @@ import org.apache.spark.metrics.event.LogErrorWrapEvent
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.hive.thriftserver.ReflectionUtils._
-import org.apache.spark.sql.hive.thriftserver.status.{SQLJobData, ThriftServerAppStatusScheduler,
-  ThriftServerSqlAppStatusStore}
 import org.apache.spark.sql.hive.thriftserver.ui._
 import org.apache.spark.status.ElementTrackingStore
 import org.apache.spark.util.{ShutdownHookManager, Utils}
@@ -149,7 +143,7 @@ private[hive] class HiveThriftServer2(sqlContext: SQLContext)
   // state is tracked internally so that the server only attempts to shut down if it successfully
   // started, and then once only.
   private val started = new AtomicBoolean(false)
-
+  val appStatusScheduler = new ThriftServerAppStatusScheduler()
   override def init(hiveConf: HiveConf): Unit = {
     val sparkSqlCliService = new SparkSQLCLIService(this, sqlContext)
     setSuperField(this, "cliService", sparkSqlCliService)

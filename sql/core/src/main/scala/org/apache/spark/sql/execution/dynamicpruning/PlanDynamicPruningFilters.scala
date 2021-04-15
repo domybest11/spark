@@ -19,10 +19,11 @@ package org.apache.spark.sql.execution.dynamicpruning
 
 import org.apache.spark.broadcast.BroadcastMode
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.{expressions, InternalRow}
+import org.apache.spark.sql.catalyst.{InternalRow, expressions}
 import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeSeq, BindReferences, DynamicPruningExpression, DynamicPruningSubquery, Expression, ListQuery, Literal, PredicateHelper}
 import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight}
 import org.apache.spark.sql.catalyst.plans.logical.Aggregate
+import org.apache.spark.sql.catalyst.plans.physical.RowBroadcastMode
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.{InSubqueryExec, QueryExecution, SparkPlan, SubqueryBroadcastExec}
 import org.apache.spark.sql.execution.exchange.BroadcastExchangeExec
@@ -71,7 +72,7 @@ case class PlanDynamicPruningFilters(sparkSession: SparkSession)
           val executedPlan = QueryExecution.prepareExecutedPlan(sparkSession, sparkPlan)
           val mode = broadcastMode(buildKeys, executedPlan.output)
           // plan a broadcast exchange of the build side of the join
-          val exchange = BroadcastExchangeExec(mode, executedPlan)
+          val exchange = BroadcastExchangeExec(mode.asInstanceOf[RowBroadcastMode], executedPlan)
           val name = s"dynamicpruning#${exprId.id}"
           // place the broadcast adaptor for reusing the broadcast results on the probe side
           val broadcastValues =

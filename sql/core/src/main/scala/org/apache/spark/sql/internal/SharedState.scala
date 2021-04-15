@@ -21,12 +21,11 @@ import java.net.URL
 import java.util.UUID
 import javax.annotation.concurrent.GuardedBy
 import java.util.concurrent.{ConcurrentHashMap, CopyOnWriteArrayList}
-import java.util.function.{BiFunction, Function => JFunction}
+import java.util.function.BiFunction
 
 import scala.reflect.ClassTag
 import scala.util.control.NonFatal
 import scala.util.Random
-import scala.collection.JavaConverters._
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FsUrlStreamHandlerFactory
 import org.apache.hadoop.security.UserGroupInformation

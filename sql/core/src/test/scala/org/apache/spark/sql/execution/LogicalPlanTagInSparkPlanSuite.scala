@@ -84,7 +84,7 @@ class LogicalPlanTagInSparkPlanSuite extends TPCDSQuerySuite with DisableAdaptiv
 
       // The exchange related nodes are created after the planning, they don't have corresponding
       // logical plan.
-      case _: ShuffleExchangeExec | _: BroadcastExchangeExec | _: ReusedExchangeExec =>
+      case _: ShuffleExchangeExec | _: BroadcastExchangeExec[_] | _: ReusedExchangeExec =>
         assert(plan.getTagValue(SparkPlan.LOGICAL_PLAN_TAG).isEmpty)
 
       // The subquery exec nodes are just wrappers of the actual nodes, they don't have

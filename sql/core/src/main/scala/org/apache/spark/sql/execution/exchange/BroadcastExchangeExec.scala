@@ -73,7 +73,6 @@ trait BroadcastExchangeLike extends Exchange {
 case class BroadcastExchangeExec[T: ClassTag](
     mode: RowBroadcastMode,
     child: SparkPlan) extends BroadcastExchangeLike {
-  import BroadcastExchangeExec._
 
   override val runId: UUID = UUID.randomUUID
 

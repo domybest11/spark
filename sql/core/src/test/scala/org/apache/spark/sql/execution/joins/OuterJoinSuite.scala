@@ -201,6 +201,7 @@ class OuterJoinSuite extends SparkPlanTest with SharedSparkSession {
         withSQLConf(SQLConf.EXECUTOR_SIDE_BROADCAST_ENABLED.key -> executorSideBroadcast) {
           usingBroadcastNestedLoopJoin(BuildRight)
         }
+      }
     }
   }
 

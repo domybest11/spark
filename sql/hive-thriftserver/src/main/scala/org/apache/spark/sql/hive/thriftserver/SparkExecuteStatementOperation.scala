@@ -224,6 +224,8 @@ private[hive] class SparkExecuteStatementOperation(
   override def runInternal(): Unit = {
     setState(OperationState.PENDING)
     logInfo(s"Submitting query '$statement' with $statementId")
+    val traceId = sqlContext.sparkSession.conf.getOption("archer.trace.id")
+      .orElse(Option(parentSession.getHiveConf.get("archer.trace.id")))
     HiveThriftServer2.eventManager.onStatementStart(
       statementId,
       parentSession.getSessionHandle.getSessionId.toString,
@@ -250,7 +252,7 @@ private[hive] class SparkExecuteStatementOperation(
     }
 
     if (!runInBackground) {
-      execute()
+      execute(traceId)
     } else {
       val sparkServiceUGI =
         if (sqlContext.sparkContext.conf.getBoolean("spark.proxyuser.enabled", false)) {
@@ -272,7 +274,7 @@ private[hive] class SparkExecuteStatementOperation(
               registerCurrentOperationLog()
               try {
                 withLocalProperties {
-                  execute()
+                  execute(traceId)
                 }
               } catch {
                 case e: HiveSQLException => setOperationException(e)
@@ -307,22 +309,20 @@ private[hive] class SparkExecuteStatementOperation(
           logError("Error submitting query in background, query rejected", rejected)
           setState(OperationState.ERROR)
           HiveThriftServer2.eventManager.onStatementError(
-            statementId, rejected.getMessage, SparkUtils.exceptionString(rejected))
+            statementId, traceId.getOrElse(""), rejected.getMessage, SparkUtils.exceptionString(rejected))
           throw new HiveSQLException("The background threadpool cannot accept" +
             " new task for execution, please retry the operation", rejected)
         case NonFatal(e) =>
           logError(s"Error executing query in background", e)
           setState(OperationState.ERROR)
           HiveThriftServer2.eventManager.onStatementError(
-            statementId, e.getMessage, SparkUtils.exceptionString(e))
+            statementId, traceId.getOrElse(""), e.getMessage, SparkUtils.exceptionString(e))
           throw new HiveSQLException(e)
       }
     }
   }
 
-  private def execute(): Unit = {
-    val traceId = sqlContext.sparkSession.conf.getOption("archer.trace.id")
-      .orElse(Option(parentSession.getHiveConf.get("archer.trace.id")))
+  private def execute(traceId: Option[String]): Unit = {
     if (traceId.isDefined) {
       logInfo(s"Query with trace id $traceId")
       sqlContext.sparkContext.setLocalProperty("spark.trace.id", traceId.get)
