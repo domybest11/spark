@@ -107,7 +107,7 @@ private[thriftserver] case class SparkListenerThriftServerOperationTimeout(
 
 private[thriftserver] case class SparkListenerThriftServerOperationError(
     id: String,
-    traceId :String,
+    traceId: String,
     errorMsg: String,
     errorTrace: String,
     finishTime: Long) extends SparkListenerEvent

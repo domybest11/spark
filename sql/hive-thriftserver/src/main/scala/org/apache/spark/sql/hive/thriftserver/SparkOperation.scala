@@ -99,7 +99,7 @@ private[hive] trait SparkOperation extends Operation with Logging {
       logError(s"Error operating $getType with $statementId", e)
       super.setState(OperationState.ERROR)
       val traceId = sqlContext.sparkSession.conf.getOption("archer.trace.id")
-        .orElse(Option(parentSession.getHiveConf.get("archer.trace.id")))
+        .orElse(Option(""))
       HiveThriftServer2.eventManager.onStatementError(
         statementId, traceId.getOrElse(""), e.getMessage, Utils.exceptionString(e))
       e match {

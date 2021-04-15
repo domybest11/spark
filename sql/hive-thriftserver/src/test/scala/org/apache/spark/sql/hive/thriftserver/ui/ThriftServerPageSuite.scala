@@ -49,7 +49,8 @@ class ThriftServerPageSuite extends SparkFunSuite with BeforeAndAfter {
     val server = mock(classOf[HiveThriftServer2], RETURNS_SMART_NULLS)
     val sparkConf = new SparkConf
 
-    val listener = new HiveThriftServer2Listener(kvstore, sparkConf, Some(server))
+    val listener = new HiveThriftServer2Listener(kvstore, sparkConf, Some(server), false,
+      server.appStatusScheduler._executionInfoQueue, None)
     val statusStore = new HiveThriftServer2AppStatusStore(kvstore, Some(listener))
 
     listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionid", "user",

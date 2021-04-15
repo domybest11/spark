@@ -70,7 +70,8 @@ object HiveThriftServer2 extends Logging {
     server
   }
 
-  private def createListenerAndUI(server: HiveThriftServer2, sc: SparkContext, sqlContext: SQLContext): Unit = {
+  private def createListenerAndUI(server: HiveThriftServer2, sc: SparkContext,
+                                  sqlContext: SQLContext): Unit = {
     val kvStore = sc.statusStore.store.asInstanceOf[ElementTrackingStore]
     eventManager = new HiveThriftServer2EventManager(sc)
     var failureJobCollector: FailureJobCollector[LogErrorWrapEvent] = null

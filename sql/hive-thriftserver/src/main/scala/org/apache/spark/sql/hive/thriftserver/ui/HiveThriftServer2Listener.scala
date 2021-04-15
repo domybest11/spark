@@ -42,7 +42,8 @@ private[thriftserver] class HiveThriftServer2Listener(
     server: Option[HiveServer2],
     live: Boolean = true,
     val executionQueue: LinkedBlockingQueue[LiveExecutionData],
-    val logErrorQueue: Option[LinkedBlockingQueue[LogErrorWrapEvent]]) extends SparkListener with Logging {
+    val logErrorQueue: Option[LinkedBlockingQueue[LogErrorWrapEvent]])
+  extends SparkListener with Logging {
 
   private val sessionList = new ConcurrentHashMap[String, LiveSessionData]()
   private val executionList = new ConcurrentHashMap[String, LiveExecutionData]()

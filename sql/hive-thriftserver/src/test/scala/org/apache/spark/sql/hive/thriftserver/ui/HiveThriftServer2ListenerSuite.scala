@@ -152,7 +152,7 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
     listener.onOtherEvent(SparkListenerThriftServerOperationParsed(unknownOperation, "query"))
     listener.onOtherEvent(SparkListenerThriftServerOperationCanceled(unknownOperation, 0))
     listener.onOtherEvent(SparkListenerThriftServerOperationTimeout(unknownOperation, 0))
-    listener.onOtherEvent(SparkListenerThriftServerOperationError(unknownOperation,
+    listener.onOtherEvent(SparkListenerThriftServerOperationError(unknownOperation, "",
       "msg", "trace", 0))
     listener.onOtherEvent(SparkListenerThriftServerOperationFinish(unknownOperation, 0))
     listener.onOtherEvent(SparkListenerThriftServerOperationClosed(unknownOperation, 0))
@@ -172,11 +172,14 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
     kvstore = new ElementTrackingStore(new InMemoryStore, sparkConf)
     if (live) {
       val server = mock(classOf[HiveThriftServer2], RETURNS_SMART_NULLS)
-      val listener = new HiveThriftServer2Listener(kvstore, sparkConf, Some(server))
+      val listener = new HiveThriftServer2Listener(kvstore, sparkConf, Some(server),
+        executionQueue = server.appStatusScheduler._executionInfoQueue, logErrorQueue = None)
       (new HiveThriftServer2AppStatusStore(kvstore, Some(listener)), listener)
     } else {
+      val server = mock(classOf[HiveThriftServer2], RETURNS_SMART_NULLS)
       (new HiveThriftServer2AppStatusStore(kvstore),
-        new HiveThriftServer2Listener(kvstore, sparkConf, None, false))
+        new HiveThriftServer2Listener(kvstore, sparkConf, None, false,
+          server.appStatusScheduler._executionInfoQueue, None))
     }
   }
 }
