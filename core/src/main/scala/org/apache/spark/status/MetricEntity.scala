@@ -20,11 +20,11 @@ package org.apache.spark.status
 import java.util.Date
 import java.util.concurrent.atomic.AtomicInteger
 
-import scala.collection.immutable.{HashSet, TreeSet}
+import scala.collection.immutable.TreeSet
 import scala.collection.mutable.HashMap
 import com.google.common.collect.Interners
 import org.apache.spark.JobExecutionStatus
-import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.executor.{ExecutorMetrics, TaskMetrics}
 import org.apache.spark.metrics.event.SimpleWrapEvent
 import org.apache.spark.metrics.sink.KafkaSink
 import org.apache.spark.scheduler.{AccumulableInfo, StageInfo, TaskInfo}
@@ -317,10 +317,12 @@ private class LiveMetricExecutorStageSummary(
   var failedTasks = 0
   var killedTasks = 0
   var isBlacklisted = false
-
+  var isExcluded = false
   var metrics = createMetrics(default = 0L)
+  val peakExecutorMetrics = new ExecutorMetrics()
 
   override protected def doUpdate(): Any = {
+
     val info = new v1.ExecutorStageSummary(
       taskTime,
       failedTasks,
@@ -336,7 +338,10 @@ private class LiveMetricExecutorStageSummary(
       metrics.shuffleWriteMetrics.recordsWritten,
       metrics.memoryBytesSpilled,
       metrics.diskBytesSpilled,
-      isBlacklisted)
+      isBlacklisted,
+      Some(peakExecutorMetrics).filter(_.isSet),
+      isExcluded
+    )
     new ExecutorStageSummaryWrapper(stageId, attemptId, executorId, info)
   }
 
@@ -517,8 +522,8 @@ private class LiveMetricRDD(val info: RDDInfo) extends LiveMetricEntity {
 
   def partition(blockName: String): LiveRDDPartition = {
     partitions.getOrElseUpdate(blockName, {
-      val part = new LiveRDDPartition(blockName)
-      part.update(Nil, storageLevel, 0L, 0L)
+      val part = new LiveRDDPartition(blockName, info.storageLevel)
+      part.update(Seq.empty, 0L, 0L)
       partitionSeq.addPartition(part)
       part
     })
