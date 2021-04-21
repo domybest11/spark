@@ -525,7 +525,7 @@ private[spark] class Client(
     // and add them as local resources to the application master.
     val fs = destDir.getFileSystem(hadoopConf)
     val currentUser = UserGroupInformation.getCurrentUser()
-    val credentials = currentUser.getCredentials()
+    credentials = currentUser.getCredentials()
 
     if (isClusterMode) {
       val credentialManager = new HadoopDelegationTokenManager(sparkConf, hadoopConf, null)
