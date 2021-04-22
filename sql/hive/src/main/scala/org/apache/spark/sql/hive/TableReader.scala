@@ -342,7 +342,7 @@ class HadoopTableReader(
       sparkSession.sparkContext,
       _broadcastedHadoopConf.asInstanceOf[Broadcast[SerializableConfiguration]],
       Some(initializeJobConfFunc),
-      inputFormatClass,
+      inputFormatClassFinal,
       classOf[Writable],
       classOf[Writable],
       _minSplitsPerRDD)
