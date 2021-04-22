@@ -610,6 +610,7 @@ private[spark] class Executor(
 
         val resultSer = env.serializer.newInstance()
         val beforeSerializationNs = System.nanoTime()
+        logInfo("=======value=========:" + value)
         val valueBytes = resultSer.serialize(value)
         val afterSerializationNs = System.nanoTime()
 
