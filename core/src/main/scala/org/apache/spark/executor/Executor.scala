@@ -610,10 +610,6 @@ private[spark] class Executor(
 
         val resultSer = env.serializer.newInstance()
         val beforeSerializationNs = System.nanoTime()
-        if (value.isInstanceOf[Tuple2]) {
-          logInfo("=======value1=========:" + value.asInstanceOf[Tuple2]._1)
-          logInfo("=======value2=========:" + value.asInstanceOf[Tuple2]._2)
-        }
         val valueBytes = resultSer.serialize(value)
         val afterSerializationNs = System.nanoTime()
 

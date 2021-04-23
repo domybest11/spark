@@ -130,8 +130,8 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       context: TaskContext,
       metrics: ShuffleReadMetricsReporter): ShuffleReader[K, C] = {
     new BlockStoreShuffleReader(
-      handle.asInstanceOf[BaseShuffleHandle[K, _, C]], startPartition, startMapIndex,
-      endMapIndex, endPartition, context, metrics, shouldBatchFetch =
+      handle.asInstanceOf[BaseShuffleHandle[K, _, C]], startMapIndex,
+      endMapIndex, startPartition,  endPartition, context, metrics, shouldBatchFetch =
         canUseBatchFetch(startPartition, endPartition, context))
   }
 
