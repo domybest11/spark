@@ -6,7 +6,7 @@ package org.apache.spark.util
 
 import java.net.InetAddress
 import java.util._
-import java.util.concurrent.Executors
+import java.util.concurrent.{Executors, ScheduledExecutorService}
 
 import com.bilibili.config.DeployConfig
 import com.bilibili.config.transport.ConfigTransportConfig
@@ -35,10 +35,7 @@ object ConfigurationUtil extends Logging {
   /**
    * 刷新线程
    */
-  private val executor = Executors.newSingleThreadScheduledExecutor(
-    new ThreadFactoryBuilder()
-      .setDaemon(true)
-      .setNameFormat("refresh configuration-%d").build)
+  private var executor: ScheduledExecutorService = _
 
   def initConfiguration(): Unit = {
     logInfo(System.getenv.toString)
@@ -51,6 +48,10 @@ object ConfigurationUtil extends Logging {
         logError("Fetching error", e)
     }
     oldConfig = config.clone.asInstanceOf[Properties]
+    executor = Executors.newSingleThreadScheduledExecutor(
+      new ThreadFactoryBuilder()
+        .setDaemon(true)
+        .setNameFormat("refresh configuration-%d").build)
     executor.submit(new RefreshConfigThread)
   }
 
