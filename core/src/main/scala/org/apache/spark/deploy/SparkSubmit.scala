@@ -84,7 +84,9 @@ private[spark] class SparkSubmit extends Logging {
 
     val appArgs = parseArguments(args)
     appArgs.sparkProperties.foreach(entry => {
-      System.setProperty(entry._1, entry._2)
+      if (entry._1 != "spark.launcher.port" && entry._1 != "spark.launcher.secret") {
+        System.setProperty(entry._1, entry._2)
+      }
     })
     if (appArgs.verbose) {
       logInfo(appArgs.toString)
