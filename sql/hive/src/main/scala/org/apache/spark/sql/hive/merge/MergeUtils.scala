@@ -343,7 +343,7 @@ object MergeUtils extends Logging {
         reader.close()
       }
     }
-    mergeOp.closeOp(true)
+    mergeOp.closeOp(false)
     fs.cancelDeleteOnExit(outputPath)
     val taskPath = new Path(tmpMergeLocationDir + "/part-" +
       "%05d".format(context.partitionId()) + extension)
