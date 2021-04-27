@@ -25,7 +25,6 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.common.FileUtils
-import org.apache.hadoop.hive.ql.CompilationOpContext
 import org.apache.hadoop.hive.ql.exec.{AbstractFileMergeOperator, OrcFileMergeOperator, RCFileMergeOperator}
 import org.apache.hadoop.hive.ql.io.orc.OrcFileStripeMergeRecordReader
 import org.apache.hadoop.hive.ql.io.rcfile.merge.RCFileBlockMergeRecordReader
@@ -92,10 +91,9 @@ object MergeUtils extends Logging {
       conf: Configuration): AbstractFileMergeOperator[T] = {
     val mergeOperator: AbstractFileMergeOperator[T] = outputFormat match {
       case ORC =>
-        new OrcFileMergeOperator(new CompilationOpContext)
-          .asInstanceOf[AbstractFileMergeOperator[T]]
+        new OrcFileMergeOperator().asInstanceOf[AbstractFileMergeOperator[T]]
       case RC =>
-        new RCFileMergeOperator(new CompilationOpContext).asInstanceOf[AbstractFileMergeOperator[T]]
+        new RCFileMergeOperator().asInstanceOf[AbstractFileMergeOperator[T]]
       case PARQUET =>
         val schema = DataType.fromJson(conf.get(SCHEMA)).asInstanceOf[StructType]
         new ParquetFileMergeOperator(conf, schema).asInstanceOf[AbstractFileMergeOperator[T]]
