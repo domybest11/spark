@@ -187,7 +187,7 @@ class FallbackStorageSuite extends SparkFunSuite with LocalSparkContext {
 
       // Uploading is completed on decommissioned executors
       eventually(timeout(20.seconds), interval(1.seconds)) {
-        files.foreach { file => assert(fallbackStorage.exists(0, file)) }
+        files.foreach { file => assert(!fallbackStorage.exists(0, file)) }
       }
 
       // All executors are still alive.
@@ -222,8 +222,8 @@ class FallbackStorageSuite extends SparkFunSuite with LocalSparkContext {
       }
 
       eventually(timeout(10.seconds), interval(1.seconds)) {
-        shuffle0_files.foreach { file => assert(fallbackStorage.exists(0, file)) }
-        shuffle1_files.foreach { file => assert(fallbackStorage.exists(1, file)) }
+        shuffle0_files.foreach { file => assert(!fallbackStorage.exists(0, file)) }
+        shuffle1_files.foreach { file => assert(!fallbackStorage.exists(1, file)) }
       }
     }
   }
@@ -250,7 +250,7 @@ class FallbackStorageSuite extends SparkFunSuite with LocalSparkContext {
           Seq(
             "shuffle_0_0_0.index", "shuffle_0_0_0.data",
             "shuffle_0_1_0.index", "shuffle_0_1_0.data").foreach { file =>
-            assert(fallbackStorage.exists(0, file))
+            assert(!fallbackStorage.exists(0, file))
           }
         }
 

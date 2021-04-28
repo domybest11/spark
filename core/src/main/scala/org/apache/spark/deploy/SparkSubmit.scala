@@ -84,7 +84,8 @@ private[spark] class SparkSubmit extends Logging {
 
     val appArgs = parseArguments(args)
     appArgs.sparkProperties.foreach(entry => {
-      if (entry._1 != "spark.launcher.port" && entry._1 != "spark.launcher.secret") {
+      if (entry._1 == "spark.app.id" || entry._1 == "spark.app.name"
+        || entry._1 == "spark.trace.id") {
         System.setProperty(entry._1, entry._2)
       }
     })

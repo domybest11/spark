@@ -192,7 +192,11 @@ class FsHistoryProviderSuite extends SparkFunSuite with Matchers with Logging {
     logFile2.setReadable(false, false)
 
     updateAndCheck(provider) { list =>
-      list.size should be (1)
+      if (System.getProperties.get("USER") == "root") {
+        list.size should be (2)
+      } else {
+        list.size should be(1)
+      }
     }
 
     provider.doMergeApplicationListingCall should be (1)
