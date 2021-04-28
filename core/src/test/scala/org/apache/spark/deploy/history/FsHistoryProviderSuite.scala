@@ -195,11 +195,15 @@ class FsHistoryProviderSuite extends SparkFunSuite with Matchers with Logging {
       if (System.getProperties.get("user.name") == "root") {
         list.size should be (2)
       } else {
-        list.size should be(1)
+        list.size should be (1)
       }
     }
 
-    provider.doMergeApplicationListingCall should be (1)
+    if (System.getProperties.get("user.name") == "root") {
+      provider.doMergeApplicationListingCall should be (2)
+    } else {
+      provider.doMergeApplicationListingCall should be(1)
+    }
   }
 
   test("history file is renamed from inprogress to completed") {
