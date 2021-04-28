@@ -96,8 +96,11 @@ private[spark] class BlockStoreShuffleReader[K, C](
       serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
     }
 
-    val foundDataSkew = mapOutputTracker.checkDataSkewTask(handle.shuffleId,
-      dep.partitioner.numPartitions, startPartition, endPartition)
+    var foundDataSkew: Boolean = false
+    if (dep.partitioner != null) {
+      foundDataSkew = mapOutputTracker.checkDataSkewTask(handle.shuffleId,
+        dep.partitioner.numPartitions, startPartition, endPartition)
+    }
     if (foundDataSkew) {
       context.getLocalProperties.setProperty("spark.sql.autoDetectDataSkew", "true")
     }

@@ -2327,6 +2327,13 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |        },
       |        {
       |          "ID": 25,
+      |          "Name": "$TEST_DATA_SKEW_KEYS",
+      |          "Update": "[]",
+      |          "Internal": false,
+      |          "Count Failed Values": true
+      |        },
+      |        {
+      |          "ID": 26,
       |          "Name": "$TEST_ACCUM",
       |          "Update": 0,
       |          "Internal": true,
