@@ -19,12 +19,12 @@ package org.apache.spark.sql.hive.thriftserver
 
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
+
 import org.apache.hadoop.hive.common.ServerUtils
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
 import org.apache.hive.service.cli.thrift.{ThriftBinaryCLIService, ThriftHttpCLIService}
 import org.apache.hive.service.server.HiveServer2
-
 import org.apache.spark.SparkContext
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.collector.FailureJobCollector
@@ -38,7 +38,7 @@ import org.apache.spark.sql.hive.thriftserver.ui._
 import org.apache.spark.status.ElementTrackingStore
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 import org.apache.spark.internal.config.Status._
-import org.apache.spark.sql.hive.thriftserver.status.ThriftServerAppStatusScheduler
+import org.apache.spark.sql.hive.thriftserver.status.{ThriftServerAppStatusScheduler, ThriftServerSqlAppStatusStore}
 
 /**
  * The main entry point for the Spark SQL port of HiveServer2.  Starts up a `SparkSQLContext` and a
@@ -74,6 +74,10 @@ object HiveThriftServer2 extends Logging {
                                   sqlContext: SQLContext): Unit = {
     val kvStore = sc.statusStore.store.asInstanceOf[ElementTrackingStore]
     eventManager = new HiveThriftServer2EventManager(sc)
+    val thriftServerSqlStatusStore = new ThriftServerSqlAppStatusStore(
+      Some(SparkSQLEnv.sqlContext.sharedState.statusStore),
+      Some(SparkSQLEnv.sparkContext.statusStore), SparkSQLEnv.sparkContext.conf)
+    server.appStatusScheduler.start(thriftServerSqlStatusStore)
     var failureJobCollector: FailureJobCollector[LogErrorWrapEvent] = null
     if (SparkSQLEnv.sparkContext.conf.get(FAILURE_JOB_COLLECTOR)) {
       failureJobCollector =
