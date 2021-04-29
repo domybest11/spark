@@ -83,6 +83,7 @@ case class BroadcastExchangeExec[T: ClassTag](
   } else {
     Map(
       "dataSize" -> SQLMetrics.createMetric(sparkContext, "data size (bytes)"),
+      "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"),
       "collectTime" -> SQLMetrics.createMetric(sparkContext, "time to collect (ms)"),
       "buildTime" -> SQLMetrics.createMetric(sparkContext, "time to build (ms)"),
       "broadcastTime" -> SQLMetrics.createMetric(sparkContext, "time to broadcast (ms)"))
