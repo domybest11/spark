@@ -260,11 +260,19 @@
   </properties>
   <repositories>
     <repository>
+      <id>bilibili-nexus-releases</id>
+      <url>http://nexus.bilibili.co/content/repositories/releases/</url>
+    </repository>
+    <repository>
+      <id>bilibili-nexus-snapshots</id>
+      <url>http://nexus.bilibili.co/content/repositories/snapshots/</url>
+    </repository>
+ <!--   <repository>
       <id>gcs-maven-central-mirror</id>
-      <!--
+      &lt;!&ndash;
         Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
         See https://storage-download.googleapis.com/maven-central/index.html
-      -->
+      &ndash;&gt;
       <name>GCS Maven Central mirror</name>
       <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
       <releases>
@@ -275,27 +283,31 @@
       </snapshots>
     </repository>
     <repository>
+    -->
+
       <!--
         This is used as a fallback when the first try fails.
       -->
-      <id>central</id>
-      <name>Maven Repository</name>
-      <url>https://repo.maven.apache.org/maven2</url>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-    </repository>
-  </repositories>
-  <pluginRepositories>
-    <pluginRepository>
-      <id>gcs-maven-central-mirror</id>
-      <!--
-        Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
-        See https://storage-download.googleapis.com/maven-central/index.html
-      -->
+    <!--
+     <id>central</id>
+     <name>Maven Repository</name>
+     <url>https://repo.maven.apache.org/maven2</url>
+     <releases>
+       <enabled>true</enabled>
+     </releases>
+     <snapshots>
+       <enabled>false</enabled>
+     </snapshots>
+   </repository>
+   -->
+ </repositories>
+ <pluginRepositories>
+   <pluginRepository>
+     <id>gcs-maven-central-mirror</id>
+     <!--
+       Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
+       See https://storage-download.googleapis.com/maven-central/index.html
+     -->
       <name>GCS Maven Central mirror</name>
       <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
       <releases>
@@ -3005,7 +3017,7 @@
         <version>1.0.0</version>
         <configuration>
           <verbose>false</verbose>
-          <failOnViolation>true</failOnViolation>
+          <failOnViolation>false</failOnViolation>
           <includeTestSourceDirectory>false</includeTestSourceDirectory>
           <failOnWarning>false</failOnWarning>
           <sourceDirectory>${basedir}/src/main/scala</sourceDirectory>
