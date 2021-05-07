@@ -617,23 +617,6 @@ class SparkContext(config: SparkConf) extends Logging {
       conf.get(EXECUTOR_HEARTBEAT_INTERVAL))
     _heartbeater.start()
 
-    if (_conf.get(METRICS_SINK_USED_MAX_RESOURCE)) {
-      val url = _conf.get(METRICS_SINK_LANCER_URL)
-      val logId = _conf.get(METRICS_SINK_LOG_ID)
-      _kafkaHttpSink = new KafkaHttpSink(url, logId)
-      _kafkaHttpSink.start()
-    }
-
-    if (conf.get(CONTAINER_METRICS_COLLECTION_ENABLE)) {
-      val url = _conf.get(METRICS_SINK_LANCER_URL)
-      val logId = _conf.get(METRICS_SINK_LOG_ID)
-      val kafkaHttpSinkUsedResource = new KafkaHttpSink(url, logId)
-      sinkUsedResourceScheduler = new SinkUsedResourceScheduler(
-        sinkUsedResource, "driver-sink-used-resource",
-        kafkaHttpSinkUsedResource, conf.get(CONTAINER_METRICS_COLLECTION_INTERVAL))
-      sinkUsedResourceScheduler.start()
-    }
-
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
     // constructor
     _taskScheduler.start()
@@ -712,9 +695,26 @@ class SparkContext(config: SparkConf) extends Logging {
       _env.metricsSystem.registerSource(e.executorAllocationManagerSource)
     }
 
+    if (_conf.get(METRICS_SINK_USED_MAX_RESOURCE)) {
+      val url = _conf.get(METRICS_SINK_LANCER_URL)
+      val logId = _conf.get(METRICS_SINK_LOG_ID)
+      _kafkaHttpSink = new KafkaHttpSink(url, logId)
+      _kafkaHttpSink.start()
+    }
+
+    if (conf.get(CONTAINER_METRICS_COLLECTION_ENABLE)) {
+      val url = _conf.get(METRICS_SINK_LANCER_URL)
+      val logId = _conf.get(METRICS_SINK_LOG_ID)
+      val kafkaHttpSinkUsedResource = new KafkaHttpSink(url, logId)
+      sinkUsedResourceScheduler = new SinkUsedResourceScheduler(
+        sinkUsedResource, "driver-sink-used-resource",
+        kafkaHttpSinkUsedResource, conf.get(CONTAINER_METRICS_COLLECTION_INTERVAL))
+      sinkUsedResourceScheduler.start()
+    }
+
     if (conf.get(JVM_PAUSE_MONITOR_ENABLE)) {
       jvmPauseMonitor = new JvmPauseMonitor(conf, applicationId,
-        applicationAttemptId.get.toInt, "-1")
+        applicationAttemptId.getOrElse("1").toInt, "-1")
       jvmPauseMonitor.start()
     }
 
@@ -2166,13 +2166,8 @@ class SparkContext(config: SparkConf) extends Logging {
         val executorAllocatedMemory = conf.get(EXECUTOR_MEMORY).toInt
         val executorAllocatedVCores = conf.getInt("spark.executor.cores", 1)
 
-        var appAttemptId: Int = 1
-        if (applicationAttemptId.isDefined) {
-          appAttemptId = applicationAttemptId.get.toInt
-        }
-
         val appMaxUsedResourceWrap = new AppMaxUsedResourceWrap("appMaxUsedResource",
-          applicationId, "spark", appAttemptId, driverAllocatedMemory,
+          applicationId, "spark", applicationAttemptId.getOrElse("1").toInt, driverAllocatedMemory,
           driverAllocatedVCores, maxDriverUsedMemory, maxDriverUsedCpuPercent,
           executorAllocatedMemory, executorAllocatedVCores, maxExecutorUsedMemory,
           maxExecutorUsedCpuPercent, System.currentTimeMillis())
@@ -2748,7 +2743,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private def sinkUsedResource(kafkaHttpSink: KafkaHttpSink): Unit = {
     try {
       val usedResourceWrap = new AppUsedResourceWrap("appUsedResource", conf.getAppId,
-        applicationAttemptId.get.toInt, "spark", "-1", curDriverUsedMemory,
+        applicationAttemptId.getOrElse("1").toInt, "spark", "-1", curDriverUsedMemory,
         curDriverUsedCpuPercent, System.currentTimeMillis())
       kafkaHttpSink.produce(usedResourceWrap)
     } catch {

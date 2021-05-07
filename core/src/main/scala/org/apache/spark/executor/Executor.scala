@@ -187,7 +187,7 @@ private[spark] class Executor(
   // Maintains the list of running tasks.
   private val runningTasks = new ConcurrentHashMap[Long, TaskRunner]
 
-  private val appAttemptId = conf.get("spark.yarn.app.attempt.id", "-1")
+  private val appAttemptId = conf.get("spark.yarn.app.attempt.id", "1")
   if (conf.get(CONTAINER_METRICS_COLLECTION_ENABLE)) {
     val url = conf.get(METRICS_SINK_LANCER_URL)
     val logId = conf.get(METRICS_SINK_LOG_ID)
