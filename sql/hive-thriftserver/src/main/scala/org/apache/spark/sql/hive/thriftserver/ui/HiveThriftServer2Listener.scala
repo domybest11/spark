@@ -192,6 +192,7 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.finishTimestamp = e.finishTime
         executionData.state = ExecutionState.CANCELED
         updateLiveStore(executionData)
+        executionList.get(e.id).finishOrErroAndReport = true
         executionQueue.offer(executionList.get(e.id))
       case None => logWarning(s"onOperationCanceled called with unknown operation id: ${e.id}")
     }
@@ -202,6 +203,7 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.finishTimestamp = e.finishTime
         executionData.state = ExecutionState.TIMEDOUT
         updateLiveStore(executionData)
+        executionList.get(e.id).finishOrErroAndReport = true
         executionQueue.offer(executionList.get(e.id))
       case None => logWarning(s"onOperationCanceled called with unknown operation id: ${e.id}")
     }
@@ -213,6 +215,7 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.detail = e.errorMsg
         executionData.state = ExecutionState.FAILED
         updateLiveStore(executionData)
+        executionList.get(e.id).finishOrErroAndReport = true
         executionQueue.offer(executionList.get(e.id))
         if (logErrorQueue.isDefined) {
           logErrorQueue.get.offer(new LogErrorWrapEvent("SparkThriftServer", "Error",

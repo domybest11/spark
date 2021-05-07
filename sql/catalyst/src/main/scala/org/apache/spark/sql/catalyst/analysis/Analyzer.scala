@@ -360,6 +360,10 @@ class Analyzer(override val catalogManager: CatalogManager)
         }
         case d @ Divide(l, r, f) if d.childrenResolved => (l.dataType, r.dataType) match {
           case (CalendarIntervalType, _) => DivideInterval(l, r, f)
+          case (TimestampType, LongType) =>
+            Divide(Cast(l, DoubleType), Cast(r, DoubleType), f)
+          case (LongType, TimestampType) =>
+            Divide(Cast(l, DoubleType), Cast(r, DoubleType), f)
           case _ => d
         }
       }
