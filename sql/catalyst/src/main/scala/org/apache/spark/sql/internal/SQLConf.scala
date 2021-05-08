@@ -960,7 +960,7 @@ object SQLConf {
       "we can't recover it back and broadcasting will be failed. Thus it is not " +
       "guaranteed completely safe when using with dynamic allocation.")
     .booleanConf
-    .createWithDefault(true)
+    .createWithDefault(false)
 
   // This is only used for the thriftserver
   val THRIFTSERVER_POOL = buildConf("spark.sql.thriftserver.scheduler.pool")
