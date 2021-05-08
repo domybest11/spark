@@ -228,7 +228,6 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _archives: Seq[String] = _
   private var _shutdownHookRef: AnyRef = _
   private var _statusStore: AppStatusStore = _
-  private var _metricsListener: MetricsListener = _
   private var _heartbeater: Heartbeater = _
   private var _resources: immutable.Map[String, ResourceInformation] = _
   private var _shuffleDriverComponents: ShuffleDriverComponents = _
@@ -493,9 +492,6 @@ class SparkContext(config: SparkConf) extends Logging {
     val appStatusSource = AppStatusSource.createSource(conf)
     _statusStore = AppStatusStore.createLiveStore(_conf, appStatusSource)
     listenerBus.addToStatusQueue(_statusStore.listener.get)
-    // Initialize the metrics listener
-    _metricsListener = MetricsListener.createLiveRecord(config)
-    listenerBus.addToStatusQueue(_metricsListener)
 
     // Create the Spark execution environment (cache, map output tracker, etc)
     _env = createSparkEnv(_conf, isLocal, listenerBus)
@@ -2215,9 +2211,6 @@ class SparkContext(config: SparkConf) extends Logging {
         _dagScheduler.stop()
       }
       _dagScheduler = null
-    }
-    if (_metricsListener != null) {
-      _metricsListener.close()
     }
     if (_listenerBusStarted) {
       Utils.tryLogNonFatalError {
