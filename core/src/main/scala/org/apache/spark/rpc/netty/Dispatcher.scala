@@ -70,6 +70,10 @@ private[netty] class Dispatcher(nettyEnv: NettyRpcEnv, numUsableCores: Int) exte
       // called.
       endpointRefs.put(endpoint, endpointRef)
 
+      if (endpointsIsStopped.getOrDefault(name, false)) {
+        endpointsIsStopped.remove(name)
+      }
+
       var messageLoop: MessageLoop = null
       try {
         messageLoop = endpoint match {

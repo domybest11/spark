@@ -653,6 +653,11 @@ object XxHash64Function extends InterpretedHashFunction {
  */
 @ExpressionDescription(
   usage = "_FUNC_(expr1, expr2, ...) - Returns a hash value of the arguments.",
+  examples = """
+    Examples:
+      > SELECT _FUNC_('Spark', array(123), 2);
+       -347056540
+  """,
   since = "2.2.0")
 case class HiveHash(children: Seq[Expression]) extends HashExpression[Int] {
   override val seed = 0

@@ -2274,10 +2274,9 @@ cannot resolve '(CAST('2017-12-12 09:30:00.0' AS TIMESTAMP) IN (CAST('2017-12-12
 -- !query
 SELECT cast('2017-12-12 09:30:00.0' as timestamp) in (cast('2017-12-12 09:30:00.0' as timestamp), cast(1 as bigint)) FROM t
 -- !query schema
-struct<>
+struct<(CAST(CAST(2017-12-12 09:30:00.0 AS TIMESTAMP) AS BIGINT) IN (CAST(CAST(2017-12-12 09:30:00.0 AS TIMESTAMP) AS BIGINT), CAST(CAST(1 AS BIGINT) AS BIGINT))):boolean>
 -- !query output
-org.apache.spark.sql.AnalysisException
-cannot resolve '(CAST('2017-12-12 09:30:00.0' AS TIMESTAMP) IN (CAST('2017-12-12 09:30:00.0' AS TIMESTAMP), CAST(1 AS BIGINT)))' due to data type mismatch: Arguments must be same type but were: timestamp != bigint; line 1 pos 50
+true
 
 
 -- !query

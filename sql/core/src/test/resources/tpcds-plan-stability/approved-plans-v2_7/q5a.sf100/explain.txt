@@ -71,7 +71,7 @@ TakeOrderedAndProject (98)
             :           :                          :     :  :     +- * ColumnarToRow (48)
             :           :                          :     :  :        +- Scan parquet default.web_sales (47)
             :           :                          :     :  +- * Project (62)
-            :           :                          :     :     +- * SortMergeJoin Inner (61)
+            :           :                          :     :     +- SortMergeJoin Inner (61)
             :           :                          :     :        :- * Sort (55)
             :           :                          :     :        :  +- Exchange (54)
             :           :                          :     :        :     +- * Filter (53)
@@ -203,7 +203,7 @@ Results [5]: [s_store_id#25, sum#31, sum#32, sum#33, sum#34]
 
 (24) Exchange
 Input [5]: [s_store_id#25, sum#31, sum#32, sum#33, sum#34]
-Arguments: hashpartitioning(s_store_id#25, 5), true, [id=#35]
+Arguments: hashpartitioning(s_store_id#25, 5), ENSURE_REQUIREMENTS, [id=#35]
 
 (25) HashAggregate [codegen id : 6]
 Input [5]: [s_store_id#25, sum#31, sum#32, sum#33, sum#34]
@@ -298,7 +298,7 @@ Results [5]: [cp_catalog_page_id#66, sum#72, sum#73, sum#74, sum#75]
 
 (45) Exchange
 Input [5]: [cp_catalog_page_id#66, sum#72, sum#73, sum#74, sum#75]
-Arguments: hashpartitioning(cp_catalog_page_id#66, 5), true, [id=#76]
+Arguments: hashpartitioning(cp_catalog_page_id#66, 5), ENSURE_REQUIREMENTS, [id=#76]
 
 (46) HashAggregate [codegen id : 12]
 Input [5]: [cp_catalog_page_id#66, sum#72, sum#73, sum#74, sum#75]
@@ -341,7 +341,7 @@ Condition : isnotnull(wr_returned_date_sk#96)
 
 (54) Exchange
 Input [5]: [wr_returned_date_sk#96, wr_item_sk#97, wr_order_number#98, wr_return_amt#99, wr_net_loss#100]
-Arguments: hashpartitioning(wr_item_sk#97, wr_order_number#98, 5), true, [id=#101]
+Arguments: hashpartitioning(wr_item_sk#97, wr_order_number#98, 5), ENSURE_REQUIREMENTS, [id=#101]
 
 (55) Sort [codegen id : 15]
 Input [5]: [wr_returned_date_sk#96, wr_item_sk#97, wr_order_number#98, wr_return_amt#99, wr_net_loss#100]
@@ -363,13 +363,13 @@ Condition : ((isnotnull(ws_item_sk#102) AND isnotnull(ws_order_number#103)) AND 
 
 (59) Exchange
 Input [3]: [ws_item_sk#102, ws_web_site_sk#87, ws_order_number#103]
-Arguments: hashpartitioning(cast(ws_item_sk#102 as bigint), cast(ws_order_number#103 as bigint), 5), true, [id=#104]
+Arguments: hashpartitioning(cast(ws_item_sk#102 as bigint), cast(ws_order_number#103 as bigint), 5), ENSURE_REQUIREMENTS, [id=#104]
 
 (60) Sort [codegen id : 17]
 Input [3]: [ws_item_sk#102, ws_web_site_sk#87, ws_order_number#103]
 Arguments: [cast(ws_item_sk#102 as bigint) ASC NULLS FIRST, cast(ws_order_number#103 as bigint) ASC NULLS FIRST], false, 0
 
-(61) SortMergeJoin [codegen id : 18]
+(61) SortMergeJoin
 Left keys [2]: [wr_item_sk#97, wr_order_number#98]
 Right keys [2]: [cast(ws_item_sk#102 as bigint), cast(ws_order_number#103 as bigint)]
 Join condition: None
@@ -428,7 +428,7 @@ Results [5]: [web_site_id#112, sum#118, sum#119, sum#120, sum#121]
 
 (74) Exchange
 Input [5]: [web_site_id#112, sum#118, sum#119, sum#120, sum#121]
-Arguments: hashpartitioning(web_site_id#112, 5), true, [id=#122]
+Arguments: hashpartitioning(web_site_id#112, 5), ENSURE_REQUIREMENTS, [id=#122]
 
 (75) HashAggregate [codegen id : 22]
 Input [5]: [web_site_id#112, sum#118, sum#119, sum#120, sum#121]
@@ -448,7 +448,7 @@ Results [8]: [channel#40, id#41, sum#138, isEmpty#139, sum#140, isEmpty#141, sum
 
 (78) Exchange
 Input [8]: [channel#40, id#41, sum#138, isEmpty#139, sum#140, isEmpty#141, sum#142, isEmpty#143]
-Arguments: hashpartitioning(channel#40, id#41, 5), true, [id=#144]
+Arguments: hashpartitioning(channel#40, id#41, 5), ENSURE_REQUIREMENTS, [id=#144]
 
 (79) HashAggregate [codegen id : 24]
 Input [8]: [channel#40, id#41, sum#138, isEmpty#139, sum#140, isEmpty#141, sum#142, isEmpty#143]
@@ -476,7 +476,7 @@ Results [7]: [channel#40, sum#170, isEmpty#171, sum#172, isEmpty#173, sum#174, i
 
 (83) Exchange
 Input [7]: [channel#40, sum#170, isEmpty#171, sum#172, isEmpty#173, sum#174, isEmpty#175]
-Arguments: hashpartitioning(channel#40, 5), true, [id=#176]
+Arguments: hashpartitioning(channel#40, 5), ENSURE_REQUIREMENTS, [id=#176]
 
 (84) HashAggregate [codegen id : 49]
 Input [7]: [channel#40, sum#170, isEmpty#171, sum#172, isEmpty#173, sum#174, isEmpty#175]
@@ -496,7 +496,7 @@ Results [5]: [channel#40, id#41, sales#148, returns#149, profit#150]
 
 (87) Exchange
 Input [5]: [channel#40, id#41, sales#148, returns#149, profit#150]
-Arguments: hashpartitioning(channel#40, id#41, sales#148, returns#149, profit#150, 5), true, [id=#184]
+Arguments: hashpartitioning(channel#40, id#41, sales#148, returns#149, profit#150, 5), ENSURE_REQUIREMENTS, [id=#184]
 
 (88) HashAggregate [codegen id : 51]
 Input [5]: [channel#40, id#41, sales#148, returns#149, profit#150]
@@ -524,7 +524,7 @@ Results [6]: [sum#201, isEmpty#202, sum#203, isEmpty#204, sum#205, isEmpty#206]
 
 (92) Exchange
 Input [6]: [sum#201, isEmpty#202, sum#203, isEmpty#204, sum#205, isEmpty#206]
-Arguments: SinglePartition, true, [id=#207]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [id=#207]
 
 (93) HashAggregate [codegen id : 76]
 Input [6]: [sum#201, isEmpty#202, sum#203, isEmpty#204, sum#205, isEmpty#206]
@@ -544,7 +544,7 @@ Results [5]: [channel#40, id#41, sales#148, returns#149, profit#150]
 
 (96) Exchange
 Input [5]: [channel#40, id#41, sales#148, returns#149, profit#150]
-Arguments: hashpartitioning(channel#40, id#41, sales#148, returns#149, profit#150, 5), true, [id=#216]
+Arguments: hashpartitioning(channel#40, id#41, sales#148, returns#149, profit#150, 5), ENSURE_REQUIREMENTS, [id=#216]
 
 (97) HashAggregate [codegen id : 78]
 Input [5]: [channel#40, id#41, sales#148, returns#149, profit#150]

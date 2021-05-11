@@ -63,7 +63,7 @@ import org.apache.spark.scheduler.cluster.StandaloneSchedulerBackend
 import org.apache.spark.scheduler.local.LocalSchedulerBackend
 import org.apache.spark.shuffle.ShuffleDataIOUtils
 import org.apache.spark.shuffle.api.ShuffleDriverComponents
-import org.apache.spark.status.{AppMaxUsedResourceWrap, AppStatusSource, AppStatusStore, AppUsedResourceWrap, MetricsListener}
+import org.apache.spark.status.{AppMaxUsedResourceWrap, AppStatusSource, AppStatusStore, AppUsedResourceWrap}
 import org.apache.spark.status.api.v1.ThreadStackTrace
 import org.apache.spark.storage._
 import org.apache.spark.storage.BlockManagerMessages.TriggerThreadDump
