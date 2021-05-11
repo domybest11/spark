@@ -200,7 +200,7 @@ Results [5]: [s_store_id#25, sum#31, sum#32, sum#33, sum#34]
 
 (24) Exchange
 Input [5]: [s_store_id#25, sum#31, sum#32, sum#33, sum#34]
-Arguments: hashpartitioning(s_store_id#25, 5), true, [id=#35]
+Arguments: hashpartitioning(s_store_id#25, 5), ENSURE_REQUIREMENTS, [id=#35]
 
 (25) HashAggregate [codegen id : 6]
 Input [5]: [s_store_id#25, sum#31, sum#32, sum#33, sum#34]
@@ -295,7 +295,7 @@ Results [5]: [cp_catalog_page_id#66, sum#72, sum#73, sum#74, sum#75]
 
 (45) Exchange
 Input [5]: [cp_catalog_page_id#66, sum#72, sum#73, sum#74, sum#75]
-Arguments: hashpartitioning(cp_catalog_page_id#66, 5), true, [id=#76]
+Arguments: hashpartitioning(cp_catalog_page_id#66, 5), ENSURE_REQUIREMENTS, [id=#76]
 
 (46) HashAggregate [codegen id : 12]
 Input [5]: [cp_catalog_page_id#66, sum#72, sum#73, sum#74, sum#75]
@@ -413,7 +413,7 @@ Results [5]: [web_site_id#111, sum#117, sum#118, sum#119, sum#120]
 
 (71) Exchange
 Input [5]: [web_site_id#111, sum#117, sum#118, sum#119, sum#120]
-Arguments: hashpartitioning(web_site_id#111, 5), true, [id=#121]
+Arguments: hashpartitioning(web_site_id#111, 5), ENSURE_REQUIREMENTS, [id=#121]
 
 (72) HashAggregate [codegen id : 19]
 Input [5]: [web_site_id#111, sum#117, sum#118, sum#119, sum#120]
@@ -433,7 +433,7 @@ Results [8]: [channel#40, id#41, sum#137, isEmpty#138, sum#139, isEmpty#140, sum
 
 (75) Exchange
 Input [8]: [channel#40, id#41, sum#137, isEmpty#138, sum#139, isEmpty#140, sum#141, isEmpty#142]
-Arguments: hashpartitioning(channel#40, id#41, 5), true, [id=#143]
+Arguments: hashpartitioning(channel#40, id#41, 5), ENSURE_REQUIREMENTS, [id=#143]
 
 (76) HashAggregate [codegen id : 21]
 Input [8]: [channel#40, id#41, sum#137, isEmpty#138, sum#139, isEmpty#140, sum#141, isEmpty#142]
@@ -461,7 +461,7 @@ Results [7]: [channel#40, sum#169, isEmpty#170, sum#171, isEmpty#172, sum#173, i
 
 (80) Exchange
 Input [7]: [channel#40, sum#169, isEmpty#170, sum#171, isEmpty#172, sum#173, isEmpty#174]
-Arguments: hashpartitioning(channel#40, 5), true, [id=#175]
+Arguments: hashpartitioning(channel#40, 5), ENSURE_REQUIREMENTS, [id=#175]
 
 (81) HashAggregate [codegen id : 43]
 Input [7]: [channel#40, sum#169, isEmpty#170, sum#171, isEmpty#172, sum#173, isEmpty#174]
@@ -481,7 +481,7 @@ Results [5]: [channel#40, id#41, sales#147, returns#148, profit#149]
 
 (84) Exchange
 Input [5]: [channel#40, id#41, sales#147, returns#148, profit#149]
-Arguments: hashpartitioning(channel#40, id#41, sales#147, returns#148, profit#149, 5), true, [id=#183]
+Arguments: hashpartitioning(channel#40, id#41, sales#147, returns#148, profit#149, 5), ENSURE_REQUIREMENTS, [id=#183]
 
 (85) HashAggregate [codegen id : 45]
 Input [5]: [channel#40, id#41, sales#147, returns#148, profit#149]
@@ -509,7 +509,7 @@ Results [6]: [sum#200, isEmpty#201, sum#202, isEmpty#203, sum#204, isEmpty#205]
 
 (89) Exchange
 Input [6]: [sum#200, isEmpty#201, sum#202, isEmpty#203, sum#204, isEmpty#205]
-Arguments: SinglePartition, true, [id=#206]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [id=#206]
 
 (90) HashAggregate [codegen id : 67]
 Input [6]: [sum#200, isEmpty#201, sum#202, isEmpty#203, sum#204, isEmpty#205]
@@ -529,7 +529,7 @@ Results [5]: [channel#40, id#41, sales#147, returns#148, profit#149]
 
 (93) Exchange
 Input [5]: [channel#40, id#41, sales#147, returns#148, profit#149]
-Arguments: hashpartitioning(channel#40, id#41, sales#147, returns#148, profit#149, 5), true, [id=#215]
+Arguments: hashpartitioning(channel#40, id#41, sales#147, returns#148, profit#149, 5), ENSURE_REQUIREMENTS, [id=#215]
 
 (94) HashAggregate [codegen id : 69]
 Input [5]: [channel#40, id#41, sales#147, returns#148, profit#149]

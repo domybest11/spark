@@ -156,7 +156,7 @@ Results [6]: [i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, sum#17]
 
 (23) Exchange
 Input [6]: [i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, sum#17]
-Arguments: hashpartitioning(i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, 5), true, [id=#18]
+Arguments: hashpartitioning(i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, 5), ENSURE_REQUIREMENTS, [id=#18]
 
 (24) HashAggregate [codegen id : 5]
 Input [6]: [i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, sum#17]
@@ -167,7 +167,7 @@ Results [7]: [i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, MakeDeci
 
 (25) Exchange
 Input [7]: [i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, sum_sales#20, _w0#21]
-Arguments: hashpartitioning(i_category#3, i_brand#2, cc_name#14, d_year#10, 5), true, [id=#22]
+Arguments: hashpartitioning(i_category#3, i_brand#2, cc_name#14, d_year#10, 5), ENSURE_REQUIREMENTS, [id=#22]
 
 (26) Sort [codegen id : 6]
 Input [7]: [i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, sum_sales#20, _w0#21]
@@ -183,7 +183,7 @@ Input [8]: [i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, sum_sales#
 
 (29) Exchange
 Input [7]: [i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, sum_sales#20, avg_monthly_sales#23]
-Arguments: hashpartitioning(i_category#3, i_brand#2, cc_name#14, 5), true, [id=#24]
+Arguments: hashpartitioning(i_category#3, i_brand#2, cc_name#14, 5), ENSURE_REQUIREMENTS, [id=#24]
 
 (30) Sort [codegen id : 8]
 Input [7]: [i_category#3, i_brand#2, cc_name#14, d_year#10, d_moy#11, sum_sales#20, avg_monthly_sales#23]
@@ -209,7 +209,7 @@ Results [6]: [i_category#26, i_brand#27, cc_name#28, d_year#29, d_moy#30, MakeDe
 
 (35) Exchange
 Input [6]: [i_category#26, i_brand#27, cc_name#28, d_year#29, d_moy#30, sum_sales#33]
-Arguments: hashpartitioning(i_category#26, i_brand#27, cc_name#28, 5), true, [id=#34]
+Arguments: hashpartitioning(i_category#26, i_brand#27, cc_name#28, 5), ENSURE_REQUIREMENTS, [id=#34]
 
 (36) Sort [codegen id : 14]
 Input [6]: [i_category#26, i_brand#27, cc_name#28, d_year#29, d_moy#30, sum_sales#33]
