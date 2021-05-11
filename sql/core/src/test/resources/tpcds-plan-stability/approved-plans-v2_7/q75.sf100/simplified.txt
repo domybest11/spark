@@ -1,8 +1,8 @@
 TakeOrderedAndProject [sales_cnt_diff,sales_amt_diff,prev_year,year,i_brand_id,i_class_id,i_category_id,i_manufact_id,prev_yr_cnt,curr_yr_cnt]
   WholeStageCodegen (55)
     Project [d_year,d_year,i_brand_id,i_class_id,i_category_id,i_manufact_id,sales_cnt,sales_cnt,sales_amt,sales_amt]
-      SortMergeJoin [i_brand_id,i_class_id,i_category_id,i_manufact_id,i_brand_id,i_class_id,i_category_id,i_manufact_id,sales_cnt,sales_cnt]
-        InputAdapter
+      InputAdapter
+        SortMergeJoin [i_brand_id,i_class_id,i_category_id,i_manufact_id,i_brand_id,i_class_id,i_category_id,i_manufact_id,sales_cnt,sales_cnt]
           WholeStageCodegen (27)
             Sort [i_brand_id,i_class_id,i_category_id,i_manufact_id]
               InputAdapter
@@ -129,7 +129,6 @@ TakeOrderedAndProject [sales_cnt_diff,sales_amt_diff,prev_year,year,i_brand_id,i
                                                                 ColumnarToRow
                                                                   InputAdapter
                                                                     Scan parquet default.web_returns [wr_item_sk,wr_order_number,wr_return_quantity,wr_return_amt]
-        InputAdapter
           WholeStageCodegen (54)
             Sort [i_brand_id,i_class_id,i_category_id,i_manufact_id]
               InputAdapter
