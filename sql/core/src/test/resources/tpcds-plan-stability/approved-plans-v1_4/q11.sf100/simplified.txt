@@ -1,16 +1,16 @@
 TakeOrderedAndProject [customer_preferred_cust_flag]
   WholeStageCodegen (35)
     Project [customer_preferred_cust_flag]
-      SortMergeJoin [customer_id,customer_id,year_total,year_total,year_total,year_total]
-        InputAdapter
+      InputAdapter
+        SortMergeJoin [customer_id,customer_id,year_total,year_total,year_total,year_total]
           WholeStageCodegen (26)
             Project [customer_id,year_total,customer_preferred_cust_flag,year_total,year_total]
-              SortMergeJoin [customer_id,customer_id]
-                InputAdapter
+              InputAdapter
+                SortMergeJoin [customer_id,customer_id]
                   WholeStageCodegen (17)
                     Project [customer_id,year_total,customer_preferred_cust_flag,year_total]
-                      SortMergeJoin [customer_id,customer_id]
-                        InputAdapter
+                      InputAdapter
+                        SortMergeJoin [customer_id,customer_id]
                           WholeStageCodegen (8)
                             Sort [customer_id]
                               InputAdapter
@@ -23,8 +23,8 @@ TakeOrderedAndProject [customer_preferred_cust_flag]
                                             WholeStageCodegen (6)
                                               HashAggregate [c_customer_id,c_first_name,c_last_name,d_year,c_preferred_cust_flag,c_birth_country,c_login,c_email_address,ss_ext_list_price,ss_ext_discount_amt] [sum,sum]
                                                 Project [c_customer_id,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address,ss_ext_discount_amt,ss_ext_list_price,d_year]
-                                                  SortMergeJoin [ss_customer_sk,c_customer_sk]
-                                                    InputAdapter
+                                                  InputAdapter
+                                                    SortMergeJoin [ss_customer_sk,c_customer_sk]
                                                       WholeStageCodegen (3)
                                                         Sort [ss_customer_sk]
                                                           InputAdapter
@@ -43,7 +43,6 @@ TakeOrderedAndProject [customer_preferred_cust_flag]
                                                                             ColumnarToRow
                                                                               InputAdapter
                                                                                 Scan parquet default.date_dim [d_date_sk,d_year]
-                                                    InputAdapter
                                                       WholeStageCodegen (5)
                                                         Sort [c_customer_sk]
                                                           InputAdapter
@@ -53,7 +52,6 @@ TakeOrderedAndProject [customer_preferred_cust_flag]
                                                                   ColumnarToRow
                                                                     InputAdapter
                                                                       Scan parquet default.customer [c_customer_sk,c_customer_id,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address]
-                        InputAdapter
                           WholeStageCodegen (16)
                             Sort [customer_id]
                               InputAdapter
@@ -65,8 +63,8 @@ TakeOrderedAndProject [customer_preferred_cust_flag]
                                           WholeStageCodegen (14)
                                             HashAggregate [c_customer_id,c_first_name,c_last_name,d_year,c_preferred_cust_flag,c_birth_country,c_login,c_email_address,ss_ext_list_price,ss_ext_discount_amt] [sum,sum]
                                               Project [c_customer_id,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address,ss_ext_discount_amt,ss_ext_list_price,d_year]
-                                                SortMergeJoin [ss_customer_sk,c_customer_sk]
-                                                  InputAdapter
+                                                InputAdapter
+                                                  SortMergeJoin [ss_customer_sk,c_customer_sk]
                                                     WholeStageCodegen (11)
                                                       Sort [ss_customer_sk]
                                                         InputAdapter
@@ -85,12 +83,10 @@ TakeOrderedAndProject [customer_preferred_cust_flag]
                                                                           ColumnarToRow
                                                                             InputAdapter
                                                                               Scan parquet default.date_dim [d_date_sk,d_year]
-                                                  InputAdapter
                                                     WholeStageCodegen (13)
                                                       Sort [c_customer_sk]
                                                         InputAdapter
                                                           ReusedExchange [c_customer_sk,c_customer_id,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address] #5
-                InputAdapter
                   WholeStageCodegen (25)
                     Sort [customer_id]
                       InputAdapter
@@ -104,8 +100,8 @@ TakeOrderedAndProject [customer_preferred_cust_flag]
                                       WholeStageCodegen (23)
                                         HashAggregate [c_customer_id,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address,d_year,ws_ext_list_price,ws_ext_discount_amt] [sum,sum]
                                           Project [c_customer_id,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address,ws_ext_discount_amt,ws_ext_list_price,d_year]
-                                            SortMergeJoin [ws_bill_customer_sk,c_customer_sk]
-                                              InputAdapter
+                                            InputAdapter
+                                              SortMergeJoin [ws_bill_customer_sk,c_customer_sk]
                                                 WholeStageCodegen (20)
                                                   Sort [ws_bill_customer_sk]
                                                     InputAdapter
@@ -119,12 +115,10 @@ TakeOrderedAndProject [customer_preferred_cust_flag]
                                                                     Scan parquet default.web_sales [ws_sold_date_sk,ws_bill_customer_sk,ws_ext_discount_amt,ws_ext_list_price]
                                                               InputAdapter
                                                                 ReusedExchange [d_date_sk,d_year] #4
-                                              InputAdapter
                                                 WholeStageCodegen (22)
                                                   Sort [c_customer_sk]
                                                     InputAdapter
                                                       ReusedExchange [c_customer_sk,c_customer_id,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address] #5
-        InputAdapter
           WholeStageCodegen (34)
             Sort [customer_id]
               InputAdapter
@@ -136,8 +130,8 @@ TakeOrderedAndProject [customer_preferred_cust_flag]
                           WholeStageCodegen (32)
                             HashAggregate [c_customer_id,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address,d_year,ws_ext_list_price,ws_ext_discount_amt] [sum,sum]
                               Project [c_customer_id,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address,ws_ext_discount_amt,ws_ext_list_price,d_year]
-                                SortMergeJoin [ws_bill_customer_sk,c_customer_sk]
-                                  InputAdapter
+                                InputAdapter
+                                  SortMergeJoin [ws_bill_customer_sk,c_customer_sk]
                                     WholeStageCodegen (29)
                                       Sort [ws_bill_customer_sk]
                                         InputAdapter
@@ -151,7 +145,6 @@ TakeOrderedAndProject [customer_preferred_cust_flag]
                                                         Scan parquet default.web_sales [ws_sold_date_sk,ws_bill_customer_sk,ws_ext_discount_amt,ws_ext_list_price]
                                                   InputAdapter
                                                     ReusedExchange [d_date_sk,d_year] #9
-                                  InputAdapter
                                     WholeStageCodegen (31)
                                       Sort [c_customer_sk]
                                         InputAdapter

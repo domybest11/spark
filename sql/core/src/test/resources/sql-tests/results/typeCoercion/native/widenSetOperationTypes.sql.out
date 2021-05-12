@@ -427,10 +427,10 @@ Union can only be performed on tables with the compatible column types. boolean 
 -- !query
 SELECT cast(1 as bigint) FROM t UNION SELECT cast('2017-12-11 09:30:00.0' as timestamp) FROM t
 -- !query schema
-struct<>
+struct<CAST(1 AS BIGINT):bigint>
 -- !query output
-org.apache.spark.sql.AnalysisException
-Union can only be performed on tables with the compatible column types. timestamp <> bigint at the first column of the second table
+1
+1513013400000000
 
 
 -- !query

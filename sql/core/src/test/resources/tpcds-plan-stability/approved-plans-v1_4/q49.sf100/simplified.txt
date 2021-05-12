@@ -27,8 +27,8 @@ TakeOrderedAndProject [channel,return_rank,currency_rank,item,return_ratio]
                                                     WholeStageCodegen (6)
                                                       HashAggregate [ws_item_sk,wr_return_quantity,ws_quantity,wr_return_amt,ws_net_paid] [sum,sum,sum,isEmpty,sum,isEmpty,sum,sum,sum,isEmpty,sum,isEmpty]
                                                         Project [ws_item_sk,ws_quantity,ws_net_paid,wr_return_quantity,wr_return_amt]
-                                                          SortMergeJoin [ws_order_number,ws_item_sk,wr_order_number,wr_item_sk]
-                                                            InputAdapter
+                                                          InputAdapter
+                                                            SortMergeJoin [ws_order_number,ws_item_sk,wr_order_number,wr_item_sk]
                                                               WholeStageCodegen (3)
                                                                 Sort [ws_order_number,ws_item_sk]
                                                                   InputAdapter
@@ -49,7 +49,6 @@ TakeOrderedAndProject [channel,return_rank,currency_rank,item,return_ratio]
                                                                                       ColumnarToRow
                                                                                         InputAdapter
                                                                                           Scan parquet default.date_dim [d_date_sk,d_year,d_moy]
-                                                            InputAdapter
                                                               WholeStageCodegen (5)
                                                                 Sort [wr_order_number,wr_item_sk]
                                                                   InputAdapter
@@ -79,8 +78,8 @@ TakeOrderedAndProject [channel,return_rank,currency_rank,item,return_ratio]
                                                     WholeStageCodegen (16)
                                                       HashAggregate [cs_item_sk,cr_return_quantity,cs_quantity,cr_return_amount,cs_net_paid] [sum,sum,sum,isEmpty,sum,isEmpty,sum,sum,sum,isEmpty,sum,isEmpty]
                                                         Project [cs_item_sk,cs_quantity,cs_net_paid,cr_return_quantity,cr_return_amount]
-                                                          SortMergeJoin [cs_order_number,cs_item_sk,cr_order_number,cr_item_sk]
-                                                            InputAdapter
+                                                          InputAdapter
+                                                            SortMergeJoin [cs_order_number,cs_item_sk,cr_order_number,cr_item_sk]
                                                               WholeStageCodegen (13)
                                                                 Sort [cs_order_number,cs_item_sk]
                                                                   InputAdapter
@@ -95,7 +94,6 @@ TakeOrderedAndProject [channel,return_rank,currency_rank,item,return_ratio]
                                                                                     Scan parquet default.catalog_sales [cs_sold_date_sk,cs_item_sk,cs_order_number,cs_quantity,cs_net_paid,cs_net_profit]
                                                                             InputAdapter
                                                                               ReusedExchange [d_date_sk] #5
-                                                            InputAdapter
                                                               WholeStageCodegen (15)
                                                                 Sort [cr_order_number,cr_item_sk]
                                                                   InputAdapter
@@ -125,8 +123,8 @@ TakeOrderedAndProject [channel,return_rank,currency_rank,item,return_ratio]
                                                     WholeStageCodegen (26)
                                                       HashAggregate [ss_item_sk,sr_return_quantity,ss_quantity,sr_return_amt,ss_net_paid] [sum,sum,sum,isEmpty,sum,isEmpty,sum,sum,sum,isEmpty,sum,isEmpty]
                                                         Project [ss_item_sk,ss_quantity,ss_net_paid,sr_return_quantity,sr_return_amt]
-                                                          SortMergeJoin [ss_ticket_number,ss_item_sk,sr_ticket_number,sr_item_sk]
-                                                            InputAdapter
+                                                          InputAdapter
+                                                            SortMergeJoin [ss_ticket_number,ss_item_sk,sr_ticket_number,sr_item_sk]
                                                               WholeStageCodegen (23)
                                                                 Sort [ss_ticket_number,ss_item_sk]
                                                                   InputAdapter
@@ -141,7 +139,6 @@ TakeOrderedAndProject [channel,return_rank,currency_rank,item,return_ratio]
                                                                                     Scan parquet default.store_sales [ss_sold_date_sk,ss_item_sk,ss_ticket_number,ss_quantity,ss_net_paid,ss_net_profit]
                                                                             InputAdapter
                                                                               ReusedExchange [d_date_sk] #5
-                                                            InputAdapter
                                                               WholeStageCodegen (25)
                                                                 Sort [sr_ticket_number,sr_item_sk]
                                                                   InputAdapter

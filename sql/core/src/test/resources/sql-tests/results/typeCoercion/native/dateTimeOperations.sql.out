@@ -40,10 +40,9 @@ cannot resolve 'CAST(1 AS INT) + INTERVAL '2 days'' due to data type mismatch: a
 -- !query
 select cast(1 as bigint) + interval 2 day
 -- !query schema
-struct<>
+struct<CAST(CAST(1 AS BIGINT) + INTERVAL '2 days' AS BIGINT):bigint>
 -- !query output
-org.apache.spark.sql.AnalysisException
-cannot resolve 'CAST(1 AS BIGINT) + INTERVAL '2 days'' due to data type mismatch: argument 1 requires timestamp type, however, 'CAST(1 AS BIGINT)' is of bigint type.; line 1 pos 7
+172800
 
 
 -- !query
@@ -153,10 +152,9 @@ cannot resolve 'CAST(1 AS INT) + INTERVAL '2 days'' due to data type mismatch: a
 -- !query
 select interval 2 day + cast(1 as bigint)
 -- !query schema
-struct<>
+struct<CAST(CAST(1 AS BIGINT) + INTERVAL '2 days' AS BIGINT):bigint>
 -- !query output
-org.apache.spark.sql.AnalysisException
-cannot resolve 'CAST(1 AS BIGINT) + INTERVAL '2 days'' due to data type mismatch: argument 1 requires timestamp type, however, 'CAST(1 AS BIGINT)' is of bigint type.; line 1 pos 7
+172800
 
 
 -- !query
@@ -266,10 +264,9 @@ cannot resolve 'CAST(1 AS INT) + (- INTERVAL '2 days')' due to data type mismatc
 -- !query
 select cast(1 as bigint) - interval 2 day
 -- !query schema
-struct<>
+struct<CAST(CAST(1 AS BIGINT) - INTERVAL '2 days' AS BIGINT):bigint>
 -- !query output
-org.apache.spark.sql.AnalysisException
-cannot resolve 'CAST(1 AS BIGINT) + (- INTERVAL '2 days')' due to data type mismatch: argument 1 requires timestamp type, however, 'CAST(1 AS BIGINT)' is of bigint type.; line 1 pos 7
+-172800
 
 
 -- !query

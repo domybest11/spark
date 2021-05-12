@@ -161,7 +161,7 @@ Results [9]: [w_warehouse_name#8, w_warehouse_sk#7, i_item_sk#5, d_moy#12, n#19,
 
 (24) Exchange
 Input [9]: [w_warehouse_name#8, w_warehouse_sk#7, i_item_sk#5, d_moy#12, n#19, avg#20, m2#21, sum#22, count#23]
-Arguments: hashpartitioning(w_warehouse_name#8, w_warehouse_sk#7, i_item_sk#5, d_moy#12, 5), true, [id=#24]
+Arguments: hashpartitioning(w_warehouse_name#8, w_warehouse_sk#7, i_item_sk#5, d_moy#12, 5), ENSURE_REQUIREMENTS, [id=#24]
 
 (25) HashAggregate [codegen id : 10]
 Input [9]: [w_warehouse_name#8, w_warehouse_sk#7, i_item_sk#5, d_moy#12, n#19, avg#20, m2#21, sum#22, count#23]
@@ -256,7 +256,7 @@ Results [9]: [w_warehouse_name#32, w_warehouse_sk#31, i_item_sk#30, d_moy#35, n#
 
 (45) Exchange
 Input [9]: [w_warehouse_name#32, w_warehouse_sk#31, i_item_sk#30, d_moy#35, n#42, avg#43, m2#44, sum#45, count#46]
-Arguments: hashpartitioning(w_warehouse_name#32, w_warehouse_sk#31, i_item_sk#30, d_moy#35, 5), true, [id=#47]
+Arguments: hashpartitioning(w_warehouse_name#32, w_warehouse_sk#31, i_item_sk#30, d_moy#35, 5), ENSURE_REQUIREMENTS, [id=#47]
 
 (46) HashAggregate [codegen id : 9]
 Input [9]: [w_warehouse_name#32, w_warehouse_sk#31, i_item_sk#30, d_moy#35, n#42, avg#43, m2#44, sum#45, count#46]
@@ -284,7 +284,7 @@ Join condition: None
 
 (51) Exchange
 Input [10]: [w_warehouse_sk#7, i_item_sk#5, d_moy#12, mean#28, cov#29, w_warehouse_sk#31, i_item_sk#30, d_moy#35, mean#51, cov#52]
-Arguments: rangepartitioning(w_warehouse_sk#7 ASC NULLS FIRST, i_item_sk#5 ASC NULLS FIRST, d_moy#12 ASC NULLS FIRST, mean#28 ASC NULLS FIRST, cov#29 ASC NULLS FIRST, d_moy#35 ASC NULLS FIRST, mean#51 ASC NULLS FIRST, cov#52 ASC NULLS FIRST, 5), true, [id=#54]
+Arguments: rangepartitioning(w_warehouse_sk#7 ASC NULLS FIRST, i_item_sk#5 ASC NULLS FIRST, d_moy#12 ASC NULLS FIRST, mean#28 ASC NULLS FIRST, cov#29 ASC NULLS FIRST, d_moy#35 ASC NULLS FIRST, mean#51 ASC NULLS FIRST, cov#52 ASC NULLS FIRST, 5), ENSURE_REQUIREMENTS, [id=#54]
 
 (52) Sort [codegen id : 11]
 Input [10]: [w_warehouse_sk#7, i_item_sk#5, d_moy#12, mean#28, cov#29, w_warehouse_sk#31, i_item_sk#30, d_moy#35, mean#51, cov#52]

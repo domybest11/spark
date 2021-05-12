@@ -4,7 +4,7 @@ TakeOrderedAndProject (35)
    +- Exchange (33)
       +- * HashAggregate (32)
          +- * Project (31)
-            +- * SortMergeJoin Inner (30)
+            +- SortMergeJoin Inner (30)
                :- * Sort (17)
                :  +- Exchange (16)
                :     +- * Project (15)
@@ -106,7 +106,7 @@ Input [16]: [ss_sold_date_sk#1, ss_item_sk#2, ss_customer_sk#3, ss_store_sk#4, s
 
 (16) Exchange
 Input [14]: [ss_sold_date_sk#1, ss_item_sk#2, ss_customer_sk#3, ss_ticket_number#5, s_store_name#9, s_company_id#10, s_street_number#11, s_street_name#12, s_street_type#13, s_suite_number#14, s_city#15, s_county#16, s_state#17, s_zip#18]
-Arguments: hashpartitioning(cast(ss_ticket_number#5 as bigint), cast(ss_item_sk#2 as bigint), cast(ss_customer_sk#3 as bigint), 5), true, [id=#20]
+Arguments: hashpartitioning(cast(ss_ticket_number#5 as bigint), cast(ss_item_sk#2 as bigint), cast(ss_customer_sk#3 as bigint), 5), ENSURE_REQUIREMENTS, [id=#20]
 
 (17) Sort [codegen id : 4]
 Input [14]: [ss_sold_date_sk#1, ss_item_sk#2, ss_customer_sk#3, ss_ticket_number#5, s_store_name#9, s_company_id#10, s_street_number#11, s_street_name#12, s_street_type#13, s_suite_number#14, s_city#15, s_county#16, s_state#17, s_zip#18]
@@ -159,13 +159,13 @@ Input [5]: [sr_returned_date_sk#21, sr_item_sk#22, sr_customer_sk#23, sr_ticket_
 
 (28) Exchange
 Input [4]: [sr_returned_date_sk#21, sr_item_sk#22, sr_customer_sk#23, sr_ticket_number#24]
-Arguments: hashpartitioning(sr_ticket_number#24, sr_item_sk#22, sr_customer_sk#23, 5), true, [id=#29]
+Arguments: hashpartitioning(sr_ticket_number#24, sr_item_sk#22, sr_customer_sk#23, 5), ENSURE_REQUIREMENTS, [id=#29]
 
 (29) Sort [codegen id : 7]
 Input [4]: [sr_returned_date_sk#21, sr_item_sk#22, sr_customer_sk#23, sr_ticket_number#24]
 Arguments: [sr_ticket_number#24 ASC NULLS FIRST, sr_item_sk#22 ASC NULLS FIRST, sr_customer_sk#23 ASC NULLS FIRST], false, 0
 
-(30) SortMergeJoin [codegen id : 8]
+(30) SortMergeJoin
 Left keys [3]: [cast(ss_ticket_number#5 as bigint), cast(ss_item_sk#2 as bigint), cast(ss_customer_sk#3 as bigint)]
 Right keys [3]: [sr_ticket_number#24, sr_item_sk#22, sr_customer_sk#23]
 Join condition: None
@@ -183,7 +183,7 @@ Results [15]: [s_store_name#9, s_company_id#10, s_street_number#11, s_street_nam
 
 (33) Exchange
 Input [15]: [s_store_name#9, s_company_id#10, s_street_number#11, s_street_name#12, s_street_type#13, s_suite_number#14, s_city#15, s_county#16, s_state#17, s_zip#18, sum#35, sum#36, sum#37, sum#38, sum#39]
-Arguments: hashpartitioning(s_store_name#9, s_company_id#10, s_street_number#11, s_street_name#12, s_street_type#13, s_suite_number#14, s_city#15, s_county#16, s_state#17, s_zip#18, 5), true, [id=#40]
+Arguments: hashpartitioning(s_store_name#9, s_company_id#10, s_street_number#11, s_street_name#12, s_street_type#13, s_suite_number#14, s_city#15, s_county#16, s_state#17, s_zip#18, 5), ENSURE_REQUIREMENTS, [id=#40]
 
 (34) HashAggregate [codegen id : 9]
 Input [15]: [s_store_name#9, s_company_id#10, s_street_number#11, s_street_name#12, s_street_type#13, s_suite_number#14, s_city#15, s_county#16, s_state#17, s_zip#18, sum#35, sum#36, sum#37, sum#38, sum#39]

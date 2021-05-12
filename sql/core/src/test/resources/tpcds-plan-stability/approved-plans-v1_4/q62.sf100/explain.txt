@@ -168,7 +168,7 @@ Results [8]: [substr(w_warehouse_name#16, 1, 20)#18, sm_type#13, web_name#10, su
 
 (30) Exchange
 Input [8]: [substr(w_warehouse_name#16, 1, 20)#18, sm_type#13, web_name#10, sum#24, sum#25, sum#26, sum#27, sum#28]
-Arguments: hashpartitioning(substr(w_warehouse_name#16, 1, 20)#18, sm_type#13, web_name#10, 5), true, [id=#29]
+Arguments: hashpartitioning(substr(w_warehouse_name#16, 1, 20)#18, sm_type#13, web_name#10, 5), ENSURE_REQUIREMENTS, [id=#29]
 
 (31) HashAggregate [codegen id : 6]
 Input [8]: [substr(w_warehouse_name#16, 1, 20)#18, sm_type#13, web_name#10, sum#24, sum#25, sum#26, sum#27, sum#28]

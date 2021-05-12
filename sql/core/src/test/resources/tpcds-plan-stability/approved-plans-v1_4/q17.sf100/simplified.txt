@@ -6,16 +6,16 @@ TakeOrderedAndProject [i_item_id,i_item_desc,s_state,store_sales_quantitycount,s
           WholeStageCodegen (17)
             HashAggregate [i_item_id,i_item_desc,s_state,ss_quantity,sr_return_quantity,cs_quantity] [count,sum,count,n,avg,m2,count,sum,count,n,avg,m2,count,sum,count,n,avg,m2,count,sum,count,n,avg,m2,count,sum,count,n,avg,m2,count,sum,count,n,avg,m2]
               Project [ss_quantity,sr_return_quantity,cs_quantity,s_state,i_item_id,i_item_desc]
-                SortMergeJoin [ss_customer_sk,ss_item_sk,ss_ticket_number,sr_customer_sk,sr_item_sk,sr_ticket_number]
-                  InputAdapter
+                InputAdapter
+                  SortMergeJoin [ss_customer_sk,ss_item_sk,ss_ticket_number,sr_customer_sk,sr_item_sk,sr_ticket_number]
                     WholeStageCodegen (8)
                       Sort [ss_customer_sk,ss_item_sk,ss_ticket_number]
                         InputAdapter
                           Exchange [ss_customer_sk,ss_item_sk,ss_ticket_number] #2
                             WholeStageCodegen (7)
                               Project [ss_item_sk,ss_customer_sk,ss_ticket_number,ss_quantity,s_state,i_item_id,i_item_desc]
-                                SortMergeJoin [ss_item_sk,i_item_sk]
-                                  InputAdapter
+                                InputAdapter
+                                  SortMergeJoin [ss_item_sk,i_item_sk]
                                     WholeStageCodegen (4)
                                       Sort [ss_item_sk]
                                         InputAdapter
@@ -44,7 +44,6 @@ TakeOrderedAndProject [i_item_id,i_item_desc,s_state,store_sales_quantitycount,s
                                                           ColumnarToRow
                                                             InputAdapter
                                                               Scan parquet default.store [s_store_sk,s_state]
-                                  InputAdapter
                                     WholeStageCodegen (6)
                                       Sort [i_item_sk]
                                         InputAdapter
@@ -54,15 +53,14 @@ TakeOrderedAndProject [i_item_id,i_item_desc,s_state,store_sales_quantitycount,s
                                                 ColumnarToRow
                                                   InputAdapter
                                                     Scan parquet default.item [i_item_sk,i_item_id,i_item_desc]
-                  InputAdapter
                     WholeStageCodegen (16)
                       Sort [sr_customer_sk,sr_item_sk,sr_ticket_number]
                         InputAdapter
                           Exchange [sr_customer_sk,sr_item_sk,sr_ticket_number] #7
                             WholeStageCodegen (15)
                               Project [sr_item_sk,sr_customer_sk,sr_ticket_number,sr_return_quantity,cs_quantity]
-                                SortMergeJoin [sr_customer_sk,sr_item_sk,cs_bill_customer_sk,cs_item_sk]
-                                  InputAdapter
+                                InputAdapter
+                                  SortMergeJoin [sr_customer_sk,sr_item_sk,cs_bill_customer_sk,cs_item_sk]
                                     WholeStageCodegen (11)
                                       Sort [sr_customer_sk,sr_item_sk]
                                         InputAdapter
@@ -82,7 +80,6 @@ TakeOrderedAndProject [i_item_id,i_item_desc,s_state,store_sales_quantitycount,s
                                                             ColumnarToRow
                                                               InputAdapter
                                                                 Scan parquet default.date_dim [d_date_sk,d_quarter_name]
-                                  InputAdapter
                                     WholeStageCodegen (14)
                                       Sort [cs_bill_customer_sk,cs_item_sk]
                                         InputAdapter

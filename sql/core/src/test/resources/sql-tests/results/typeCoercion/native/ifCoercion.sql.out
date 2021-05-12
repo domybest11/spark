@@ -395,10 +395,9 @@ cannot resolve '(IF(true, CAST(1 AS BIGINT), CAST(2 AS BOOLEAN)))' due to data t
 -- !query
 SELECT IF(true, cast(1 as bigint), cast('2017-12-11 09:30:00.0' as timestamp)) FROM t
 -- !query schema
-struct<>
+struct<(IF(true, CAST(1 AS BIGINT), CAST(2017-12-11 09:30:00.0 AS TIMESTAMP))):bigint>
 -- !query output
-org.apache.spark.sql.AnalysisException
-cannot resolve '(IF(true, CAST(1 AS BIGINT), CAST('2017-12-11 09:30:00.0' AS TIMESTAMP)))' due to data type mismatch: differing types in '(IF(true, CAST(1 AS BIGINT), CAST('2017-12-11 09:30:00.0' AS TIMESTAMP)))' (bigint and timestamp).; line 1 pos 7
+1
 
 
 -- !query

@@ -124,7 +124,7 @@ Input [12]: [ws_sold_date_sk#1, ws_web_page_sk#3, ws_quantity#5, ws_sales_price#
 Output [3]: [cd_demo_sk#19, cd_marital_status#20, cd_education_status#21]
 Batched: true
 Location [not included in comparison]/{warehouse_dir}/customer_demographics]
-PushedFilters: [IsNotNull(cd_demo_sk), IsNotNull(cd_marital_status), IsNotNull(cd_education_status), Or(Or(And(EqualTo(cd_marital_status,M),EqualTo(cd_education_status,Advanced Degree)),And(EqualTo(cd_marital_status,S),EqualTo(cd_education_status,College))),And(EqualTo(cd_marital_status,W),EqualTo(cd_education_status,2 yr Degree)))]
+PushedFilters: [IsNotNull(cd_demo_sk), IsNotNull(cd_marital_status), IsNotNull(cd_education_status), Or(Or(And(EqualTo(cd_marital_status,M),EqualTo(cd_education_status,Advanced Degree     )),And(EqualTo(cd_marital_status,S),EqualTo(cd_education_status,College             ))),And(EqualTo(cd_marital_status,W),EqualTo(cd_education_status,2 yr Degree         )))]
 ReadSchema: struct<cd_demo_sk:int,cd_marital_status:string,cd_education_status:string>
 
 (17) ColumnarToRow [codegen id : 3]
@@ -132,7 +132,7 @@ Input [3]: [cd_demo_sk#19, cd_marital_status#20, cd_education_status#21]
 
 (18) Filter [codegen id : 3]
 Input [3]: [cd_demo_sk#19, cd_marital_status#20, cd_education_status#21]
-Condition : (((isnotnull(cd_demo_sk#19) AND isnotnull(cd_marital_status#20)) AND isnotnull(cd_education_status#21)) AND ((((cd_marital_status#20 = M) AND (cd_education_status#21 = Advanced Degree)) OR ((cd_marital_status#20 = S) AND (cd_education_status#21 = College))) OR ((cd_marital_status#20 = W) AND (cd_education_status#21 = 2 yr Degree))))
+Condition : (((isnotnull(cd_demo_sk#19) AND isnotnull(cd_marital_status#20)) AND isnotnull(cd_education_status#21)) AND ((((cd_marital_status#20 = M) AND (cd_education_status#21 = Advanced Degree     )) OR ((cd_marital_status#20 = S) AND (cd_education_status#21 = College             ))) OR ((cd_marital_status#20 = W) AND (cd_education_status#21 = 2 yr Degree         ))))
 
 (19) BroadcastExchange
 Input [3]: [cd_demo_sk#19, cd_marital_status#20, cd_education_status#21]
@@ -141,7 +141,7 @@ Arguments: HashedRelationBroadcastMode(List(cast(input[0, int, false] as bigint)
 (20) BroadcastHashJoin [codegen id : 8]
 Left keys [1]: [wr_refunded_cdemo_sk#9]
 Right keys [1]: [cast(cd_demo_sk#19 as bigint)]
-Join condition: ((((((cd_marital_status#20 = M) AND (cd_education_status#21 = Advanced Degree)) AND (ws_sales_price#6 >= 100.00)) AND (ws_sales_price#6 <= 150.00)) OR ((((cd_marital_status#20 = S) AND (cd_education_status#21 = College)) AND (ws_sales_price#6 >= 50.00)) AND (ws_sales_price#6 <= 100.00))) OR ((((cd_marital_status#20 = W) AND (cd_education_status#21 = 2 yr Degree)) AND (ws_sales_price#6 >= 150.00)) AND (ws_sales_price#6 <= 200.00)))
+Join condition: ((((((cd_marital_status#20 = M) AND (cd_education_status#21 = Advanced Degree     )) AND (ws_sales_price#6 >= 100.00)) AND (ws_sales_price#6 <= 150.00)) OR ((((cd_marital_status#20 = S) AND (cd_education_status#21 = College             )) AND (ws_sales_price#6 >= 50.00)) AND (ws_sales_price#6 <= 100.00))) OR ((((cd_marital_status#20 = W) AND (cd_education_status#21 = 2 yr Degree         )) AND (ws_sales_price#6 >= 150.00)) AND (ws_sales_price#6 <= 200.00)))
 
 (21) Project [codegen id : 8]
 Output [10]: [ws_sold_date_sk#1, ws_quantity#5, ws_net_profit#7, wr_refunded_addr_sk#10, wr_returning_cdemo_sk#11, wr_reason_sk#12, wr_fee#14, wr_refunded_cash#15, cd_marital_status#20, cd_education_status#21]

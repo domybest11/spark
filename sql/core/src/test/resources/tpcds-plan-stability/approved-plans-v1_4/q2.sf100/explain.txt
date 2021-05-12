@@ -2,7 +2,7 @@
 * Sort (41)
 +- Exchange (40)
    +- * Project (39)
-      +- * SortMergeJoin Inner (38)
+      +- SortMergeJoin Inner (38)
          :- * Sort (26)
          :  +- * Project (25)
          :     +- * BroadcastHashJoin Inner BuildRight (24)
@@ -209,7 +209,7 @@ Arguments: hashpartitioning((d_week_seq2#70 - 53), 5), ENSURE_REQUIREMENTS, [id=
 Input [8]: [d_week_seq2#70, sun_sales2#71, mon_sales2#72, tue_sales2#73, wed_sales2#74, thu_sales2#75, fri_sales2#76, sat_sales2#77]
 Arguments: [(d_week_seq2#70 - 53) ASC NULLS FIRST], false, 0
 
-(38) SortMergeJoin [codegen id : 14]
+(38) SortMergeJoin
 Left keys [1]: [d_week_seq1#45]
 Right keys [1]: [(d_week_seq2#70 - 53)]
 Join condition: None

@@ -22,7 +22,7 @@
                         :     :     :  :        :        +- * ColumnarToRow (2)
                         :     :     :  :        :           +- Scan parquet default.web_sales (1)
                         :     :     :  :        +- * Project (14)
-                        :     :     :  :           +- * SortMergeJoin Inner (13)
+                        :     :     :  :           +- SortMergeJoin Inner (13)
                         :     :     :  :              :- * Sort (10)
                         :     :     :  :              :  +- Exchange (9)
                         :     :     :  :              :     +- * Filter (8)
@@ -31,11 +31,11 @@
                         :     :     :  :              +- * Sort (12)
                         :     :     :  :                 +- ReusedExchange (11)
                         :     :     :  +- * Project (32)
-                        :     :     :     +- * SortMergeJoin Inner (31)
+                        :     :     :     +- SortMergeJoin Inner (31)
                         :     :     :        :- * Sort (25)
                         :     :     :        :  +- Exchange (24)
                         :     :     :        :     +- * Project (23)
-                        :     :     :        :        +- * SortMergeJoin Inner (22)
+                        :     :     :        :        +- SortMergeJoin Inner (22)
                         :     :     :        :           :- * Sort (19)
                         :     :     :        :           :  +- ReusedExchange (18)
                         :     :     :        :           +- * Sort (21)
@@ -78,7 +78,7 @@ Condition : ((isnotnull(ws_ship_date_sk#1) AND isnotnull(ws_ship_addr_sk#2)) AND
 
 (4) Exchange
 Input [6]: [ws_ship_date_sk#1, ws_ship_addr_sk#2, ws_web_site_sk#3, ws_order_number#4, ws_ext_ship_cost#5, ws_net_profit#6]
-Arguments: hashpartitioning(ws_order_number#4, 5), true, [id=#7]
+Arguments: hashpartitioning(ws_order_number#4, 5), ENSURE_REQUIREMENTS, [id=#7]
 
 (5) Sort [codegen id : 2]
 Input [6]: [ws_ship_date_sk#1, ws_ship_addr_sk#2, ws_web_site_sk#3, ws_order_number#4, ws_ext_ship_cost#5, ws_net_profit#6]
@@ -100,7 +100,7 @@ Condition : (isnotnull(ws_order_number#4) AND isnotnull(ws_warehouse_sk#8))
 
 (9) Exchange
 Input [2]: [ws_warehouse_sk#8, ws_order_number#4]
-Arguments: hashpartitioning(ws_order_number#4, 5), true, [id=#9]
+Arguments: hashpartitioning(ws_order_number#4, 5), ENSURE_REQUIREMENTS, [id=#9]
 
 (10) Sort [codegen id : 4]
 Input [2]: [ws_warehouse_sk#8, ws_order_number#4]
@@ -113,7 +113,7 @@ Output [2]: [ws_warehouse_sk#10, ws_order_number#11]
 Input [2]: [ws_warehouse_sk#10, ws_order_number#11]
 Arguments: [ws_order_number#11 ASC NULLS FIRST], false, 0
 
-(13) SortMergeJoin [codegen id : 7]
+(13) SortMergeJoin
 Left keys [1]: [ws_order_number#4]
 Right keys [1]: [ws_order_number#11]
 Join condition: NOT (ws_warehouse_sk#8 = ws_warehouse_sk#10)
@@ -129,7 +129,7 @@ Join condition: None
 
 (16) Exchange
 Input [6]: [ws_ship_date_sk#1, ws_ship_addr_sk#2, ws_web_site_sk#3, ws_order_number#4, ws_ext_ship_cost#5, ws_net_profit#6]
-Arguments: hashpartitioning(cast(ws_order_number#4 as bigint), 5), true, [id=#13]
+Arguments: hashpartitioning(cast(ws_order_number#4 as bigint), 5), ENSURE_REQUIREMENTS, [id=#13]
 
 (17) Sort [codegen id : 8]
 Input [6]: [ws_ship_date_sk#1, ws_ship_addr_sk#2, ws_web_site_sk#3, ws_order_number#4, ws_ext_ship_cost#5, ws_net_profit#6]
@@ -149,7 +149,7 @@ Output [2]: [ws_warehouse_sk#14, ws_order_number#15]
 Input [2]: [ws_warehouse_sk#14, ws_order_number#15]
 Arguments: [ws_order_number#15 ASC NULLS FIRST], false, 0
 
-(22) SortMergeJoin [codegen id : 13]
+(22) SortMergeJoin
 Left keys [1]: [ws_order_number#4]
 Right keys [1]: [ws_order_number#15]
 Join condition: NOT (ws_warehouse_sk#8 = ws_warehouse_sk#14)
@@ -160,7 +160,7 @@ Input [4]: [ws_warehouse_sk#8, ws_order_number#4, ws_warehouse_sk#14, ws_order_n
 
 (24) Exchange
 Input [1]: [ws_order_number#4]
-Arguments: hashpartitioning(cast(ws_order_number#4 as bigint), 5), true, [id=#16]
+Arguments: hashpartitioning(cast(ws_order_number#4 as bigint), 5), ENSURE_REQUIREMENTS, [id=#16]
 
 (25) Sort [codegen id : 14]
 Input [1]: [ws_order_number#4]
@@ -182,13 +182,13 @@ Condition : isnotnull(wr_order_number#17)
 
 (29) Exchange
 Input [1]: [wr_order_number#17]
-Arguments: hashpartitioning(wr_order_number#17, 5), true, [id=#18]
+Arguments: hashpartitioning(wr_order_number#17, 5), ENSURE_REQUIREMENTS, [id=#18]
 
 (30) Sort [codegen id : 16]
 Input [1]: [wr_order_number#17]
 Arguments: [wr_order_number#17 ASC NULLS FIRST], false, 0
 
-(31) SortMergeJoin [codegen id : 17]
+(31) SortMergeJoin
 Left keys [1]: [cast(ws_order_number#4 as bigint)]
 Right keys [1]: [wr_order_number#17]
 Join condition: None
@@ -237,7 +237,7 @@ Input [7]: [ws_ship_date_sk#1, ws_ship_addr_sk#2, ws_web_site_sk#3, ws_order_num
 Output [2]: [web_site_sk#22, web_company_name#23]
 Batched: true
 Location [not included in comparison]/{warehouse_dir}/web_site]
-PushedFilters: [IsNotNull(web_company_name), EqualTo(web_company_name,pri), IsNotNull(web_site_sk)]
+PushedFilters: [IsNotNull(web_company_name), EqualTo(web_company_name,pri                                               ), IsNotNull(web_site_sk)]
 ReadSchema: struct<web_site_sk:int,web_company_name:string>
 
 (42) ColumnarToRow [codegen id : 19]
@@ -245,7 +245,7 @@ Input [2]: [web_site_sk#22, web_company_name#23]
 
 (43) Filter [codegen id : 19]
 Input [2]: [web_site_sk#22, web_company_name#23]
-Condition : ((isnotnull(web_company_name#23) AND (web_company_name#23 = pri)) AND isnotnull(web_site_sk#22))
+Condition : ((isnotnull(web_company_name#23) AND (web_company_name#23 = pri                                               )) AND isnotnull(web_site_sk#22))
 
 (44) Project [codegen id : 19]
 Output [1]: [web_site_sk#22]
@@ -304,7 +304,7 @@ Results [3]: [ws_order_number#4, sum#30, sum#31]
 
 (56) Exchange
 Input [3]: [ws_order_number#4, sum#30, sum#31]
-Arguments: hashpartitioning(ws_order_number#4, 5), true, [id=#32]
+Arguments: hashpartitioning(ws_order_number#4, 5), ENSURE_REQUIREMENTS, [id=#32]
 
 (57) HashAggregate [codegen id : 22]
 Input [3]: [ws_order_number#4, sum#30, sum#31]
@@ -322,7 +322,7 @@ Results [3]: [sum#30, sum#31, count#34]
 
 (59) Exchange
 Input [3]: [sum#30, sum#31, count#34]
-Arguments: SinglePartition, true, [id=#35]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [id=#35]
 
 (60) HashAggregate [codegen id : 23]
 Input [3]: [sum#30, sum#31, count#34]

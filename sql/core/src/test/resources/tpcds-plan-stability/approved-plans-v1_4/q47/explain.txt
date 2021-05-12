@@ -156,7 +156,7 @@ Results [7]: [i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_yea
 
 (23) Exchange
 Input [7]: [i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, d_moy#11, sum#18]
-Arguments: hashpartitioning(i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, d_moy#11, 5), true, [id=#19]
+Arguments: hashpartitioning(i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, d_moy#11, 5), ENSURE_REQUIREMENTS, [id=#19]
 
 (24) HashAggregate [codegen id : 5]
 Input [7]: [i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, d_moy#11, sum#18]
@@ -167,7 +167,7 @@ Results [8]: [i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_yea
 
 (25) Exchange
 Input [8]: [i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, d_moy#11, sum_sales#21, _w0#22]
-Arguments: hashpartitioning(i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, 5), true, [id=#23]
+Arguments: hashpartitioning(i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, 5), ENSURE_REQUIREMENTS, [id=#23]
 
 (26) Sort [codegen id : 6]
 Input [8]: [i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, d_moy#11, sum_sales#21, _w0#22]
@@ -183,7 +183,7 @@ Input [9]: [i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#
 
 (29) Exchange
 Input [8]: [i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, d_moy#11, sum_sales#21, avg_monthly_sales#24]
-Arguments: hashpartitioning(i_category#3, i_brand#2, s_store_name#14, s_company_name#15, 5), true, [id=#25]
+Arguments: hashpartitioning(i_category#3, i_brand#2, s_store_name#14, s_company_name#15, 5), ENSURE_REQUIREMENTS, [id=#25]
 
 (30) Sort [codegen id : 8]
 Input [8]: [i_category#3, i_brand#2, s_store_name#14, s_company_name#15, d_year#10, d_moy#11, sum_sales#21, avg_monthly_sales#24]
@@ -209,7 +209,7 @@ Results [7]: [i_category#27, i_brand#28, s_store_name#29, s_company_name#30, d_y
 
 (35) Exchange
 Input [7]: [i_category#27, i_brand#28, s_store_name#29, s_company_name#30, d_year#31, d_moy#32, sum_sales#35]
-Arguments: hashpartitioning(i_category#27, i_brand#28, s_store_name#29, s_company_name#30, 5), true, [id=#36]
+Arguments: hashpartitioning(i_category#27, i_brand#28, s_store_name#29, s_company_name#30, 5), ENSURE_REQUIREMENTS, [id=#36]
 
 (36) Sort [codegen id : 14]
 Input [7]: [i_category#27, i_brand#28, s_store_name#29, s_company_name#30, d_year#31, d_moy#32, sum_sales#35]

@@ -4,11 +4,11 @@ TakeOrderedAndProject (57)
    +- Exchange (55)
       +- * HashAggregate (54)
          +- * Project (53)
-            +- * SortMergeJoin Inner (52)
+            +- SortMergeJoin Inner (52)
                :- * Sort (27)
                :  +- Exchange (26)
                :     +- * Project (25)
-               :        +- * SortMergeJoin Inner (24)
+               :        +- SortMergeJoin Inner (24)
                :           :- * Sort (18)
                :           :  +- Exchange (17)
                :           :     +- * Project (16)
@@ -35,7 +35,7 @@ TakeOrderedAndProject (57)
                +- * Sort (51)
                   +- Exchange (50)
                      +- * Project (49)
-                        +- * SortMergeJoin Inner (48)
+                        +- SortMergeJoin Inner (48)
                            :- * Sort (39)
                            :  +- Exchange (38)
                            :     +- * Project (37)
@@ -160,7 +160,7 @@ Arguments: hashpartitioning(i_item_sk#16, 5), ENSURE_REQUIREMENTS, [id=#19]
 Input [3]: [i_item_sk#16, i_item_id#17, i_item_desc#18]
 Arguments: [i_item_sk#16 ASC NULLS FIRST], false, 0
 
-(24) SortMergeJoin [codegen id : 7]
+(24) SortMergeJoin
 Left keys [1]: [ss_item_sk#2]
 Right keys [1]: [i_item_sk#16]
 Join condition: None
@@ -264,7 +264,7 @@ Arguments: hashpartitioning(cast(cs_bill_customer_sk#32 as bigint), cast(cs_item
 Input [3]: [cs_bill_customer_sk#32, cs_item_sk#33, cs_net_profit#34]
 Arguments: [cast(cs_bill_customer_sk#32 as bigint) ASC NULLS FIRST, cast(cs_item_sk#33 as bigint) ASC NULLS FIRST], false, 0
 
-(48) SortMergeJoin [codegen id : 15]
+(48) SortMergeJoin
 Left keys [2]: [sr_customer_sk#23, sr_item_sk#22]
 Right keys [2]: [cast(cs_bill_customer_sk#32 as bigint), cast(cs_item_sk#33 as bigint)]
 Join condition: None
@@ -281,7 +281,7 @@ Arguments: hashpartitioning(sr_customer_sk#23, sr_item_sk#22, sr_ticket_number#2
 Input [5]: [sr_item_sk#22, sr_customer_sk#23, sr_ticket_number#24, sr_net_loss#25, cs_net_profit#34]
 Arguments: [sr_customer_sk#23 ASC NULLS FIRST, sr_item_sk#22 ASC NULLS FIRST, sr_ticket_number#24 ASC NULLS FIRST], false, 0
 
-(52) SortMergeJoin [codegen id : 17]
+(52) SortMergeJoin
 Left keys [3]: [cast(ss_customer_sk#3 as bigint), cast(ss_item_sk#2 as bigint), cast(ss_ticket_number#5 as bigint)]
 Right keys [3]: [sr_customer_sk#23, sr_item_sk#22, sr_ticket_number#24]
 Join condition: None

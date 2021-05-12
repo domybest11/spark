@@ -242,7 +242,7 @@ Input [4]: [ss_item_sk#2, ss_ext_sales_price#6, c_current_addr_sk#20, ca_address
 Output [2]: [i_item_sk#25, i_category#26]
 Batched: true
 Location [not included in comparison]/{warehouse_dir}/item]
-PushedFilters: [IsNotNull(i_category), EqualTo(i_category,Jewelry), IsNotNull(i_item_sk)]
+PushedFilters: [IsNotNull(i_category), EqualTo(i_category,Jewelry                                           ), IsNotNull(i_item_sk)]
 ReadSchema: struct<i_item_sk:int,i_category:string>
 
 (39) ColumnarToRow [codegen id : 6]
@@ -250,7 +250,7 @@ Input [2]: [i_item_sk#25, i_category#26]
 
 (40) Filter [codegen id : 6]
 Input [2]: [i_item_sk#25, i_category#26]
-Condition : ((isnotnull(i_category#26) AND (i_category#26 = Jewelry)) AND isnotnull(i_item_sk#25))
+Condition : ((isnotnull(i_category#26) AND (i_category#26 = Jewelry                                           )) AND isnotnull(i_item_sk#25))
 
 (41) Project [codegen id : 6]
 Output [1]: [i_item_sk#25]
@@ -278,7 +278,7 @@ Results [1]: [sum#29]
 
 (46) Exchange
 Input [1]: [sum#29]
-Arguments: SinglePartition, true, [id=#30]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [id=#30]
 
 (47) HashAggregate [codegen id : 8]
 Input [1]: [sum#29]
@@ -370,7 +370,7 @@ Results [1]: [sum#34]
 
 (67) Exchange
 Input [1]: [sum#34]
-Arguments: SinglePartition, true, [id=#35]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [id=#35]
 
 (68) HashAggregate [codegen id : 15]
 Input [1]: [sum#34]
