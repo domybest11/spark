@@ -74,13 +74,13 @@ public class SparkEventKafkaReporter {
   private void initKafka(SparkConf conf) {
     this.conf = conf;
     kafkaProps = new Properties();
-    kafkaProps.put(ProducerConfig.ACKS_CONFIG, conf.get("spark.acks", "0"));
+    kafkaProps.put(ProducerConfig.ACKS_CONFIG, conf.get("spark.acks", "1"));
     kafkaProps.put(ProducerConfig.BATCH_SIZE_CONFIG, conf.get("spark.batch.size", "20000"));
     kafkaProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, conf.get("spark.buffer.memory", "33554432"));
-    kafkaProps.put(ProducerConfig.LINGER_MS_CONFIG, conf.get("spark.linger.ms", "500"));
+    kafkaProps.put(ProducerConfig.LINGER_MS_CONFIG, conf.get("spark.linger.ms", "50"));
     kafkaProps.put(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, conf.get("spark.max.request.size", "1048576"));
     kafkaProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG,
-        conf.get("spark.request.timeout.ms", "50000"));
+        conf.get("spark.request.timeout.ms", "5000"));
     kafkaProps.put(ProducerConfig.RETRIES_CONFIG, conf.get("spark.retries", "3"));
     kafkaProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, conf.get("spark.bootstrap.servers",
         "10.69.179.17:9092,10.69.179.18:9092,10.69.179.19:9092,"
@@ -127,12 +127,14 @@ public class SparkEventKafkaReporter {
       record = new ProducerRecord<>(kafkaTopic, null, null, data.getBytes());
       kafkaProducer.send(record, (metadata, exception) -> {
         if (exception != null) {
-          LOGGER.error("send event to kafka error,errMsg:{}", exception);
+          LOGGER.error("send event to kafka error", exception);
+        } else {
+          LOGGER.info("send logical plan succeed!");
         }
       });
       LOGGER.warn("send logical plan succeed!");
     } catch (Exception e) {
-      LOGGER.warn("send logical plan error:{}", e.toString());
+      LOGGER.error("send logical plan error", e);
       return;
     }
 
