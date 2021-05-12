@@ -52,7 +52,9 @@ public class KafkaSink {
                 conf.get("spark.request.timeout.ms", "50000"));
         kafkaProps.put(ProducerConfig.RETRIES_CONFIG, conf.get("spark.retries", "3"));
         kafkaProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, conf.get("spark.bootstrap.servers",
-                "172.22.33.94:9092,172.22.33.99:9092,172.22.33.97:9092"));
+            "10.69.179.17:9092,10.69.179.18:9092,10.69.179.19:9092,10.69.179.20:9092," +
+                "10.69.181.30:9092,10.69.181.31:9092,10.69.181.32:9092,10.69.181.33:9092," +
+                "10.70.38.11:9092,10.70.38.12:9092 "));
         kafkaProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, conf.get("spark.key.serializer",
                         "org.apache.kafka.common.serialization.StringSerializer"));
         kafkaProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
@@ -77,6 +79,7 @@ public class KafkaSink {
                         exception);
             }
         });
+        kafkaProducer.flush();
     }
 
     public void close() {
