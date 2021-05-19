@@ -33,7 +33,7 @@
   <properties>
     <sbt.project.name>core</sbt.project.name>
   </properties>
-  
+
   <dependencies>
     <dependency>
       <groupId>com.bilibili.config</groupId>
@@ -519,11 +519,11 @@
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-crypto</artifactId>
     </dependency>
-    <dependency>
-      <groupId>org.apache.hudi</groupId>
-      <artifactId>hudi-spark-bundle_2.12</artifactId>
-      <version>0.5.1-incubating</version>
-    </dependency>
+<!--    <dependency>-->
+<!--      <groupId>org.apache.hudi</groupId>-->
+<!--      <artifactId>hudi-spark-bundle_2.12</artifactId>-->
+<!--      <version>0.5.1-incubating</version>-->
+<!--    </dependency>-->
     <dependency>
       <groupId>com.bilibili</groupId>
       <artifactId>hiveudf</artifactId>
