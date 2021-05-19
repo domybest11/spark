@@ -303,7 +303,7 @@
  </repositories>
  <pluginRepositories>
    <pluginRepository>
-     <id>central</id>
+     <id>gcs-maven-central-mirror</id>
      <!-- <url>https://repo.maven.apache.org/maven2</url> -->
      <url>http://maven.aliyun.com/nexus/content/groups/public/</url>
      <releases>
