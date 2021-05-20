@@ -252,7 +252,9 @@ fi
 
 # Copy other things
 mkdir "$DISTDIR/conf"
+mkdir "$DISTDIR/bilibili-conf"
 cp "$SPARK_HOME"/conf/* "$DISTDIR/conf"
+cp -r "$SPARK_HOME"/bilibili-conf/* "$DISTDIR/bilibili-conf"
 cp "$SPARK_HOME/README.md" "$DISTDIR"
 cp -r "$SPARK_HOME/bin" "$DISTDIR"
 cp -r "$SPARK_HOME/python" "$DISTDIR"
