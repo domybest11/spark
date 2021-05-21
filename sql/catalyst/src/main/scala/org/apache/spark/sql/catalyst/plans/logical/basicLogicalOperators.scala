@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogStorageFormat, CatalogTable
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
 import org.apache.spark.sql.catalyst.plans._
-import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partitioning, RangePartitioning, RoundRobinPartitioning}
+import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, HilbertCurveRangePartitioning, Partitioning, RangePartitioning, RoundRobinPartitioning, ZorderRangePartitioning}
 import org.apache.spark.sql.catalyst.util.truncatedString
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
@@ -1052,6 +1052,54 @@ object RepartitionByExpression {
       numPartitions: Int): RepartitionByExpression = {
     RepartitionByExpression(partitionExpressions, child, Some(numPartitions))
   }
+}
+
+case class RepartitionByZorder(
+    partitionExpressions: Seq[_ <: Expression],
+    child: LogicalPlan,
+    optNumPartitions: Option[Int]) extends RepartitionOperation {
+
+  val numPartitions = optNumPartitions.getOrElse(SQLConf.get.numShufflePartitions)
+  require(numPartitions > 0, s"Number of partitions ($numPartitions) must be positive.")
+  require(partitionExpressions.nonEmpty, "Expect at least 2 expression for WITH ZORDER" +
+    " distribution")
+  require(partitionExpressions.size > 1, "Expect at least 2 expression for WITH ZORDER" +
+    " distribution, use WITH RANGE instead if only distribution by 1 expression.")
+
+  val sortOrder: Seq[SortOrder] = partitionExpressions.map(_ match {
+    case expr: SortOrder => expr
+    case expr: Expression => SortOrder(expr, Ascending)
+  })
+
+  val partitioning: Partitioning =
+    ZorderRangePartitioning(sortOrder, numPartitions)
+
+  override def maxRows: Option[Long] = child.maxRows
+
+  override def shuffle: Boolean = true
+}
+
+case class RepartitionByHilbertCurve(
+    partitionExpressions: Seq[_ <: Expression],
+    child: LogicalPlan,
+    optNumPartitions: Option[Int]) extends RepartitionOperation {
+
+  val numPartitions = optNumPartitions.getOrElse(SQLConf.get.numShufflePartitions)
+  require(numPartitions > 0, s"Number of partitions ($numPartitions) must be positive.")
+  require(partitionExpressions.nonEmpty, "Expect at least 2 one expression for HIBERTCURVE BY")
+  require(partitionExpressions.size > 1, "Expect at least 2 one expression for HIBERTCURVE BY")
+
+  val sortOrder: Seq[SortOrder] = partitionExpressions.map(_ match {
+    case expr: SortOrder => expr
+    case expr: Expression => SortOrder(expr, Ascending)
+  })
+
+  val partitioning: Partitioning =
+    HilbertCurveRangePartitioning(sortOrder, numPartitions)
+
+  override def maxRows: Option[Long] = child.maxRows
+
+  override def shuffle: Boolean = true
 }
 
 /**

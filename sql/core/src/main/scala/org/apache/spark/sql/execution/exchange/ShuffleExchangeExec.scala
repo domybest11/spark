@@ -30,7 +30,7 @@ import org.apache.spark.shuffle.{ShuffleWriteMetricsReporter, ShuffleWriteProces
 import org.apache.spark.shuffle.sort.SortShuffleManager
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.errors._
-import org.apache.spark.sql.catalyst.expressions.{Attribute, BoundReference, UnsafeProjection, UnsafeRow}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, BoundReference, CurveIndex, UnsafeProjection, UnsafeRow}
 import org.apache.spark.sql.catalyst.expressions.codegen.LazilyGeneratedOrdering
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.catalyst.plans.physical._
@@ -269,6 +269,51 @@ object ShuffleExchangeExec {
           rddForSampling,
           ascending = true,
           samplePointsPerPartitionHint = SQLConf.get.rangeExchangeSampleSizePerPartition)
+      case ZorderRangePartitioning(sortingExpressions, numPartitions) =>
+        // Extract only fields used for sorting to avoid collecting large fields that does not
+        // affect sorting result when deciding partition bounds in CurveRangePartitioner
+        val rddForSampling = rdd.mapPartitionsInternal { iter =>
+          val projection =
+            UnsafeProjection.create(sortingExpressions.map(_.child), outputAttributes)
+          val mutablePair = new MutablePair[InternalRow, Null]()
+          // Internally, CurveRangePartitioner runs a job on the RDD that samples keys to compute
+          // partition bounds. To get accurate samples, we need to copy the mutable keys.
+          iter.map(row => mutablePair.update(projection(row).copy(), null))
+        }
+        // Construct ordering on extracted sort key.
+        val orderingAttributes = sortingExpressions.zipWithIndex.map { case (ord, i) =>
+          ord.copy(child = BoundReference(i, ord.dataType, ord.nullable))
+        }
+
+        new CurveRangePartitioner(
+          numPartitions,
+          rddForSampling,
+          orderingAttributes,
+          CurveIndex(sortingExpressions.size, false),
+          ascending = true,
+          samplePointsPerPartitionHint = SQLConf.get.rangeExchangeSampleSizePerPartition)
+      case HilbertCurveRangePartitioning(sortingExpressions, numPartitions) =>
+        // Extract only fields used for sorting to avoid collecting large fields that does not
+        // affect sorting result when deciding partition bounds in CurveRangePartitioner
+        val rddForSampling = rdd.mapPartitionsInternal { iter =>
+          val projection =
+            UnsafeProjection.create(sortingExpressions.map(_.child), outputAttributes)
+          val mutablePair = new MutablePair[InternalRow, Null]()
+          // Internally, CurveRangePartitioner runs a job on the RDD that samples keys to compute
+          // partition bounds. To get accurate samples, we need to copy the mutable keys.
+          iter.map(row => mutablePair.update(projection(row).copy(), null))
+        }
+        // Construct ordering on extracted sort key.
+        val orderingAttributes = sortingExpressions.zipWithIndex.map { case (ord, i) =>
+          ord.copy(child = BoundReference(i, ord.dataType, ord.nullable))
+        }
+        new CurveRangePartitioner(
+          numPartitions,
+          rddForSampling,
+          orderingAttributes,
+          CurveIndex(sortingExpressions.size, true),
+          ascending = true,
+          samplePointsPerPartitionHint = SQLConf.get.rangeExchangeSampleSizePerPartition)
       case SinglePartition =>
         new Partitioner {
           override def numPartitions: Int = 1
@@ -290,6 +335,12 @@ object ShuffleExchangeExec {
         val projection = UnsafeProjection.create(h.partitionIdExpression :: Nil, outputAttributes)
         row => projection(row).getInt(0)
       case RangePartitioning(sortingExpressions, _) =>
+        val projection = UnsafeProjection.create(sortingExpressions.map(_.child), outputAttributes)
+        row => projection(row)
+      case ZorderRangePartitioning(sortingExpressions, _) =>
+        val projection = UnsafeProjection.create(sortingExpressions.map(_.child), outputAttributes)
+        row => projection(row)
+      case HilbertCurveRangePartitioning(sortingExpressions, _) =>
         val projection = UnsafeProjection.create(sortingExpressions.map(_.child), outputAttributes)
         row => projection(row)
       case SinglePartition => identity

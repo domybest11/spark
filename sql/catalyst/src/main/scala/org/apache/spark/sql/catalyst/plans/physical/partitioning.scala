@@ -286,6 +286,48 @@ case class RangePartitioning(ordering: Seq[SortOrder], numPartitions: Int)
   }
 }
 
+case class ZorderRangePartitioning(ordering: Seq[SortOrder], numPartitions: Int)
+  extends Expression with Partitioning with Unevaluable {
+
+  override def children: Seq[SortOrder] = ordering
+  override def nullable: Boolean = false
+  override def dataType: DataType = IntegerType
+
+  override def satisfies0(required: Distribution): Boolean = {
+    super.satisfies0(required) || {
+      required match {
+        case _: OrderedDistribution =>
+          false
+        case ClusteredDistribution(requiredClustering, _) =>
+          ordering.size == requiredClustering.size &&
+            ordering.map(_.child).forall(x => requiredClustering.exists(_.semanticEquals(x)))
+        case _ => false
+      }
+    }
+  }
+}
+
+case class HilbertCurveRangePartitioning(ordering: Seq[SortOrder], numPartitions: Int)
+  extends Expression with Partitioning with Unevaluable {
+
+  override def children: Seq[SortOrder] = ordering
+  override def nullable: Boolean = false
+  override def dataType: DataType = IntegerType
+
+  override def satisfies0(required: Distribution): Boolean = {
+    super.satisfies0(required) || {
+      required match {
+        case _: OrderedDistribution =>
+          false
+        case ClusteredDistribution(requiredClustering, _) =>
+          ordering.size == requiredClustering.size &&
+            ordering.map(_.child).forall(x => requiredClustering.exists(_.semanticEquals(x)))
+        case _ => false
+      }
+    }
+  }
+}
+
 /**
  * A collection of [[Partitioning]]s that can be used to describe the partitioning
  * scheme of the output of a physical operator. It is usually used for an operator

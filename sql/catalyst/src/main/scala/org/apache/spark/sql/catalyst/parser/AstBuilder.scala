@@ -531,30 +531,50 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
     import ctx._
 
     // Handle ORDER BY, SORT BY, DISTRIBUTE BY, and CLUSTER BY clause.
+    val distContext = distributeByClause()
     val withOrder = if (
-      !order.isEmpty && sort.isEmpty && distributeBy.isEmpty && clusterBy.isEmpty) {
+      !order.isEmpty && sort.isEmpty && distContext == null && clusterBy.isEmpty) {
       // ORDER BY ...
       Sort(order.asScala.map(visitSortItem).toSeq, global = true, query)
-    } else if (order.isEmpty && !sort.isEmpty && distributeBy.isEmpty && clusterBy.isEmpty) {
+    } else if (order.isEmpty && !sort.isEmpty && distContext == null && clusterBy.isEmpty) {
       // SORT BY ...
       Sort(sort.asScala.map(visitSortItem).toSeq, global = false, query)
-    } else if (order.isEmpty && sort.isEmpty && !distributeBy.isEmpty && clusterBy.isEmpty) {
+    } else if (order.isEmpty && sort.isEmpty && distContext != null && clusterBy.isEmpty) {
       // DISTRIBUTE BY ...
-      withRepartitionByExpression(ctx, expressionList(distributeBy), query)
-    } else if (order.isEmpty && !sort.isEmpty && !distributeBy.isEmpty && clusterBy.isEmpty) {
+      val expressions = expressionList(distContext.distributeBy)
+      if (distContext.ZORDER() != null) {
+        withRepartitionByZOrder(ctx, expressions, query)
+      } else if (distContext.HIBERTCURVE() != null) {
+        withRepartitionByHibert(ctx, expressions, query)
+      } else if (distContext.RANGE() != null) {
+        withRepartitionByExpression(ctx, expressions.map(SortOrder(_, Ascending)), query)
+      } else {
+        withRepartitionByExpression(ctx, expressions, query)
+      }
+    } else if (order.isEmpty && !sort.isEmpty && distContext != null && clusterBy.isEmpty) {
       // SORT BY ... DISTRIBUTE BY ...
+      val expressions = expressionList(distContext.distributeBy)
+      val distribution = if (distContext.ZORDER() != null) {
+        withRepartitionByZOrder(ctx, expressions, query)
+      } else if (distContext.HIBERTCURVE() != null) {
+        withRepartitionByHibert(ctx, expressions, query)
+      } else if (distContext.RANGE() != null) {
+        withRepartitionByExpression(ctx, expressions.map(SortOrder(_, Ascending)), query)
+      } else {
+        withRepartitionByExpression(ctx, expressions, query)
+      }
       Sort(
-        sort.asScala.map(visitSortItem).toSeq,
+        sort.asScala.map(visitSortItem),
         global = false,
-        withRepartitionByExpression(ctx, expressionList(distributeBy), query))
-    } else if (order.isEmpty && sort.isEmpty && distributeBy.isEmpty && !clusterBy.isEmpty) {
+        distribution)
+    } else if (order.isEmpty && sort.isEmpty && distContext == null && !clusterBy.isEmpty) {
       // CLUSTER BY ...
       val expressions = expressionList(clusterBy)
       Sort(
         expressions.map(SortOrder(_, Ascending)),
         global = false,
         withRepartitionByExpression(ctx, expressions, query))
-    } else if (order.isEmpty && sort.isEmpty && distributeBy.isEmpty && clusterBy.isEmpty) {
+    } else if (order.isEmpty && sort.isEmpty && distContext == null && clusterBy.isEmpty) {
       // [EMPTY]
       query
     } else {
@@ -580,6 +600,26 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
       expressions: Seq[Expression],
       query: LogicalPlan): LogicalPlan = {
     throw new ParseException("DISTRIBUTE BY is not supported", ctx)
+  }
+
+  /**
+   * Create a clause for ZORDER BY.
+   */
+  protected def withRepartitionByZOrder(
+      ctx: QueryOrganizationContext,
+      expressions: Seq[Expression],
+      query: LogicalPlan): LogicalPlan = {
+    throw new ParseException("ZORDER BY is not supported", ctx)
+  }
+
+  /**
+   * Create a clause for HIBERTCURVE BY.
+   */
+  protected def withRepartitionByHibert(
+      ctx: QueryOrganizationContext,
+      expressions: Seq[Expression],
+      query: LogicalPlan): LogicalPlan = {
+    throw new ParseException("HIBERTCURVE BY is not supported", ctx)
   }
 
   override def visitTransformQuerySpecification(

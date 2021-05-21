@@ -454,10 +454,17 @@ dmlStatementNoWith
 queryOrganization
     : (ORDER BY order+=sortItem (',' order+=sortItem)*)?
       (CLUSTER BY clusterBy+=expression (',' clusterBy+=expression)*)?
-      (DISTRIBUTE BY distributeBy+=expression (',' distributeBy+=expression)*)?
+      distributeByClause?
       (SORT BY sort+=sortItem (',' sort+=sortItem)*)?
       windowClause?
       (LIMIT (ALL | limit=expression))?
+    ;
+
+distributeByClause
+    : DISTRIBUTE BY distributeBy+=expression (',' distributeBy+=expression)* (
+      WITH kind=ZORDER
+      | WITH kind=RANGE
+      | WITH kind=HIBERTCURVE)?
     ;
 
 multiInsertQueryBody
@@ -1196,6 +1203,8 @@ ansiNonReserved
     | VIEWS
     | WINDOW
     | ZONE
+    | ZORDER
+    | HIBERTCURVE
 //--ANSI-NON-RESERVED-END
     ;
 
@@ -1462,6 +1471,8 @@ nonReserved
     | WINDOW
     | WITH
     | ZONE
+    | ZORDER
+    | HIBERTCURVE
 //--DEFAULT-NON-RESERVED-END
     ;
 
@@ -1721,6 +1732,8 @@ WHERE: 'WHERE';
 WINDOW: 'WINDOW';
 WITH: 'WITH';
 ZONE: 'ZONE';
+ZORDER: 'ZORDER';
+HIBERTCURVE: 'HIBERTCURVE';
 //--SPARK-KEYWORD-LIST-END
 //============================
 // End of the keywords list

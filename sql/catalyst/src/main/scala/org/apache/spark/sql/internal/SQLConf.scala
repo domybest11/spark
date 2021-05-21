@@ -2016,6 +2016,15 @@ object SQLConf {
       .intConf
       .createWithDefault(100)
 
+  val ZORDER_EXCHANGE_SAMPLE_SIZE =
+    buildConf("spark.sql.execution.zorderExchange.sampleSize")
+      .internal()
+      .doc("Number of points to sample in order to determine the range boundaries" +
+        " for lexicographical index.")
+      .version("3.1.0")
+      .intConf
+      .createWithDefault(100)
+
   val ARROW_EXECUTION_ENABLED =
     buildConf("spark.sql.execution.arrow.enabled")
       .doc("(Deprecated since Spark 3.0, please set 'spark.sql.execution.arrow.pyspark.enabled'.)")
@@ -3612,6 +3621,8 @@ class SQLConf extends Serializable with Logging {
   def supportQuotedRegexColumnName: Boolean = getConf(SUPPORT_QUOTED_REGEX_COLUMN_NAME)
 
   def rangeExchangeSampleSizePerPartition: Int = getConf(RANGE_EXCHANGE_SAMPLE_SIZE_PER_PARTITION)
+
+  def zorderExchangeSampleSize: Int = getConf(ZORDER_EXCHANGE_SAMPLE_SIZE)
 
   def arrowPySparkEnabled: Boolean = getConf(ARROW_PYSPARK_EXECUTION_ENABLED)
 

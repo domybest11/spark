@@ -459,6 +459,81 @@ class DataFrameSuite extends QueryTest
     }
   }
 
+  test("repartitionByZOrder") {
+    val data1d = Random.shuffle(0.to(7))
+    val data2d = data1d.map(i => Random.shuffle(0.to(7)).map(j => (i, j))).flatten
+
+    val rows = data2d.toDF("x", "y").repartitionByZOrderRange(4, $"x", $"y")
+      .select(spark_partition_id().as("id"), $"x", $"y").collect()
+
+    val dist = (0 to data1d.size).map {
+      index =>
+        rows.filter(_.get(1) == index).sortBy(_.get(2).asInstanceOf[Int])
+          .map(row => row.get(0).toString).mkString(" ")
+    }.mkString("\n")
+
+    val expected =
+        "0 0 0 0 2 2 2 2\n" +
+        "0 0 0 0 2 2 2 2\n" +
+        "0 0 0 0 2 2 2 2\n" +
+        "0 0 0 0 2 2 2 2\n" +
+        "1 1 1 1 3 3 3 3\n" +
+        "1 1 1 1 3 3 3 3\n" +
+        "1 1 1 1 3 3 3 3\n" +
+        "1 1 1 1 3 3 3 3\n"
+
+    assertResult(expected)(dist)
+
+    // at least one partition-by expression must be specified
+    intercept[IllegalArgumentException] {
+      data1d.toDF("val").repartitionByZOrderRange(data1d.size)
+    }
+    intercept[IllegalArgumentException] {
+      data1d.toDF("val").repartitionByZOrderRange(data1d.size, Seq.empty: _*)
+    }
+    intercept[IllegalArgumentException] {
+      data1d.toDF("val").repartitionByZOrderRange(data1d.size, Seq($"x"): _*)
+    }
+  }
+
+
+  test("repartitionByHilbertCurve") {
+    val data1d = Random.shuffle(0.to(7))
+    val data2d = data1d.map(i => Random.shuffle(0.to(7)).map(j => (i, j))).flatten
+
+    val rows = data2d.toDF("x", "y").repartitionByHilbertCurveRange(4, $"x", $"y")
+      .select(spark_partition_id().as("id"), $"x", $"y").collect()
+
+    val dist = (0 to data1d.size).map {
+      index =>
+        rows.filter(_.get(1) == index).sortBy(_.get(2).asInstanceOf[Int])
+          .map(row => row.get(0).toString).mkString(" ")
+    }.mkString("\n")
+
+    val expected =
+        "0 0 0 0 1 1 1 1\n" +
+        "0 0 0 0 1 1 1 1\n" +
+        "0 0 0 0 1 1 1 1\n" +
+        "0 0 0 0 1 1 1 1\n" +
+        "3 3 3 3 2 2 2 2\n" +
+        "3 3 3 3 2 2 2 2\n" +
+        "3 3 3 3 2 2 2 2\n" +
+        "3 3 3 3 2 2 2 2\n"
+
+    assertResult(expected)(dist)
+
+    // at least one partition-by expression must be specified
+    intercept[IllegalArgumentException] {
+      data1d.toDF("val").repartitionByHilbertCurveRange(data1d.size)
+    }
+    intercept[IllegalArgumentException] {
+      data1d.toDF("val").repartitionByHilbertCurveRange(data1d.size, Seq.empty: _*)
+    }
+    intercept[IllegalArgumentException] {
+      data1d.toDF("val").repartitionByHilbertCurveRange(data1d.size, Seq($"x"): _*)
+    }
+  }
+
   test("coalesce") {
     intercept[IllegalArgumentException] {
       testData.select("key").coalesce(0)

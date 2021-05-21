@@ -635,6 +635,26 @@ class SparkSqlAstBuilder extends AstBuilder {
   }
 
   /**
+   * Create a clause for ZORDER BY.
+   */
+  override protected def withRepartitionByZOrder(
+      ctx: QueryOrganizationContext,
+      expressions: Seq[Expression],
+      query: LogicalPlan): LogicalPlan = {
+    RepartitionByZorder(expressions, query, Some(conf.numShufflePartitions))
+  }
+
+  /**
+   * Create a clause for ZORDER BY.
+   */
+  override protected def withRepartitionByHibert(
+      ctx: QueryOrganizationContext,
+      expressions: Seq[Expression],
+      query: LogicalPlan): LogicalPlan = {
+    RepartitionByHilbertCurve(expressions, query, Some(conf.numShufflePartitions))
+  }
+
+  /**
    * Return the parameters for [[InsertIntoDir]] logical plan.
    *
    * Expected format:

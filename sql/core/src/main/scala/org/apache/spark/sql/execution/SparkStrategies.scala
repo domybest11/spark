@@ -709,6 +709,22 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
           REPARTITION_WITH_NUM
         }
         exchange.ShuffleExchangeExec(r.partitioning, planLater(r.child), shuffleOrigin) :: Nil
+      case r: logical.RepartitionByZorder =>
+        val shuffleOrigin = if (r.optNumPartitions.isEmpty) {
+          REPARTITION
+        } else {
+          REPARTITION_WITH_NUM
+        }
+        exchange.ShuffleExchangeExec(
+          r.partitioning, planLater(r.child), shuffleOrigin) :: Nil
+      case r: logical.RepartitionByHilbertCurve =>
+        val shuffleOrigin = if (r.optNumPartitions.isEmpty) {
+          REPARTITION
+        } else {
+          REPARTITION_WITH_NUM
+        }
+        exchange.ShuffleExchangeExec(
+          r.partitioning, planLater(r.child), shuffleOrigin) :: Nil
       case ExternalRDD(outputObjAttr, rdd) => ExternalRDDScanExec(outputObjAttr, rdd) :: Nil
       case r: LogicalRDD =>
         RDDScanExec(r.output, r.rdd, "ExistingRDD", r.outputPartitioning, r.outputOrdering) :: Nil

@@ -3106,6 +3106,7 @@ class Dataset[T] private[sql](
    *
    * Note that due to performance reasons this method uses sampling to estimate the ranges.
    * Hence, the output may not be consistent, since sampling can return different values.
+   *
    * The sample size can be controlled by the config
    * `spark.sql.execution.rangeExchange.sampleSizePerPartition`.
    *
@@ -3115,6 +3116,124 @@ class Dataset[T] private[sql](
   @scala.annotation.varargs
   def repartitionByRange(partitionExprs: Column*): Dataset[T] = {
     repartitionByRange(None, partitionExprs)
+  }
+
+  /**
+   * Returns a new Dataset partitioned by the given partitioning expressions, using
+   * `spark.sql.shuffle.partitions` as number of partitions.
+   * The resulting Dataset is zorder partitioned.
+   *
+   * At least two partition-by expression must be specified.
+   * When no explicit sort order is specified, "ascending nulls first" is assumed.
+   * Note, the rows are not sorted in each partition of the resulting Dataset.
+   *
+   * Note that due to performance reasons this method uses sampling to estimate the ranges.
+   * Hence, the output may not be consistent, since sampling can return different values.
+   *
+   * The sample size can be controlled by the config
+   * `spark.sql.execution.rangeExchange.sampleSizePerPartition`.
+   *
+   * @group typedrel
+   * @since 3.1.1
+   */
+  @scala.annotation.varargs
+  def repartitionByZOrderRange(numPartitions: Int, partitionExprs: Column*): Dataset[T] = {
+    repartitionByZOrderRange(Some(numPartitions), partitionExprs)
+  }
+
+  /**
+   * Returns a new Dataset partitioned by the given partitioning expressions, using
+   * `spark.sql.shuffle.partitions` as number of partitions.
+   * The resulting Dataset is zorder partitioned.
+   *
+   * At least two partition-by expression must be specified.
+   * When no explicit sort order is specified, "ascending nulls first" is assumed.
+   * Note, the rows are not sorted in each partition of the resulting Dataset.
+   *
+   * Note that due to performance reasons this method uses sampling to estimate the ranges.
+   * Hence, the output may not be consistent, since sampling can return different values.
+   *
+   * The sample size can be controlled by the config
+   * `spark.sql.execution.rangeExchange.sampleSizePerPartition`.
+   *
+   * @group typedrel
+   * @since 3.1.1
+   */
+  @scala.annotation.varargs
+  def repartitionByZOrderRange(partitionExprs: Column*): Dataset[T] = {
+    repartitionByZOrderRange(None, partitionExprs)
+  }
+
+  private def repartitionByZOrderRange(
+      numPartitions: Option[Int],
+      partitionExprs: Seq[Column]): Dataset[T] = {
+    require(partitionExprs.nonEmpty, "At least one partition-by expression must be specified.")
+    val sortOrder: Seq[SortOrder] = partitionExprs.map(_.expr match {
+      case expr: SortOrder => expr
+      case expr: Expression => SortOrder(expr, Ascending)
+    })
+    withTypedPlan {
+      RepartitionByZorder(sortOrder, logicalPlan, numPartitions)
+    }
+  }
+
+  /**
+   * Returns a new Dataset partitioned by the given partitioning expressions, using
+   * `spark.sql.shuffle.partitions` as number of partitions.
+   * The resulting Dataset is hibert curve partitioned.
+   *
+   * At least two partition-by expression must be specified.
+   * When no explicit sort order is specified, "ascending nulls first" is assumed.
+   * Note, the rows are not sorted in each partition of the resulting Dataset.
+   *
+   * Note that due to performance reasons this method uses sampling to estimate the ranges.
+   * Hence, the output may not be consistent, since sampling can return different values.
+   *
+   * The sample size can be controlled by the config
+   * `spark.sql.execution.rangeExchange.sampleSizePerPartition`.
+   *
+   * @group typedrel
+   * @since 3.1.1
+   */
+  @scala.annotation.varargs
+  def repartitionByHilbertCurveRange(numPartitions: Int, partitionExprs: Column*): Dataset[T] = {
+    repartitionByHilbertCurveRange(Some(numPartitions), partitionExprs)
+  }
+
+  /**
+   * Returns a new Dataset partitioned by the given partitioning expressions, using
+   * `spark.sql.shuffle.partitions` as number of partitions.
+   * The resulting Dataset is hibert curve partitioned.
+   *
+   * At least two partition-by expression must be specified.
+   * When no explicit sort order is specified, "ascending nulls first" is assumed.
+   * Note, the rows are not sorted in each partition of the resulting Dataset.
+   *
+   * Note that due to performance reasons this method uses sampling to estimate the ranges.
+   * Hence, the output may not be consistent, since sampling can return different values.
+   *
+   * The sample size can be controlled by the config
+   * `spark.sql.execution.rangeExchange.sampleSizePerPartition`.
+   *
+   * @group typedrel
+   * @since 3.1.1
+   */
+  @scala.annotation.varargs
+  def repartitionByHilbertCurveRange(partitionExprs: Column*): Dataset[T] = {
+    repartitionByHilbertCurveRange(None, partitionExprs)
+  }
+
+  private def repartitionByHilbertCurveRange(
+      numPartitions: Option[Int],
+      partitionExprs: Seq[Column]): Dataset[T] = {
+    require(partitionExprs.nonEmpty, "At least one partition-by expression must be specified.")
+    val sortOrder: Seq[SortOrder] = partitionExprs.map(_.expr match {
+      case expr: SortOrder => expr
+      case expr: Expression => SortOrder(expr, Ascending)
+    })
+    withTypedPlan {
+      RepartitionByHilbertCurve(sortOrder, logicalPlan, numPartitions)
+    }
   }
 
   /**
