@@ -36,7 +36,7 @@ import org.apache.spark.internal.config
 import org.apache.spark.internal.config.UI._
 import org.apache.spark.sql.{DataFrame, Dataset, SparkSession, SQLContext}
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
-import org.apache.spark.sql.catalyst.catalog.ExternalCatalogWithListener
+import org.apache.spark.sql.catalyst.catalog.{CatalogDatabase, ExternalCatalogWithListener}
 import org.apache.spark.sql.catalyst.expressions.CodegenObjectFactoryMode
 import org.apache.spark.sql.catalyst.optimizer.ConvertToLocalRelation
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, OneRowRelation}
@@ -102,10 +102,13 @@ private[hive] class TestHiveSharedState(
   val loadedTables = new collection.mutable.HashSet[String]
 
   override lazy val externalCatalog: ExternalCatalogWithListener = {
-    new ExternalCatalogWithListener(new TestHiveExternalCatalog(
+    val testHiveExternalCatalog = new TestHiveExternalCatalog(
       sc.conf,
       sc.hadoopConfiguration,
-      hiveClient))
+      hiveClient)
+    testHiveExternalCatalog.client.createDatabase(CatalogDatabase("default", "default description",
+      new URI(sc.conf.get("spark.sql.warehouse.dir")), Map.empty), ignoreIfExists = true)
+    new ExternalCatalogWithListener(testHiveExternalCatalog)
   }
 }
 

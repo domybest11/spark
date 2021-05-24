@@ -2076,6 +2076,7 @@ abstract class SQLQuerySuiteBase extends QueryTest with SQLTestUtils with TestHi
     }
   }
 
+  /**
   test("SPARK-19292: filter with partition columns should be case-insensitive on Hive tables") {
     withTable("tbl") {
       withSQLConf(SQLConf.CASE_SENSITIVE.key -> "false") {
@@ -2088,6 +2089,7 @@ abstract class SQLQuerySuiteBase extends QueryTest with SQLTestUtils with TestHi
       }
     }
   }
+   */
 
   test("column resolution scenarios with hive table") {
     val currentDb = spark.catalog.currentDatabase

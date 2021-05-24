@@ -18,12 +18,12 @@
 package org.apache.spark.sql.hive.thriftserver
 
 import java.util
-import java.util.concurrent.Semaphore
+import java.util.concurrent.{ConcurrentHashMap, Semaphore}
 
 import scala.concurrent.duration._
 
 import org.apache.hadoop.hive.conf.HiveConf
-import org.apache.hive.service.cli.OperationState
+import org.apache.hive.service.cli.{OperationState, SessionHandle}
 import org.apache.hive.service.cli.session.{HiveSession, HiveSessionImpl}
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 import org.mockito.Mockito.{doReturn, mock, spy, when, RETURNS_DEEP_STUBS}
@@ -110,7 +110,7 @@ class SparkExecuteStatementOperationSuite extends SparkFunSuite with SharedSpark
       signal: Semaphore,
       finalState: OperationState)
     extends SparkExecuteStatementOperation(sqlContext, hiveSession, statement,
-      new util.HashMap, false, null, 0) {
+      new util.HashMap, false, new ConcurrentHashMap[SessionHandle, String](), 0) {
 
     override def cleanup(): Unit = {
       super.cleanup()

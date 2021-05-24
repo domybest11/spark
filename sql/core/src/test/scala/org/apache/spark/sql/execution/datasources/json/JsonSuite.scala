@@ -2646,7 +2646,7 @@ abstract class JsonSuite
       """{"a":"2018-12-16T22:23:24.123-02:00"}""") === fromDDL("a timestamp"))
 
     assert(schemaOf("""{"a":"2018-12-17T10:11:12.123-01:00"}""", """{"a":1}""")
-      === fromDDL("a string"))
+      === fromDDL("a long"))
     assert(schemaOf("""{"a":"2018-12-17T10:11:12.123-01:00"}""", """{"a":"123"}""")
       === fromDDL("a string"))
 

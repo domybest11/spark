@@ -285,6 +285,7 @@ class StatisticsSuite extends StatisticsCollectionTestBase with TestHiveSingleto
       assert(partition.stats.get.sizeInBytes == 5812)
       assert(partition.stats.get.rowCount.isEmpty)
 
+      hiveClient.setCurrentDatabase("default")
       hiveClient
         .runSqlHive(s"ANALYZE TABLE $tableName PARTITION (ds='2017-01-01') COMPUTE STATISTICS")
       partition = spark.sessionState.catalog

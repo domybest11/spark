@@ -160,9 +160,9 @@ private[sql] class SharedState(
           (0 until maxExternalCatalogCount).foreach(v => {
             val externalCatalog = SharedState.reflect[ExternalCatalog,
               SparkConf, Configuration] (
-              SharedState.externalCatalogClassName(sparkContext.conf),
-              sparkContext.conf,
-              sparkContext.hadoopConfiguration)
+              SharedState.externalCatalogClassName(conf),
+              conf,
+              hadoopConf)
 
             val defaultDbDefinition = CatalogDatabase(
               SessionCatalog.DEFAULT_DATABASE,

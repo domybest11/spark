@@ -128,7 +128,7 @@ class VersionsSuite extends SparkFunSuite with Logging {
 
   private var versionSpark: TestHiveVersion = null
 
-  versions.foreach { version =>
+  versions.filter(_ == "2.3").foreach { version =>
     test(s"$version: create client") {
       client = null
       System.gc() // Hack to avoid SEGV on some JVM versions.

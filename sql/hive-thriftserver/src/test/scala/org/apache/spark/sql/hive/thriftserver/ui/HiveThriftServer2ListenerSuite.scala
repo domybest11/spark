@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hive.thriftserver.ui
 
 import java.util.Properties
+import java.util.concurrent.LinkedBlockingQueue
 
 import org.mockito.Mockito.{mock, RETURNS_SMART_NULLS}
 import org.scalatest.BeforeAndAfter
@@ -173,13 +174,13 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
     if (live) {
       val server = mock(classOf[HiveThriftServer2], RETURNS_SMART_NULLS)
       val listener = new HiveThriftServer2Listener(kvstore, sparkConf, Some(server),
-        executionQueue = server.appStatusScheduler._executionInfoQueue, logErrorQueue = None)
+        executionQueue = new LinkedBlockingQueue[LiveExecutionData](), logErrorQueue = None)
       (new HiveThriftServer2AppStatusStore(kvstore, Some(listener)), listener)
     } else {
       val server = mock(classOf[HiveThriftServer2], RETURNS_SMART_NULLS)
       (new HiveThriftServer2AppStatusStore(kvstore),
         new HiveThriftServer2Listener(kvstore, sparkConf, None, false,
-          server.appStatusScheduler._executionInfoQueue, None))
+          new LinkedBlockingQueue[LiveExecutionData](), None))
     }
   }
 }
