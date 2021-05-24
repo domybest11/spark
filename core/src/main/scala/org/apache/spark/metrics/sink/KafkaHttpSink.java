@@ -37,6 +37,7 @@ public class KafkaHttpSink {
   public void start() {
     metricHandlingThread = new Thread(createThread());
     metricHandlingThread.setName("Async metric sink");
+    metricHandlingThread.setDaemon(true);
     metricHandlingThread.start();
   }
 
