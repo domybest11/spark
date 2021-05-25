@@ -119,11 +119,11 @@
 
   <property>
     <name>hive.server2.authentication.kerberos.principal</name>
-    <value>hive/_HOST@BILIBILI.CO</value>
+    <value>hive@BILIBILI.CO</value>
   </property>
   <property>
     <name>hive.server2.authentication.kerberos.keytab</name>
-    <value>/etc/security/keytabs/hive.service.keytab</value>
+    <value>/etc/security/keytabs/hive.keytab</value>
   </property>
 
   <property>
