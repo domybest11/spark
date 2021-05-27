@@ -91,6 +91,9 @@ case class InsertIntoHiveTable(
    * `org.apache.hadoop.mapred.OutputFormat` provided by the table definition.
    */
   override def run(sparkSession: SparkSession, child: SparkPlan): Seq[Row] = {
+    if (SQLConf.get.mirrorExecute && !table.identifier.database.get.startsWith("dolphin")) {
+      throw new SparkException(s"forbid insert into ${table.identifier.database.get}")
+    }
     val externalCatalog = sparkSession.sharedState.externalCatalog
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
     hadoopConf.set("mapreduce.task.attempt.id", sparkSession.sparkContext.getConf.getAppId)
