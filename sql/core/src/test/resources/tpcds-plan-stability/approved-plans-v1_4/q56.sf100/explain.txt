@@ -162,7 +162,7 @@ Condition : isnotnull(i_item_sk#12)
 Output [2]: [i_item_id#13, i_color#14]
 Batched: true
 Location [not included in comparison]/{warehouse_dir}/item]
-PushedFilters: [In(i_color, [slate,blanched,burnished])]
+PushedFilters: [In(i_color, [slate               ,blanched            ,burnished           ])]
 ReadSchema: struct<i_item_id:string,i_color:string>
 
 (22) ColumnarToRow [codegen id : 3]
@@ -170,7 +170,7 @@ Input [2]: [i_item_id#13, i_color#14]
 
 (23) Filter [codegen id : 3]
 Input [2]: [i_item_id#13, i_color#14]
-Condition : i_color#14 IN (slate,blanched,burnished)
+Condition : i_color#14 IN (slate               ,blanched            ,burnished           )
 
 (24) Project [codegen id : 3]
 Output [1]: [i_item_id#13 AS i_item_id#13#15]
@@ -207,7 +207,7 @@ Results [2]: [i_item_id#13, sum#19]
 
 (31) Exchange
 Input [2]: [i_item_id#13, sum#19]
-Arguments: hashpartitioning(i_item_id#13, 5), true, [id=#20]
+Arguments: hashpartitioning(i_item_id#13, 5), ENSURE_REQUIREMENTS, [id=#20]
 
 (32) HashAggregate [codegen id : 6]
 Input [2]: [i_item_id#13, sum#19]
@@ -275,7 +275,7 @@ Results [2]: [i_item_id#13, sum#28]
 
 (46) Exchange
 Input [2]: [i_item_id#13, sum#28]
-Arguments: hashpartitioning(i_item_id#13, 5), true, [id=#29]
+Arguments: hashpartitioning(i_item_id#13, 5), ENSURE_REQUIREMENTS, [id=#29]
 
 (47) HashAggregate [codegen id : 12]
 Input [2]: [i_item_id#13, sum#28]
@@ -343,7 +343,7 @@ Results [2]: [i_item_id#13, sum#37]
 
 (61) Exchange
 Input [2]: [i_item_id#13, sum#37]
-Arguments: hashpartitioning(i_item_id#13, 5), true, [id=#38]
+Arguments: hashpartitioning(i_item_id#13, 5), ENSURE_REQUIREMENTS, [id=#38]
 
 (62) HashAggregate [codegen id : 18]
 Input [2]: [i_item_id#13, sum#37]
@@ -363,7 +363,7 @@ Results [3]: [i_item_id#13, sum#43, isEmpty#44]
 
 (65) Exchange
 Input [3]: [i_item_id#13, sum#43, isEmpty#44]
-Arguments: hashpartitioning(i_item_id#13, 5), true, [id=#45]
+Arguments: hashpartitioning(i_item_id#13, 5), ENSURE_REQUIREMENTS, [id=#45]
 
 (66) HashAggregate [codegen id : 20]
 Input [3]: [i_item_id#13, sum#43, isEmpty#44]

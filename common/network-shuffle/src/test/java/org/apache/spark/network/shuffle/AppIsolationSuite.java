@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -96,9 +97,12 @@ public class AppIsolationSuite {
       Supplier<TransportServerBootstrap> serverBootstrap,
       Function<String, TransportClientBootstrap> clientBootstrapFactory) throws Exception {
     // Start a new server with the correct RPC handler to serve block data.
-    ExternalShuffleBlockResolver blockResolver = mock(ExternalShuffleBlockResolver.class);
+    // ExternalShuffleBlockResolver blockResolver = mock(ExternalShuffleBlockResolver.class);
+    Executor sameThreadExecutor = Runnable::run;
+    ExternalShuffleBlockResolver externalShuffleBlockResolver = new ExternalShuffleBlockResolver(
+        conf, null, sameThreadExecutor);
     ExternalBlockHandler blockHandler = new ExternalBlockHandler(
-      new OneForOneStreamManager(), blockResolver);
+      new OneForOneStreamManager(), externalShuffleBlockResolver);
     TransportServerBootstrap bootstrap = serverBootstrap.get();
 
     try (

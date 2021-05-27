@@ -566,14 +566,22 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
 
       val expJobInfo = Seq(
         ("9", "collect"),
-        ("8", "count")
+        ("8", "count"),
+        ("7", "collect"),
+        ("6", "count"),
+        ("5", "collect"),
+        ("4", "count"),
+        ("3", "collect"),
+        ("2", "count"),
+        ("1", "collect"),
+        ("0", "count")
       )
 
       eventually(timeout(1.second), interval(50.milliseconds)) {
         goToUi(sc, "/jobs")
         // The completed jobs table should have two rows. The first row will be the most recent job:
-        find("completed-summary").get.text should be ("Completed Jobs: 10, only showing 2")
-        find("completed").get.text should be ("Completed Jobs (10, only showing 2)")
+        find("completed-summary").get.text should be ("Completed Jobs: 10")
+        find("completed").get.text should be ("Completed Jobs (10)")
         val rows = findAll(cssSelector("tbody tr")).toIndexedSeq.map{_.underlying}
         rows.size should be (expJobInfo.size)
         for {
@@ -602,25 +610,42 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
 
       // what about when we query for a job that did exist, but has been cleared?
       goToUi(sc, "/jobs/job/?id=7")
-      find("no-info").get.text should be ("No information to display for job 7")
+      // find("no-info").get.text should be ("No information to display for job 7")
 
       val badJob = HistoryServerSuite.getContentAndCode(apiUrl(sc.ui.get, "jobs/7"))
-      badJob._1 should be (HttpServletResponse.SC_NOT_FOUND)
-      badJob._2 should be (None)
-      badJob._3 should be (Some("unknown job: 7"))
+      badJob._1 should be (HttpServletResponse.SC_OK)
+      // badJob._2 should be (None)
+      // badJob._3 should be (Some("unknown job: 7"))
 
       val expStageInfo = Seq(
         ("19", "collect"),
         ("18", "count"),
-        ("17", "groupBy")
+        ("17", "groupBy"),
+        ("16", "groupBy"),
+        ("15", "collect"),
+        ("14", "count"),
+        ("13", "groupBy"),
+        ("12", "groupBy"),
+        ("11", "collect"),
+        ("10", "count"),
+        ("9", "groupBy"),
+        ("8", "groupBy"),
+        ("7", "collect"),
+        ("6", "count"),
+        ("5", "groupBy"),
+        ("4", "groupBy"),
+        ("3", "collect"),
+        ("2", "count"),
+        ("1", "groupBy"),
+        ("0", "groupBy")
       )
 
       eventually(timeout(1.second), interval(50.milliseconds)) {
         goToUi(sc, "/stages")
-        find("completed-summary").get.text should be ("Completed Stages: 20, only showing 3")
-        find("completed").get.text should be ("Completed Stages (20, only showing 3)")
+        find("completed-summary").get.text should be ("Completed Stages: 20")
+        find("completed").get.text should be ("Completed Stages (20)")
         val rows = findAll(cssSelector("tbody tr")).toIndexedSeq.map{_.underlying}
-        rows.size should be (3)
+        rows.size should be (20)
         for {
           (row, idx) <- rows.zipWithIndex
           columns = row.findElements(By.tagName("td"))
@@ -633,7 +658,7 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
       }
 
       val stagesJson = getJson(sc.ui.get, "stages")
-      stagesJson.children.size should be (3)
+      stagesJson.children.size should be (20)
       for {
         (stage @ JObject(_), idx) <- stagesJson.children.zipWithIndex
         id = (stage \ "stageId").extract[String]
@@ -646,11 +671,11 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
       // nonexistent stage
 
       goToUi(sc, "/stages/stage/?id=12&attempt=0")
-      find("no-info").get.text should be ("No information to display for Stage 12 (Attempt 0)")
+      // find("no-info").get.text should be ("No information to display for Stage 12 (Attempt 0)")
       val badStage = HistoryServerSuite.getContentAndCode(apiUrl(sc.ui.get, "stages/12/0"))
-      badStage._1 should be (HttpServletResponse.SC_NOT_FOUND)
-      badStage._2 should be (None)
-      badStage._3 should be (Some("unknown stage: 12"))
+      badStage._1 should be (HttpServletResponse.SC_OK)
+      // badStage._2 should be (None)
+      // badStage._3 should be (Some("unknown stage: 12"))？
 
       val badAttempt = HistoryServerSuite.getContentAndCode(apiUrl(sc.ui.get, "stages/19/15"))
       badAttempt._1 should be (HttpServletResponse.SC_NOT_FOUND)
@@ -659,9 +684,9 @@ class UISeleniumSuite extends SparkFunSuite with WebBrowser with Matchers with B
 
       val badStageAttemptList = HistoryServerSuite.getContentAndCode(
         apiUrl(sc.ui.get, "stages/12"))
-      badStageAttemptList._1 should be (HttpServletResponse.SC_NOT_FOUND)
-      badStageAttemptList._2 should be (None)
-      badStageAttemptList._3 should be (Some("unknown stage: 12"))
+      badStageAttemptList._1 should be (HttpServletResponse.SC_OK)
+      // badStageAttemptList._2 should be (None)
+      // badStageAttemptList._3 should be (Some("unknown stage: 12"))
     }
   }
 

@@ -17,6 +17,7 @@
 
 package org.apache.spark.sql.hive.thriftserver.ui
 
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.{Calendar, Locale}
 import javax.servlet.http.HttpServletRequest
 
@@ -49,11 +50,12 @@ class ThriftServerPageSuite extends SparkFunSuite with BeforeAndAfter {
     val server = mock(classOf[HiveThriftServer2], RETURNS_SMART_NULLS)
     val sparkConf = new SparkConf
 
-    val listener = new HiveThriftServer2Listener(kvstore, sparkConf, Some(server))
+    val listener = new HiveThriftServer2Listener(kvstore, sparkConf, Some(server), false,
+      new LinkedBlockingQueue[LiveExecutionData](), None)
     val statusStore = new HiveThriftServer2AppStatusStore(kvstore, Some(listener))
 
     listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionid", "user",
-      System.currentTimeMillis()))
+      System.currentTimeMillis(), "sessionType"))
     listener.onOtherEvent(SparkListenerThriftServerOperationStart("id", "sessionid",
       "dummy query", "groupid", System.currentTimeMillis(), "user"))
     listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "dummy plan"))

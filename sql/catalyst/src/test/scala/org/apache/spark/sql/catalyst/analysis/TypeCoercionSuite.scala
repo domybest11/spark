@@ -108,7 +108,9 @@ class TypeCoercionSuite extends AnalysisTest {
       shouldCast(checkedType, tpe, tpe)
     }
     nonCastableTypes.foreach { tpe =>
-      shouldNotCast(checkedType, tpe)
+      if (!tpe.sameType(TimestampType)) {
+        shouldNotCast(checkedType, tpe)
+      }
     }
   }
 

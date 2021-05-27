@@ -19,6 +19,10 @@ package org.apache.spark.sql.execution.joins
 
 import scala.collection.mutable.ArrayBuffer
 
+import com.google.common.collect.Interners
+
+import org.apache.spark.{SparkEnv, TaskContext}
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
@@ -157,7 +161,8 @@ case class SortMergeJoinExec(
               RowIterator.fromScala(rightIter),
               inMemoryThreshold,
               spillThreshold,
-              cleanupResources
+              cleanupResources,
+              leftKeys
             )
             private[this] val joinRow = new JoinedRow
 
@@ -202,7 +207,8 @@ case class SortMergeJoinExec(
             bufferedIter = RowIterator.fromScala(rightIter),
             inMemoryThreshold,
             spillThreshold,
-            cleanupResources
+            cleanupResources,
+            leftKeys
           )
           val rightNullRow = new GenericInternalRow(right.output.length)
           new LeftOuterIterator(
@@ -217,7 +223,8 @@ case class SortMergeJoinExec(
             bufferedIter = RowIterator.fromScala(leftIter),
             inMemoryThreshold,
             spillThreshold,
-            cleanupResources
+            cleanupResources,
+            leftKeys
           )
           val leftNullRow = new GenericInternalRow(left.output.length)
           new RightOuterIterator(
@@ -253,7 +260,7 @@ case class SortMergeJoinExec(
               inMemoryThreshold,
               spillThreshold,
               cleanupResources,
-              condition.isEmpty
+              onlyBufferFirstMatch = condition.isEmpty
             )
             private[this] val joinRow = new JoinedRow
 
@@ -290,7 +297,7 @@ case class SortMergeJoinExec(
               inMemoryThreshold,
               spillThreshold,
               cleanupResources,
-              condition.isEmpty
+              onlyBufferFirstMatch = condition.isEmpty
             )
             private[this] val joinRow = new JoinedRow
 
@@ -334,7 +341,7 @@ case class SortMergeJoinExec(
               inMemoryThreshold,
               spillThreshold,
               cleanupResources,
-              condition.isEmpty
+              onlyBufferFirstMatch = condition.isEmpty
             )
             private[this] val joinRow = new JoinedRow
 
@@ -371,7 +378,8 @@ case class SortMergeJoinExec(
   }
 
   override def supportCodegen: Boolean = {
-    joinType.isInstanceOf[InnerLike]
+    // joinType.isInstanceOf[InnerLike]
+    false
   }
 
   override def inputRDDs(): Seq[RDD[InternalRow]] = {
@@ -668,6 +676,7 @@ private[joins] class SortMergeJoinScanner(
     inMemoryThreshold: Int,
     spillThreshold: Int,
     eagerCleanupResources: () => Unit,
+    streamedKey: Seq[Expression] = Seq.empty,
     onlyBufferFirstMatch: Boolean = false) {
   private[this] var streamedRow: InternalRow = _
   private[this] var streamedRowKey: InternalRow = _
@@ -682,6 +691,13 @@ private[joins] class SortMergeJoinScanner(
   private[this] val bufferedMatches: ExternalAppendOnlyUnsafeRowArray =
     new ExternalAppendOnlyUnsafeRowArray(if (onlyBufferFirstMatch) 1 else inMemoryThreshold,
       spillThreshold)
+
+  private[this] val foundDataSkew: Boolean = TaskContext.get().getLocalProperties
+    .getProperty("spark.sql.autoDetectDataSkew", "false").toBoolean && streamedKey.nonEmpty
+  private[this] val samplingSize: Long = SparkEnv.get.conf
+    .getLong("spark.sql.autoDetectDataSkewSamplingSize", 10000000)
+  private[this] var _samplingSize = samplingSize
+  private[this] val dataSkewSampler = new DataSkewSampler(streamedKey)
 
   // Initialization (note: do _not_ want to advance streamed here).
   advancedBufferedToRowWithNullFreeJoinKey()
@@ -799,11 +815,17 @@ private[joins] class SortMergeJoinScanner(
   private def advancedStreamed(): Boolean = {
     if (streamedIter.advanceNext()) {
       streamedRow = streamedIter.getRow
+      if (foundDataSkew && _samplingSize > 0) {
+        _samplingSize -= 1
+        dataSkewSampler.readRecords(streamedRowKey)
+        if (_samplingSize == 0) dataSkewSampler.sendHeavyHitters(samplingSize - _samplingSize)
+      }
       streamedRowKey = streamedKeyGenerator(streamedRow)
       true
     } else {
       streamedRow = null
       streamedRowKey = null
+      if (foundDataSkew) dataSkewSampler.sendHeavyHitters(samplingSize - _samplingSize)
       false
     }
   }
@@ -846,6 +868,74 @@ private[joins] class SortMergeJoinScanner(
       }
       advancedBufferedToRowWithNullFreeJoinKey()
     } while (bufferedRow != null && keyOrdering.compare(streamedRowKey, bufferedRowKey) == 0)
+  }
+}
+
+private class DataSkewSampler(streamedKey: Seq[Expression] = Seq.empty) extends Logging {
+  private[this] val threshold: Long = SparkEnv.get.conf
+    .getLong("spark.sql.autoDetectDataSkewThreshold", 1000000)
+
+  private[this] var originalKey: String = _
+  private[this] var currentKey: String = _
+  private[this] var currentKeyNum: Long = 0L
+  private[this] var heavyHitter: (String, Long) = _
+  private[this] var startTime = 0L
+  private[this] var costTime = 0L
+  private[this] var active = true
+  private[this] val stringInterner = Interners.newWeakInterner[String]()
+
+  def readRecords(streamedRowKey: InternalRow): Unit = {
+    if (active) {
+      try {
+        startTime = System.currentTimeMillis()
+
+        /** String interning to reduce the memory usage. */
+        originalKey = weakIntern(streamedKey.zipWithIndex.map { case (expr, i) =>
+          String.valueOf(streamedRowKey.get(i, expr.dataType))
+        }.mkString(","))
+        if (originalKey == currentKey) {
+          currentKeyNum += 1
+        } else {
+          if (currentKeyNum >= threshold &&
+            (heavyHitter == null || currentKeyNum >= heavyHitter._2)) {
+            heavyHitter = (currentKey, currentKeyNum)
+          }
+          currentKey = originalKey
+          currentKeyNum = 1
+        }
+        costTime = costTime + (System.currentTimeMillis() - startTime)
+      } catch {
+        case e: Exception =>
+          logError("Data skew sampler occurs error and stop it", e)
+          active = false
+      }
+    }
+  }
+
+  def sendHeavyHitters(samplingSize: Long): Unit = {
+    if (active) {
+      logInfo(s"Detect data skew key cost $costTime ms")
+      active = false
+      costTime = 0L
+      try {
+        // Compare prev heavy-hitter with current key right away
+        if (heavyHitter == null || currentKeyNum >= heavyHitter._2) {
+          heavyHitter = (currentKey, currentKeyNum)
+        }
+        if (heavyHitter._2 >= threshold) {
+          TaskContext.get().taskMetrics().incSkewKeys((streamedKey.map(k => k.sql).mkString(","),
+            s"${heavyHitter._1}: ${heavyHitter._2}/$samplingSize"))
+        } else {
+          logInfo(s"No data skew key found")
+        }
+      } catch {
+        case e: Exception => logError("Send heavy hitters failed", e)
+      }
+    }
+  }
+
+  def weakIntern(s: String): String = {
+    stringInterner.intern(s)
   }
 }
 

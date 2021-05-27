@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<configuration>
+  <property>
+    <name>hive.exec.orc.split.strategy.etl.max.files</name>
+    <value>500</value>
+  </property>
+  <property>
+    <name>hive.cli.print.header</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>hive.exec.dynamic.partition.mode</name>
+    <value>nonstrict</value>
+  </property>
+  <property>
+    <name>hive.reload.functions</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hive.metastore.warehouse.dir</name>
+    <value>viewfs://jssz-bigdata-cluster/warehouse1</value>
+  </property>
+  <property>
+    <name>hive.support.sql11.reserved.keywords</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hive.cbo.enable</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hive.warehouse.subdir.inherit.perms</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hive.mapred.supports.subdirectories</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>hive.server2.thrift.min.worker.threads</name>
+    <value>0</value>
+  </property>
+  <property>
+    <name>hive.server2.thrift.max.worker.threads</name>
+    <value>1024</value>
+  </property>
+  <property>
+    <name>hive.server2.async.exec.threads</name>
+    <value>100</value>
+  </property>
+  <!--
+    <property>
+      <name>hive.exec.scratchdir</name>
+      <value>/data/log/hive/hive-scratchdir/</value>
+    </property>
+  -->
+  <!--
+    <property>
+      <name>hive.exec.stagingdir</name>
+      <value>/tmp/hive-stagingdir/spark</value>
+    </property>
+  -->
+  <property>
+    <name>hive.server2.logging.operation.enabled</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>hive.server2.logging.operation.level</name>
+    <value>verbose</value>
+  </property>
+  <property>
+    <name>hive.server2.logging.operation.log.location</name>
+    <value>/data/log/hive/spark/operation_logs</value>
+  </property>
+  <property>
+    <name>hive.security.authorization.enabled</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>hive.security.authorization.manager</name>
+    <value>org.apache.hadoop.hive.ql.security.authorization.plugin.sqlstd.SQLStdHiveAuthorizerFactory</value>
+  </property>
+  <property>
+    <name>hive.server2.enable.doAs</name>
+    <value>true</value>
+  </property>
+  <!--
+    <property>
+      <name>hive.semantic.analyzer.hook</name>
+      <value>com.eleme.hive.plugin.EleAuthHook</value>
+    </property>
+  -->
+  <!--Hive 元数据的 URI，多个 thrift://地址，以英文逗号分隔-->
+  <property>
+    <name>hive.metastore.uris</name>
+    <value>thrift://10.68.69.21:9083,thrift://10.68.69.22:9083,thrift://10.68.69.23:9083</value>
+    <description>Thrift URI for the remote metastore. Used by metastore client to connect to remote metastore.</description>
+  </property>
+  <!--连接到 Thrift 元数据服务的最大重试次数-->
+  <property>
+    <name>hive.metastore.connect.retries</name>
+    <value>10</value>
+    <description>Number of retries while opening a connection to metastore</description>
+  </property>
+  <property>
+    <name>hive.metastore.failure.retries</name>
+    <value>25</value>
+    <description>Number of retries upon failure of Thrift metastore calls</description>
+  </property>
+  <property>
+    <name>hive.metastore.client.connect.retry.delay</name>
+    <value>6s</value>
+    <description>
+      Expects a time value with unit (d/day, h/hour, m/min, s/sec, ms/msec, us/usec, ns/nsec), which is sec if not specified.
+      Number of seconds for the client to wait between consecutive connection attempts
+    </description>
+  </property>
+  <property>
+    <name>hive.metastore.client.socket.timeout</name>
+    <value>600s</value>
+    <description>
+      Expects a time value with unit (d/day, h/hour, m/min, s/sec, ms/msec, us/usec, ns/nsec), which is sec if not specified.
+      MetaStore Client socket timeout in seconds
+    </description>
+  </property>
+  <property>
+    <name>hive.server2.thrift.port</name>
+    <value>10003</value>
+  </property>
+  <property>
+    <name>hive.aux.jars.path</name>
+    <value>file:///data/service/hive/lib/hive-contrib-2.3.4.jar,file:///data/service/hive/lib/com.bilibili.hiveudf.jar,file:///data/service/hive/lib/bilibili-hive-sdk-0.0.1-SNAPSHOT-jar-with-dependencies.jar,file:///data/service/hive/lib/cypress-hive-0.1.1-SNAPSHOT.jar</value>
+  </property>
+  <property>
+    <name>hive.exec.post.hooks</name>
+    <value>com.bilibili.statistics.hive.sdk.hooks.HiveProgressHook,com.bilibili.cypress.hive.hook.QueryExcuteHookContext</value>
+  </property>
+  <property>
+    <name>hive.insert.into.multilevel.dirs</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>hive.semantic.analyzer.hook</name>
+    <value>com.bilibili.statistics.hive.sdk.hooks.AdminAuthHook</value>
+  </property>
+  <property>
+    <name>hbase.zookeeper.quorum</name>
+    <value>10.69.8.16,10.69.8.17,10.69.8.15</value>
+  </property>
+</configuration>
+

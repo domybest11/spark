@@ -278,6 +278,21 @@ package object config {
       .stringConf
       .createWithDefaultString("file,hdfs")
 
+  private[spark] val METRICS_SINK_USED_MAX_RESOURCE =
+    ConfigBuilder("spark.metrics.sink.used.max.resource")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val METRICS_SINK_LANCER_URL =
+    ConfigBuilder("spark.metrics.sink.lancer.url")
+      .stringConf
+      .createWithDefault("http://dataflow.biliapi.com/log/system")
+
+  private[spark] val METRICS_SINK_LOG_ID =
+    ConfigBuilder("spark.metrics.sink.log.id")
+      .stringConf
+      .createWithDefault("007830")
+
   private[spark] val EXECUTOR_JAVA_OPTIONS =
     ConfigBuilder(SparkLauncher.EXECUTOR_EXTRA_JAVA_OPTIONS)
       .withPrepended(SparkLauncher.EXECUTOR_DEFAULT_JAVA_OPTIONS)
@@ -324,6 +339,26 @@ package object config {
     .version("0.6.0")
     .intConf
     .createOptional
+
+  private[spark] val CONTAINER_METRICS_COLLECTION_ENABLE =
+    ConfigBuilder("spark.container.metrics.collection.enable")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val CONTAINER_METRICS_COLLECTION_INTERVAL =
+    ConfigBuilder("spark.container.metrics.collection.interval")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("60s")
+
+  private[spark] val JVM_PAUSE_MONITOR_ENABLE =
+    ConfigBuilder("spark.jvm.pause.monitor.enable")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val JVM_PAUSE_MONITOR_INTERVAL =
+    ConfigBuilder("spark.jvm.pause.monitor.interval")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("10s")
 
   private[spark] val MEMORY_OFFHEAP_ENABLED = ConfigBuilder("spark.memory.offHeap.enabled")
     .doc("If true, Spark will attempt to use off-heap memory for certain operations. " +

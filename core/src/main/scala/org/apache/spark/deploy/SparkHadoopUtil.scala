@@ -66,8 +66,21 @@ private[spark] class SparkHadoopUtil extends Logging {
   def createSparkUser(): UserGroupInformation = {
     val user = Utils.getCurrentUserName()
     logDebug("creating UGI for user: " + user)
-    val ugi = UserGroupInformation.createRemoteUser(user)
+    var ugi = UserGroupInformation.createRemoteUser(user)
     transferCredentials(UserGroupInformation.getCurrentUser(), ugi)
+
+    val proxyUserEnable = Option(System.getenv("EXECUTOR_PROXY_USER_ENABLE")).
+      map(_.toBoolean).getOrElse(false)
+    if (proxyUserEnable) {
+      val executorPrincipal = Option(System.getenv("EXECUTOR_PRINCIPAL")).getOrElse("")
+      val executorKeytab = Option(System.getenv("EXECUTOR_KEYTAB")).getOrElse("")
+      if (!executorKeytab.isEmpty && !executorKeytab.isEmpty) {
+        UserGroupInformation.loginUserFromKeytab(executorPrincipal, executorKeytab)
+        ugi = UserGroupInformation.getLoginUser
+        logInfo(s"login success by kerberos" +
+          s"principal ${executorPrincipal} keytab ${executorKeytab}")
+      }
+    }
     ugi
   }
 
@@ -425,6 +438,7 @@ private[spark] object SparkHadoopUtil extends Logging {
   private[spark] def newConfiguration(conf: SparkConf): Configuration = {
     val hadoopConf = new Configuration()
     appendS3AndSparkHadoopHiveConfigurations(conf, hadoopConf)
+    hadoopConf.addResource(SparkHadoopUtil.SPARK_HADOOP_CONF_FILE)
     hadoopConf
   }
 

@@ -208,6 +208,10 @@ private[spark] class DAGScheduler(
   /** If enabled, FetchFailed will not cause stage retry, in order to surface the problem. */
   private val disallowStageRetryForTest = sc.getConf.get(TEST_NO_STAGE_RETRY)
 
+  private val maxAllowTaskCountInOneStage = sc.getConf.getInt(
+    "spark.max.allow.taskcount.inOneStage", -1
+  )
+
   private val shouldMergeResourceProfiles = sc.getConf.get(config.RESOURCE_PROFILE_MERGE_CONFLICTS)
 
   /**
@@ -251,6 +255,12 @@ private[spark] class DAGScheduler(
 
   private val pushBasedShuffleEnabled = Utils.isPushBasedShuffleEnabled(sc.getConf)
 
+  private[spark] var maxExecutorUsedCpuPercent = 0.0f
+  private[spark] var maxExecutorUsedMemMb = 0
+
+  private val BYTE_TO_MB = 1024 * 1024
+  private val NS_TO_MS = 1000 * 1000
+
   /**
    * Called by the TaskSetManager to report task's starting.
    */
@@ -291,9 +301,21 @@ private[spark] class DAGScheduler(
       accumUpdates: Array[(Long, Int, Int, Seq[AccumulableInfo])],
       blockManagerId: BlockManagerId,
       // (stageId, stageAttemptId) -> metrics
-      executorUpdates: mutable.Map[(Int, Int), ExecutorMetrics]): Boolean = {
+      executorUpdates: mutable.Map[(Int, Int), ExecutorMetrics],
+      executorResources: Array[Long]): Boolean = {
     listenerBus.post(SparkListenerExecutorMetricsUpdate(execId, accumUpdates,
       executorUpdates))
+    if (executorResources.length == 3) {
+      val curExecutorUsedCpuPercent =
+        executorResources(2).toFloat / (executorResources(1) * NS_TO_MS)
+      if (curExecutorUsedCpuPercent > maxExecutorUsedCpuPercent) {
+        maxExecutorUsedCpuPercent = curExecutorUsedCpuPercent
+      }
+      val curExecutorUsedMemMb = (executorResources(0) / BYTE_TO_MB).toInt
+      if (curExecutorUsedMemMb > maxExecutorUsedMemMb) {
+        maxExecutorUsedMemMb = curExecutorUsedMemMb
+      }
+    }
     blockManagerMaster.driverHeartbeatEndPoint.askSync[Boolean](
       BlockManagerHeartbeat(blockManagerId), new RpcTimeout(10.minutes, "BlockManagerHeartbeat"))
   }
@@ -824,6 +846,10 @@ private[spark] class DAGScheduler(
       return new JobWaiter[U](this, jobId, 0, resultHandler)
     }
 
+    if (properties != null) {
+      properties.setProperty("user", Utils.getCurrentUserName())
+    }
+
     assert(partitions.nonEmpty)
     val func2 = func.asInstanceOf[(TaskContext, Iterator[_]) => _]
     val waiter = new JobWaiter[U](this, jobId, partitions.size, resultHandler)
@@ -890,6 +916,7 @@ private[spark] class DAGScheduler(
       timeout: Long,
       properties: Properties): PartialResult[R] = {
     val jobId = nextJobId.getAndIncrement()
+    properties.setProperty("user", Utils.getCurrentUserName())
     if (rdd.partitions.isEmpty) {
       // Return immediately if the job is running 0 tasks
       val time = clock.getTimeMillis()
@@ -927,6 +954,10 @@ private[spark] class DAGScheduler(
     val jobId = nextJobId.getAndIncrement()
     if (rdd.partitions.length == 0) {
       throw new SparkException("Can't run submitMapStage on RDD with 0 partitions")
+    }
+
+    if (properties != null) {
+      properties.setProperty("user", Utils.getCurrentUserName())
     }
 
     // We create a JobWaiter with only one "task", which will be marked as complete when the whole
@@ -1297,6 +1328,15 @@ private[spark] class DAGScheduler(
     // Figure out the indexes of partition ids to compute.
     val partitionsToCompute: Seq[Int] = stage.findMissingPartitions()
 
+    if(maxAllowTaskCountInOneStage > 0
+      && partitionsToCompute.size > maxAllowTaskCountInOneStage) {
+      abortStage(stage, "Task creation failed: task total count is too large in one stage, " +
+        s"task count:${partitionsToCompute.size}. " +
+        s"max allow count:${maxAllowTaskCountInOneStage}", None)
+      return
+    }
+
+
     // Use the scheduling pool, job group, description, etc. from an ActiveJob associated
     // with this Stage
     val properties = jobIdToActiveJob(jobId).properties
@@ -1397,6 +1437,7 @@ private[spark] class DAGScheduler(
         return
     }
 
+    val user = if (properties == null) "" else properties.getProperty("user")
     val tasks: Seq[Task[_]] = try {
       val serializedTaskMetrics = closureSerializer.serialize(stage.latestInfo.taskMetrics).array()
       stage match {
@@ -1406,7 +1447,7 @@ private[spark] class DAGScheduler(
             val locs = taskIdToLocations(id)
             val part = partitions(id)
             stage.pendingPartitions += id
-            new ShuffleMapTask(stage.id, stage.latestInfo.attemptNumber,
+            new ShuffleMapTask(user, stage.id, stage.latestInfo.attemptNumber,
               taskBinary, part, locs, properties, serializedTaskMetrics, Option(jobId),
               Option(sc.applicationId), sc.applicationAttemptId, stage.rdd.isBarrier())
           }
@@ -1416,7 +1457,7 @@ private[spark] class DAGScheduler(
             val p: Int = stage.partitions(id)
             val part = partitions(p)
             val locs = taskIdToLocations(id)
-            new ResultTask(stage.id, stage.latestInfo.attemptNumber,
+            new ResultTask(user, stage.id, stage.latestInfo.attemptNumber,
               taskBinary, part, locs, id, properties, serializedTaskMetrics,
               Option(jobId), Option(sc.applicationId), sc.applicationAttemptId,
               stage.rdd.isBarrier())

@@ -23,9 +23,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
-
 import org.apache.commons.lang3.StringUtils
-
 import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.annotation.{DeveloperApi, Stable, Unstable}
 import org.apache.spark.api.java.JavaRDD
@@ -40,7 +38,7 @@ import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.encoders._
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.json.{JacksonGenerator, JSONOptions}
+import org.apache.spark.sql.catalyst.json.{JSONOptions, JacksonGenerator}
 import org.apache.spark.sql.catalyst.optimizer.CombineUnions
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserUtils}
 import org.apache.spark.sql.catalyst.plans._
@@ -48,6 +46,7 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.plans.physical.{Partitioning, PartitioningCollection}
 import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.catalyst.util.IntervalUtils
+import org.apache.spark.sql.execution.SparkEventKafkaReporter.EventTopic
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.aggregate.TypedAggregateExpression
 import org.apache.spark.sql.execution.arrow.{ArrowBatchStreamWriter, ArrowConverters}
@@ -3684,6 +3683,15 @@ class Dataset[T] private[sql](
   private def withAction[U](name: String, qe: QueryExecution)(action: SparkPlan => U) = {
     SQLExecution.withNewExecutionId(qe, Some(name)) {
       qe.executedPlan.resetMetrics()
+      val needReport = sparkSession.sparkContext
+        .conf.getBoolean("spark.report.logicalplan", false)
+      val traceId = sparkSession.sparkContext.conf.getOption("spark.trace.id")
+      val appName = sparkSession.sparkContext.conf.getOption("spark.app.name")
+      if (needReport && traceId.isDefined && appName.isDefined
+        && qe.analyzed.isInstanceOf[DataWritingCommand]) {
+        sparkSession.sharedState.eventReporter.reportLogicalPlan(
+          qe.analyzed, EventTopic.LogicalPlan, traceId.get, appName.get)
+      }
       action(qe.executedPlan)
     }
   }

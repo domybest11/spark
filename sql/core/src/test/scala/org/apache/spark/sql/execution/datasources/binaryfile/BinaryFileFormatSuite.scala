@@ -326,8 +326,10 @@ class BinaryFileFormatSuite extends QueryTest with SharedSparkSession {
       file.setReadable(false)
 
       // If content is selected, it throws an exception because it's not readable.
-      intercept[IOException] {
-        readBinaryFile(file, StructType(schema(CONTENT) :: Nil))
+      if (System.getProperties.get("user.name") != "root") {
+        intercept[IOException] {
+          readBinaryFile(file, StructType(schema(CONTENT) :: Nil))
+        }
       }
 
       // Otherwise, it should be able to read.

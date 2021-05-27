@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hive.thriftserver.ui
 
 import java.util.Properties
+import java.util.concurrent.LinkedBlockingQueue
 
 import org.mockito.Mockito.{mock, RETURNS_SMART_NULLS}
 import org.scalatest.BeforeAndAfter
@@ -47,7 +48,7 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
       listener: HiveThriftServer2Listener) = createAppStatusStore(live)
 
       listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId",
-        "user", System.currentTimeMillis()))
+        "user", System.currentTimeMillis(), "sessionType"))
       listener.onOtherEvent(SparkListenerThriftServerOperationStart("id", "sessionId",
         "dummy query", "groupId", System.currentTimeMillis(), "user"))
       listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "dummy plan"))
@@ -91,16 +92,16 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
       listener: HiveThriftServer2Listener) = createAppStatusStore(true)
       var time = 0
       listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId1",
-        "user", time))
+        "user", time, "sessionType1"))
       time += 1
       listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId2",
-        "user", time))
+        "user", time, "sessionType2"))
       time += 1
       listener.onOtherEvent(SparkListenerThriftServerSessionClosed("sessionId1", time))
       time += 1
       listener.onOtherEvent(SparkListenerThriftServerSessionClosed("sessionId2", time))
       listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId3",
-        "user", time))
+        "user", time, "sessionType3"))
       time += 1
       listener.onOtherEvent(SparkListenerThriftServerSessionClosed("sessionId3", time))
 
@@ -119,7 +120,7 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
     listener: HiveThriftServer2Listener) = createAppStatusStore(true)
 
     listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId", "user",
-      System.currentTimeMillis()))
+      System.currentTimeMillis(), "sessionType"))
     listener.onOtherEvent(SparkListenerThriftServerOperationStart("id", "sessionId", "dummy query",
       "groupId", System.currentTimeMillis(), "user"))
     listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "dummy plan"))
@@ -152,7 +153,7 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
     listener.onOtherEvent(SparkListenerThriftServerOperationParsed(unknownOperation, "query"))
     listener.onOtherEvent(SparkListenerThriftServerOperationCanceled(unknownOperation, 0))
     listener.onOtherEvent(SparkListenerThriftServerOperationTimeout(unknownOperation, 0))
-    listener.onOtherEvent(SparkListenerThriftServerOperationError(unknownOperation,
+    listener.onOtherEvent(SparkListenerThriftServerOperationError(unknownOperation, "",
       "msg", "trace", 0))
     listener.onOtherEvent(SparkListenerThriftServerOperationFinish(unknownOperation, 0))
     listener.onOtherEvent(SparkListenerThriftServerOperationClosed(unknownOperation, 0))
@@ -172,11 +173,14 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
     kvstore = new ElementTrackingStore(new InMemoryStore, sparkConf)
     if (live) {
       val server = mock(classOf[HiveThriftServer2], RETURNS_SMART_NULLS)
-      val listener = new HiveThriftServer2Listener(kvstore, sparkConf, Some(server))
+      val listener = new HiveThriftServer2Listener(kvstore, sparkConf, Some(server),
+        executionQueue = new LinkedBlockingQueue[LiveExecutionData](), logErrorQueue = None)
       (new HiveThriftServer2AppStatusStore(kvstore, Some(listener)), listener)
     } else {
+      val server = mock(classOf[HiveThriftServer2], RETURNS_SMART_NULLS)
       (new HiveThriftServer2AppStatusStore(kvstore),
-        new HiveThriftServer2Listener(kvstore, sparkConf, None, false))
+        new HiveThriftServer2Listener(kvstore, sparkConf, None, false,
+          new LinkedBlockingQueue[LiveExecutionData](), None))
     }
   }
 }

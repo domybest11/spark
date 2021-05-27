@@ -81,7 +81,7 @@ class HeartbeatReceiverSuite
     heartbeatReceiverClock = new ManualClock
     heartbeatReceiver = new HeartbeatReceiver(sc, heartbeatReceiverClock)
     heartbeatReceiverRef = sc.env.rpcEnv.setupEndpoint("heartbeat", heartbeatReceiver)
-    when(scheduler.executorHeartbeatReceived(any(), any(), any(), any())).thenReturn(true)
+    when(scheduler.executorHeartbeatReceived(any(), any(), any(), any(), any())).thenReturn(true)
   }
 
   /**
@@ -224,13 +224,13 @@ class HeartbeatReceiverSuite
 
     heartbeatReceiverRef.askSync[Boolean](TaskSchedulerIsSet)
     val response = heartbeatReceiverRef.askSync[HeartbeatResponse](
-      Heartbeat(executorId1, Array.empty, blockManagerId, mutable.Map.empty))
+      Heartbeat(executorId1, Array.empty, blockManagerId, mutable.Map.empty, Array.empty))
     assert(response.reregisterBlockManager)
 
     try {
       sc.stopped.set(true)
       val response = heartbeatReceiverRef.askSync[HeartbeatResponse](
-        Heartbeat(executorId1, Array.empty, blockManagerId, mutable.Map.empty))
+        Heartbeat(executorId1, Array.empty, blockManagerId, mutable.Map.empty, Array.empty))
       assert(!response.reregisterBlockManager)
     } finally {
       sc.stopped.set(false)
@@ -246,8 +246,10 @@ class HeartbeatReceiverSuite
     val executorMetrics = new ExecutorMetrics(Array(123456L, 543L, 12345L, 1234L, 123L,
       12L, 432L, 321L, 654L, 765L))
     val executorUpdates = mutable.Map((0, 0) -> executorMetrics)
+    val executorResources = new Array[Long](3)
     val response = heartbeatReceiverRef.askSync[HeartbeatResponse](
-      Heartbeat(executorId, Array(1L -> metrics.accumulators()), blockManagerId, executorUpdates))
+      Heartbeat(executorId, Array(1L -> metrics.accumulators()), blockManagerId, executorUpdates,
+        executorResources))
     if (executorShouldReregister) {
       assert(response.reregisterBlockManager)
     } else {
@@ -257,7 +259,8 @@ class HeartbeatReceiverSuite
         meq(executorId),
         meq(Array(1L -> metrics.accumulators())),
         meq(blockManagerId),
-        meq(executorUpdates))
+        meq(executorUpdates),
+        meq(executorResources))
     }
   }
 

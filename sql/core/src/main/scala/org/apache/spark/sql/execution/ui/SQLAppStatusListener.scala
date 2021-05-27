@@ -17,11 +17,12 @@
 package org.apache.spark.sql.execution.ui
 
 import java.util.{Arrays, Date, NoSuchElementException}
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.util.control.Breaks.{break, breakable}
 
 import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.apache.spark.internal.Logging
@@ -31,12 +32,16 @@ import org.apache.spark.sql.execution.SQLExecution
 import org.apache.spark.sql.execution.metric._
 import org.apache.spark.sql.internal.StaticSQLConf._
 import org.apache.spark.status.{ElementTrackingStore, KVUtils, LiveEntity}
+import org.apache.spark.util.SQLAppStatusReporter
+import org.apache.spark.util.SQLAppStatusReporter.Msg
 import org.apache.spark.util.collection.OpenHashMap
 
 class SQLAppStatusListener(
     conf: SparkConf,
     kvstore: ElementTrackingStore,
-    live: Boolean) extends SparkListener with Logging {
+    live: Boolean,
+    executionQueue: Option[LinkedBlockingQueue[SQLExecutionUIData]] = None)
+  extends SparkListener with Logging {
 
   // How often to flush intermediate state of a live execution to the store. When replaying logs,
   // never flush (only do the very last write).
@@ -52,6 +57,10 @@ class SQLAppStatusListener(
   private[sql] def noLiveData(): Boolean = {
     liveExecutions.isEmpty && stageMetrics.isEmpty
   }
+
+  val TRACE_ID_KEY = "spark.trace.id"
+  val TRACE_IGNORED_KEY = "spark.trace.ignored"
+  private val reporter = SQLAppStatusReporter.createAppStatusReporter(conf)
 
   kvstore.addTrigger(classOf[SQLExecutionUIData], conf.get[Int](UI_RETAINED_EXECUTIONS)) { count =>
     cleanupExecutions(count)
@@ -302,7 +311,14 @@ class SQLAppStatusListener(
 
   private def onExecutionStart(event: SparkListenerSQLExecutionStart): Unit = {
     val SparkListenerSQLExecutionStart(executionId, description, details,
-      physicalPlanDescription, sparkPlanInfo, time) = event
+      physicalPlanDescription, sparkPlanInfo, time, properties, sqlText) = event
+    val traceId = Option(properties).flatMap { p => Option(p.getProperty(TRACE_ID_KEY)) }
+    val ignored = properties.getProperty(TRACE_IGNORED_KEY, "false").toBoolean
+    val sqlIdentifier = getSqlIdentifier(sqlText)
+    if (!ignored && sqlIdentifier.isDefined) {
+      reporter.postProcess(traceId, s"sql-execution_${event.executionId}", "",
+        JobExecutionStatus.RUNNING, s"${Msg.EXECUTE.toString}(${sqlIdentifier.get})", event.time)
+    }
 
     val planGraph = SparkPlanGraph(sparkPlanInfo)
     val sqlPlanMetrics = planGraph.allNodes.flatMap { node =>
@@ -321,6 +337,24 @@ class SQLAppStatusListener(
     exec.physicalPlanDescription = physicalPlanDescription
     exec.metrics = sqlPlanMetrics
     exec.submissionTime = time
+    exec.traceId = traceId
+    exec.ignored = ignored
+    exec.sqlIdentifier = sqlIdentifier
+    if (executionQueue.isDefined) {
+      val executionUIData = new SQLExecutionUIData(
+        exec.executionId,
+        exec.description,
+        exec.details,
+        exec.physicalPlanDescription,
+        exec.metrics,
+        exec.submissionTime,
+        exec.completionTime,
+        exec.jobs,
+        exec.stages,
+        exec.metricsValues
+      )
+      executionQueue.get.offer(executionUIData)
+    }
     update(exec)
   }
 
@@ -366,7 +400,33 @@ class SQLAppStatusListener(
         exec.metricsValues = aggregateMetrics(exec)
         removeStaleMetricsData(exec)
         exec.endEvents.incrementAndGet()
+        if (executionQueue.isDefined) {
+          val executionUIData = new SQLExecutionUIData(
+            exec.executionId,
+            exec.description,
+            exec.details,
+            exec.physicalPlanDescription,
+            exec.metrics,
+            exec.submissionTime,
+            exec.completionTime,
+            exec.jobs,
+            exec.stages,
+            exec.metricsValues
+          )
+          exec.finishAndReport = true
+          executionUIData.finishAndReport = true
+          executionQueue.get.offer(executionUIData)
+        }
         update(exec, force = true)
+
+        if (!exec.ignored && exec.sqlIdentifier.isDefined) {
+          var status = JobExecutionStatus.SUCCEEDED
+          if (exec.jobs.values.toStream.contains(JobExecutionStatus.FAILED)) {
+            status = JobExecutionStatus.FAILED
+          }
+          reporter.postProcess(exec.traceId, s"sql-execution_${event.executionId}", "",
+            status, s"${Msg.EXECUTE.toString}(${exec.sqlIdentifier.get})", event.time)
+        }
       }
     }
   }
@@ -389,12 +449,64 @@ class SQLAppStatusListener(
     }
   }
 
+  private def onAnalysisStart(event: SparkListenerSQLAnalysisStart): Unit = {
+    val ignored = event.properties.getProperty(TRACE_IGNORED_KEY, "false").toBoolean
+    val sqlText = event.sqlText
+    if (!ignored && Option(sqlText).isDefined) {
+      val traceId = Option(event.properties)
+        .flatMap { p => Option(p.getProperty(TRACE_ID_KEY)) }
+      reporter.postProcess(traceId, s"sql-compile_${sqlText.hashCode}", "",
+        JobExecutionStatus.RUNNING, s"${Msg.COMPILE.toString}(${getSqlIdentifier(sqlText).get})",
+        event.time)
+    }
+  }
+
+  private def onAnalysisEnd(event: SparkListenerSQLAnalysisEnd): Unit = {
+    val ignored = event.properties.getProperty(TRACE_IGNORED_KEY, "false").toBoolean
+    val sqlText = event.sqlText
+    if (!ignored && Option(sqlText).isDefined) {
+      val traceId = Option(event.properties)
+        .flatMap { p => Option(p.getProperty(TRACE_ID_KEY)) }
+      var status = JobExecutionStatus.SUCCEEDED
+      if (event.failureReason.isDefined) {
+        status = JobExecutionStatus.FAILED
+      }
+      reporter.postProcess(traceId, s"sql-compile_${sqlText.hashCode}", "", status,
+        s"${Msg.COMPILE.toString}(${getSqlIdentifier(sqlText).get})", event.time)
+    }
+  }
+
+  private def getSqlIdentifier(sqlText: String): Option[String] = {
+    if (sqlText == null) {
+      return None
+    }
+    var sql = sqlText.trim
+    var cycleIndex = 20
+    breakable {
+      while (sql.length > 0 && sql.startsWith("--") && cycleIndex > 0) {
+        if (sql.indexOf("\n") > -1 && sql.indexOf("\n") < sql.length-1) {
+          sql = sql.substring(sql.indexOf("\n") + 1)
+          cycleIndex -= 1
+        } else {
+          break
+        }
+      }
+    }
+    if (sql.length <= 20) {
+      Option(sql)
+    } else {
+      Option(sql.substring(0, 20).concat("..."))
+    }
+  }
+
   override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
     case e: SparkListenerSQLExecutionStart => onExecutionStart(e)
     case e: SparkListenerSQLAdaptiveExecutionUpdate => onAdaptiveExecutionUpdate(e)
     case e: SparkListenerSQLAdaptiveSQLMetricUpdates => onAdaptiveSQLMetricUpdate(e)
     case e: SparkListenerSQLExecutionEnd => onExecutionEnd(e)
     case e: SparkListenerDriverAccumUpdates => onDriverAccumUpdates(e)
+    case e: SparkListenerSQLAnalysisStart => onAnalysisStart(e)
+    case e: SparkListenerSQLAnalysisEnd => onAnalysisEnd(e)
     case _ => // Ignore
   }
 
@@ -431,7 +543,15 @@ class SQLAppStatusListener(
     }
 
     val view = kvstore.view(classOf[SQLExecutionUIData]).index("completionTime").first(0L)
-    val toDelete = KVUtils.viewToSeq(view, countToDelete.toInt)(_.completionTime.isDefined)
+
+    var toDelete : Seq[SQLExecutionUIData] = null
+    if (executionQueue.isDefined) {
+      toDelete = KVUtils.viewToSeq(view, countToDelete.toInt)(executionUIData =>
+        executionUIData.completionTime.isDefined && executionUIData.finishAndReport)
+    } else {
+      toDelete = KVUtils.viewToSeq(view, countToDelete.toInt)(_.completionTime.isDefined)
+    }
+
     toDelete.foreach { e =>
       kvstore.delete(e.getClass(), e.executionId)
       kvstore.delete(classOf[SparkPlanGraphWrapper], e.executionId)
@@ -458,9 +578,14 @@ private class LiveExecutionData(val executionId: Long) extends LiveEntity {
   // Just in case job end and execution end arrive out of order, keep track of how many
   // end events arrived so that the listener can stop tracking the execution.
   val endEvents = new AtomicInteger()
+  @volatile var finishAndReport = false
+
+  var traceId: Option[String] = None
+  var ignored: Boolean = false
+  var sqlIdentifier: Option[String] = None
 
   override protected def doUpdate(): Any = {
-    new SQLExecutionUIData(
+    val sqlExecutionUIData = new SQLExecutionUIData(
       executionId,
       description,
       details,
@@ -471,6 +596,8 @@ private class LiveExecutionData(val executionId: Long) extends LiveEntity {
       jobs,
       stages,
       metricsValues)
+    sqlExecutionUIData.finishAndReport = finishAndReport
+    sqlExecutionUIData
   }
 
 }

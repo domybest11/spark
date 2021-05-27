@@ -344,10 +344,17 @@ NULL	a	NULL
 -- !query
 SELECT val, cate, row_number() OVER(PARTITION BY cate) FROM testData ORDER BY cate, val
 -- !query schema
-struct<>
+struct<val:int,cate:string,row_number() OVER (PARTITION BY cate ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW):int>
 -- !query output
-org.apache.spark.sql.AnalysisException
-Window function row_number() requires window to be ordered, please add ORDER BY clause. For example SELECT row_number()(value_expr) OVER (PARTITION BY window_partition ORDER BY window_ordering) from table
+NULL	NULL	1
+3	NULL	2
+NULL	a	1
+1	a	2
+1	a	3
+2	a	4
+1	b	1
+2	b	2
+3	b	3
 
 
 -- !query

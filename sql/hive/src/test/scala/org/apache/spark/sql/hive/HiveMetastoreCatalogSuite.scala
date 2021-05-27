@@ -100,6 +100,7 @@ class HiveMetastoreCatalogSuite extends TestHiveSingleton with SQLTestUtils {
           |) USING hive
         """.stripMargin)
 
+      hiveClient.setCurrentDatabase("default")
       val schema = hiveClient.getTable("default", "t").schema
       val expectedSchema = new StructType()
         .add("c1", "boolean")
@@ -201,6 +202,7 @@ class DataSourceWithHiveMetastoreCatalogSuite
         assert(columns.map(_.dataType) === Seq(DecimalType(10, 3), StringType))
 
         checkAnswer(table("t"), testDF)
+        sparkSession.metadataHive.setCurrentDatabase("default")
         assert(sparkSession.metadataHive.runSqlHive("SELECT * FROM t") ===
           Seq("1.100\t1", "2.100\t2"))
       }
@@ -234,6 +236,7 @@ class DataSourceWithHiveMetastoreCatalogSuite
           assert(columns.map(_.dataType) === Seq(DecimalType(10, 3), StringType))
 
           checkAnswer(table("t"), testDF)
+          sparkSession.metadataHive.setCurrentDatabase("default")
           assert(sparkSession.metadataHive.runSqlHive("SELECT * FROM t") ===
             Seq("1.100\t1", "2.100\t2"))
         }
@@ -263,6 +266,7 @@ class DataSourceWithHiveMetastoreCatalogSuite
           assert(columns.map(_.dataType) === Seq(IntegerType, StringType))
 
           checkAnswer(table("t"), Row(1, "val_1"))
+          sparkSession.metadataHive.setCurrentDatabase("default")
           assert(sparkSession.metadataHive.runSqlHive("SELECT * FROM t") === Seq("1\tval_1"))
         }
       }
@@ -297,6 +301,7 @@ class DataSourceWithHiveMetastoreCatalogSuite
       checkAnswer(table("t"), Row(1, 2))
 
       // It's not a bucketed table at Hive side
+      sparkSession.metadataHive.setCurrentDatabase("default")
       val hiveSide = sparkSession.metadataHive.runSqlHive("DESC FORMATTED t")
       assert(hiveSide.contains("Num Buckets:        \t-1                  \t "))
       assert(hiveSide.contains("Bucket Columns:     \t[]                  \t "))
@@ -339,6 +344,7 @@ class DataSourceWithHiveMetastoreCatalogSuite
       assert(hiveSide.contains("Bucket Columns:     \t[]                  \t "))
       assert(hiveSide.contains("\tspark.sql.sources.schema.numBuckets\t2                   "))
       assert(hiveSide.contains("\tspark.sql.sources.schema.bucketCol.0\tkey                 "))
+      sparkSession.metadataHive.setCurrentDatabase("default")
       assert(sparkSession.metadataHive.runSqlHive("SELECT count(*) FROM t") ===
         Seq(table("src").count().toString))
     }

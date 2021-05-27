@@ -185,6 +185,10 @@ run_command() {
       execute_command nice -n "$SPARK_NICENESS" "${SPARK_HOME}"/bin/spark-class "$command" "$@"
       ;;
 
+    (run)
+      execute_command exec nice -n "$SPARK_NICENESS" "${SPARK_HOME}"/bin/spark-class "$command" "$@"
+      ;;
+
     (submit)
       execute_command nice -n "$SPARK_NICENESS" bash "${SPARK_HOME}"/bin/spark-submit --class "$command" "$@"
       ;;
@@ -205,6 +209,10 @@ case $option in
 
   (start)
     run_command class "$@"
+    ;;
+
+  (run)
+    run_command run "$@"
     ;;
 
   (stop)

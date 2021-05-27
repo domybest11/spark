@@ -15,23 +15,23 @@ TakeOrderedAndProject [segment,num_customers,segment_base]
                             Project [c_customer_sk,ss_sold_date_sk,ss_ext_sales_price]
                               BroadcastHashJoin [ca_county,ca_state,s_county,s_state]
                                 Project [c_customer_sk,ss_sold_date_sk,ss_ext_sales_price,ca_county,ca_state]
-                                  SortMergeJoin [c_current_addr_sk,ca_address_sk]
-                                    InputAdapter
+                                  InputAdapter
+                                    SortMergeJoin [c_current_addr_sk,ca_address_sk]
                                       WholeStageCodegen (13)
                                         Sort [c_current_addr_sk]
                                           InputAdapter
                                             Exchange [c_current_addr_sk] #3
                                               WholeStageCodegen (12)
                                                 Project [c_customer_sk,c_current_addr_sk,ss_sold_date_sk,ss_ext_sales_price]
-                                                  SortMergeJoin [c_customer_sk,ss_customer_sk]
-                                                    InputAdapter
+                                                  InputAdapter
+                                                    SortMergeJoin [c_customer_sk,ss_customer_sk]
                                                       WholeStageCodegen (9)
                                                         Sort [c_customer_sk]
                                                           HashAggregate [c_customer_sk,c_current_addr_sk]
                                                             HashAggregate [c_customer_sk,c_current_addr_sk]
                                                               Project [c_customer_sk,c_current_addr_sk]
-                                                                SortMergeJoin [customer_sk,c_customer_sk]
-                                                                  InputAdapter
+                                                                InputAdapter
+                                                                  SortMergeJoin [customer_sk,c_customer_sk]
                                                                     WholeStageCodegen (6)
                                                                       Sort [customer_sk]
                                                                         InputAdapter
@@ -71,7 +71,6 @@ TakeOrderedAndProject [segment,num_customers,segment_base]
                                                                                             ColumnarToRow
                                                                                               InputAdapter
                                                                                                 Scan parquet default.date_dim [d_date_sk,d_year,d_moy]
-                                                                  InputAdapter
                                                                     WholeStageCodegen (8)
                                                                       Sort [c_customer_sk]
                                                                         InputAdapter
@@ -81,7 +80,6 @@ TakeOrderedAndProject [segment,num_customers,segment_base]
                                                                                 ColumnarToRow
                                                                                   InputAdapter
                                                                                     Scan parquet default.customer [c_customer_sk,c_current_addr_sk]
-                                                    InputAdapter
                                                       WholeStageCodegen (11)
                                                         Sort [ss_customer_sk]
                                                           InputAdapter
@@ -91,7 +89,6 @@ TakeOrderedAndProject [segment,num_customers,segment_base]
                                                                   ColumnarToRow
                                                                     InputAdapter
                                                                       Scan parquet default.store_sales [ss_sold_date_sk,ss_customer_sk,ss_ext_sales_price]
-                                    InputAdapter
                                       WholeStageCodegen (15)
                                         Sort [ca_address_sk]
                                           InputAdapter

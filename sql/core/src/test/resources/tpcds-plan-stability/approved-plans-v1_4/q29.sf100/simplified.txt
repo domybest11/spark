@@ -6,24 +6,24 @@ TakeOrderedAndProject [i_item_id,i_item_desc,s_store_id,s_store_name,store_sales
           WholeStageCodegen (17)
             HashAggregate [i_item_id,i_item_desc,s_store_id,s_store_name,ss_quantity,sr_return_quantity,cs_quantity] [sum,sum,sum,sum,sum,sum]
               Project [ss_quantity,sr_return_quantity,cs_quantity,s_store_id,s_store_name,i_item_id,i_item_desc]
-                SortMergeJoin [sr_customer_sk,sr_item_sk,cs_bill_customer_sk,cs_item_sk]
-                  InputAdapter
+                InputAdapter
+                  SortMergeJoin [sr_customer_sk,sr_item_sk,cs_bill_customer_sk,cs_item_sk]
                     WholeStageCodegen (13)
                       Sort [sr_customer_sk,sr_item_sk]
                         InputAdapter
                           Exchange [sr_customer_sk,sr_item_sk] #2
                             WholeStageCodegen (12)
                               Project [ss_quantity,s_store_id,s_store_name,i_item_id,i_item_desc,sr_item_sk,sr_customer_sk,sr_return_quantity]
-                                SortMergeJoin [ss_customer_sk,ss_item_sk,ss_ticket_number,sr_customer_sk,sr_item_sk,sr_ticket_number]
-                                  InputAdapter
+                                InputAdapter
+                                  SortMergeJoin [ss_customer_sk,ss_item_sk,ss_ticket_number,sr_customer_sk,sr_item_sk,sr_ticket_number]
                                     WholeStageCodegen (8)
                                       Sort [ss_customer_sk,ss_item_sk,ss_ticket_number]
                                         InputAdapter
                                           Exchange [ss_customer_sk,ss_item_sk,ss_ticket_number] #3
                                             WholeStageCodegen (7)
                                               Project [ss_item_sk,ss_customer_sk,ss_ticket_number,ss_quantity,s_store_id,s_store_name,i_item_id,i_item_desc]
-                                                SortMergeJoin [ss_item_sk,i_item_sk]
-                                                  InputAdapter
+                                                InputAdapter
+                                                  SortMergeJoin [ss_item_sk,i_item_sk]
                                                     WholeStageCodegen (4)
                                                       Sort [ss_item_sk]
                                                         InputAdapter
@@ -52,7 +52,6 @@ TakeOrderedAndProject [i_item_id,i_item_desc,s_store_id,s_store_name,store_sales
                                                                           ColumnarToRow
                                                                             InputAdapter
                                                                               Scan parquet default.store [s_store_sk,s_store_id,s_store_name]
-                                                  InputAdapter
                                                     WholeStageCodegen (6)
                                                       Sort [i_item_sk]
                                                         InputAdapter
@@ -62,7 +61,6 @@ TakeOrderedAndProject [i_item_id,i_item_desc,s_store_id,s_store_name,store_sales
                                                                 ColumnarToRow
                                                                   InputAdapter
                                                                     Scan parquet default.item [i_item_sk,i_item_id,i_item_desc]
-                                  InputAdapter
                                     WholeStageCodegen (11)
                                       Sort [sr_customer_sk,sr_item_sk,sr_ticket_number]
                                         InputAdapter
@@ -82,7 +80,6 @@ TakeOrderedAndProject [i_item_id,i_item_desc,s_store_id,s_store_name,store_sales
                                                             ColumnarToRow
                                                               InputAdapter
                                                                 Scan parquet default.date_dim [d_date_sk,d_year,d_moy]
-                  InputAdapter
                     WholeStageCodegen (16)
                       Sort [cs_bill_customer_sk,cs_item_sk]
                         InputAdapter

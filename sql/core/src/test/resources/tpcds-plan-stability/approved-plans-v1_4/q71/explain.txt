@@ -177,7 +177,7 @@ Input [6]: [i_item_sk#1, i_brand_id#2, i_brand#3, ext_price#14, sold_item_sk#15,
 Output [4]: [t_time_sk#31, t_hour#32, t_minute#33, t_meal_time#34]
 Batched: true
 Location [not included in comparison]/{warehouse_dir}/time_dim]
-PushedFilters: [Or(EqualTo(t_meal_time,breakfast),EqualTo(t_meal_time,dinner)), IsNotNull(t_time_sk)]
+PushedFilters: [Or(EqualTo(t_meal_time,breakfast           ),EqualTo(t_meal_time,dinner              )), IsNotNull(t_time_sk)]
 ReadSchema: struct<t_time_sk:int,t_hour:int,t_minute:int,t_meal_time:string>
 
 (32) ColumnarToRow [codegen id : 8]
@@ -185,7 +185,7 @@ Input [4]: [t_time_sk#31, t_hour#32, t_minute#33, t_meal_time#34]
 
 (33) Filter [codegen id : 8]
 Input [4]: [t_time_sk#31, t_hour#32, t_minute#33, t_meal_time#34]
-Condition : (((t_meal_time#34 = breakfast) OR (t_meal_time#34 = dinner)) AND isnotnull(t_time_sk#31))
+Condition : (((t_meal_time#34 = breakfast           ) OR (t_meal_time#34 = dinner              )) AND isnotnull(t_time_sk#31))
 
 (34) Project [codegen id : 8]
 Output [3]: [t_time_sk#31, t_hour#32, t_minute#33]
@@ -213,7 +213,7 @@ Results [5]: [i_brand#3, i_brand_id#2, t_hour#32, t_minute#33, sum#37]
 
 (39) Exchange
 Input [5]: [i_brand#3, i_brand_id#2, t_hour#32, t_minute#33, sum#37]
-Arguments: hashpartitioning(i_brand#3, i_brand_id#2, t_hour#32, t_minute#33, 5), true, [id=#38]
+Arguments: hashpartitioning(i_brand#3, i_brand_id#2, t_hour#32, t_minute#33, 5), ENSURE_REQUIREMENTS, [id=#38]
 
 (40) HashAggregate [codegen id : 10]
 Input [5]: [i_brand#3, i_brand_id#2, t_hour#32, t_minute#33, sum#37]
@@ -224,7 +224,7 @@ Results [5]: [i_brand_id#2 AS brand_id#40, i_brand#3 AS brand#41, t_hour#32, t_m
 
 (41) Exchange
 Input [5]: [brand_id#40, brand#41, t_hour#32, t_minute#33, ext_price#42]
-Arguments: rangepartitioning(ext_price#42 DESC NULLS LAST, brand_id#40 ASC NULLS FIRST, 5), true, [id=#43]
+Arguments: rangepartitioning(ext_price#42 DESC NULLS LAST, brand_id#40 ASC NULLS FIRST, 5), ENSURE_REQUIREMENTS, [id=#43]
 
 (42) Sort [codegen id : 11]
 Input [5]: [brand_id#40, brand#41, t_hour#32, t_minute#33, ext_price#42]

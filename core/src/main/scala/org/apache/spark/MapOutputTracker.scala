@@ -22,7 +22,7 @@ import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue, ThreadPoolE
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.{HashMap, ListBuffer, Map}
+import scala.collection.mutable.{HashMap, HashSet, ListBuffer, Map}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration.Duration
 import scala.reflect.ClassTag
@@ -39,6 +39,7 @@ import org.apache.spark.scheduler.MapStatus
 import org.apache.spark.shuffle.MetadataFetchFailedException
 import org.apache.spark.storage.{BlockId, BlockManagerId, ShuffleBlockId}
 import org.apache.spark.util._
+import org.apache.spark.util.collection.MedianHeap
 
 /**
  * Helper class used by the [[MapOutputTrackerMaster]] to perform bookkeeping for a single
@@ -346,6 +347,11 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
   def getMapSizesByExecutorId(shuffleId: Int, reduceId: Int)
       : Iterator[(BlockManagerId, Seq[(BlockId, Long, Int)])] = {
     getMapSizesByExecutorId(shuffleId, 0, Int.MaxValue, reduceId, reduceId + 1)
+  }
+
+  def checkDataSkewTask(
+      shuffleId: Int, numPartitions: Int, startPartition: Int, endPartition: Int): Boolean = {
+    false
   }
 
   /**
@@ -805,6 +811,16 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
    */
   private val fetchingLock = new KeyLock[Int]
 
+  val partitionStatistics: Map[Int, (Array[Long], Long)] =
+    new ConcurrentHashMap[Int, (Array[Long], Long)]().asScala
+  private val calculating = new HashSet[Int]
+
+  val autoDetectDataSkewEnabled: Boolean =
+    conf.getBoolean("spark.sql.autoDetectDataSkewEnabled", false)
+  val targetPartitionSize: Long =
+    conf.getLong("spark.sql.adaptive.shuffle.targetPostShuffleInputSize", 64 * 1024 * 1024)
+  val SKEWNESS_MULTIPLIER: Double = conf.getDouble("spark.sql.autoDetectDataSkewMultiplier", 2)
+
   override def getMapSizesByExecutorId(
       shuffleId: Int,
       startMapIndex: Int,
@@ -854,6 +870,79 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
     } else {
       statuses
     }
+  }
+
+  override def checkDataSkewTask(
+      shuffleId: Int, numPartitions: Int, startPartition: Int, endPartition: Int): Boolean = {
+    var isSkew: Boolean = false
+    if (autoDetectDataSkewEnabled && endPartition - startPartition == 1) {
+      val startTime = System.currentTimeMillis()
+      var partitionStat = partitionStatistics.get(shuffleId).orNull
+      if (partitionStat == null) {
+        calculating.synchronized {
+          while (calculating.contains(shuffleId)) {
+            try {
+              calculating.wait()
+            } catch {
+              case e: InterruptedException =>
+            }
+          }
+
+          partitionStat = partitionStatistics.get(shuffleId).orNull
+          if (partitionStat == null) {
+            calculating += shuffleId
+          }
+        }
+
+        if (partitionStat == null) {
+          try {
+            partitionStat = calculatePartitionStats(shuffleId, numPartitions)
+          } catch {
+            case e: MetadataFetchFailedException =>
+              logError("Check data skew get map status failed", e)
+          }
+          finally {
+            calculating.synchronized {
+              calculating -= shuffleId
+              calculating.notifyAll()
+            }
+          }
+        }
+      }
+      val costTime = System.currentTimeMillis() - startTime
+      logInfo(s"Check data skew task cost $costTime ms")
+      if (partitionStat != null) {
+        val total = partitionStat._1
+        val threshold = (partitionStat._2 * SKEWNESS_MULTIPLIER).toLong
+        if (total(startPartition) >= threshold) {
+          logInfo(s"Check data skew found " +
+            s"$shuffleId $startPartition ${total(startPartition)} $threshold")
+          isSkew = true
+        }
+      }
+    }
+    isSkew
+  }
+
+  def calculatePartitionStats(shuffleId: Int, numPartitions: Int): (Array[Long], Long) = {
+    val statuses = getStatuses(shuffleId, conf)
+    val totalSizes = new Array[Long](numPartitions)
+    for (s <- statuses) {
+      for (i <- 0 until numPartitions) {
+        totalSizes(i) += s.getSizeForBlock(i)
+      }
+    }
+    val partitionSizes = new MedianHeap()
+    totalSizes.foreach(s => {
+      // Exclude small size partitions which cause to improper median size
+      if (s > targetPartitionSize) {
+        partitionSizes.insert(s)
+      }
+    })
+    val medianSize =
+      if (partitionSizes.size() <= 1) targetPartitionSize else partitionSizes.median.toLong
+    partitionStatistics.put(shuffleId, (totalSizes, medianSize))
+    (totalSizes, medianSize)
   }
 
 

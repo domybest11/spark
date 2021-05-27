@@ -21,6 +21,8 @@ import java.io.Closeable
 import java.util.concurrent.TimeUnit._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
+import org.apache.commons.lang3.SerializationUtils
+
 import scala.collection.JavaConverters._
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
@@ -30,6 +32,7 @@ import org.apache.spark.annotation.{DeveloperApi, Experimental, Stable, Unstable
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.{ConfigEntry, EXECUTOR_ALLOW_SPARK_CONTEXT}
+import org.apache.spark.mysql.{AsyncExecution, CallChain}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.scheduler.{SparkListener, SparkListenerApplicationEnd}
 import org.apache.spark.sql.catalog.Catalog
@@ -43,6 +46,7 @@ import org.apache.spark.sql.connector.ExternalCommandRunner
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.command.ExternalCommandExecutor
 import org.apache.spark.sql.execution.datasources.{DataSource, LogicalRelation}
+import org.apache.spark.sql.execution.ui.{SparkListenerSQLAnalysisEnd, SparkListenerSQLAnalysisStart}
 import org.apache.spark.sql.internal._
 import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
 import org.apache.spark.sql.sources.BaseRelation
@@ -608,11 +612,28 @@ class SparkSession private(
    * @since 2.0.0
    */
   def sql(sqlText: String): DataFrame = withActive {
+    AsyncExecution.AsycnHandle(new CallChain.Event(sqlText,
+      AsyncExecution.getSparkAppName(sparkContext.conf), "sql"))
+    sharedState
+    sparkContext.setLocalProperty("spark.trace.sqlIdentifier", sqlText)
+    val copyOfProperties = SerializationUtils.clone(sparkContext.getLocalProperties)
+    sparkContext.listenerBus.post(SparkListenerSQLAnalysisStart(sqlText, System.currentTimeMillis(),
+      copyOfProperties))
     val tracker = new QueryPlanningTracker
     val plan = tracker.measurePhase(QueryPlanningTracker.PARSING) {
       sessionState.sqlParser.parsePlan(sqlText)
     }
-    Dataset.ofRows(self, plan, tracker)
+    try {
+      val dataFrame = Dataset.ofRows(self, plan, tracker)
+      sparkContext.listenerBus.post(SparkListenerSQLAnalysisEnd(sqlText, System.currentTimeMillis(),
+        copyOfProperties))
+      dataFrame
+    } catch {
+      case e: Throwable =>
+        sparkContext.listenerBus.post(SparkListenerSQLAnalysisEnd(sqlText,
+          System.currentTimeMillis(), copyOfProperties, Option(e.getMessage)))
+        throw e
+    }
   }
 
   /**

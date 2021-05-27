@@ -226,6 +226,7 @@ private[spark] class ApplicationMaster(
         // Set this internal configuration if it is running on cluster mode, this
         // configuration will be checked in SparkContext to avoid misuse of yarn cluster mode.
         System.setProperty("spark.yarn.app.id", appAttemptId.getApplicationId().toString())
+        System.setProperty("spark.yarn.app.attempt.id", appAttemptId.getAttemptId().toString())
 
         Option(appAttemptId.getAttemptId.toString)
       } else {
@@ -847,6 +848,10 @@ object ApplicationMaster extends Logging {
   private var master: ApplicationMaster = _
 
   def main(args: Array[String]): Unit = {
+    Utils.getPropertiesFromFile(args.filter(_.contains("__spark_conf__")).head)
+      .foreach(entry => {
+        System.setProperty(entry._1, entry._2)
+      })
     SignalUtils.registerLogger(log)
     val amArgs = new ApplicationMasterArguments(args)
     val sparkConf = new SparkConf()

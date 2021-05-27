@@ -17,6 +17,8 @@
 
 package org.apache.spark.sql.hive.thriftserver.ui
 
+import java.util.concurrent.LinkedBlockingQueue
+
 import org.apache.spark.SparkConf
 import org.apache.spark.scheduler.SparkListener
 import org.apache.spark.status.{AppHistoryServerPlugin, ElementTrackingStore}
@@ -25,7 +27,8 @@ import org.apache.spark.ui.SparkUI
 class HiveThriftServer2HistoryServerPlugin extends AppHistoryServerPlugin {
 
   override def createListeners(conf: SparkConf, store: ElementTrackingStore): Seq[SparkListener] = {
-    Seq(new HiveThriftServer2Listener(store, conf, None, false))
+    Seq(new HiveThriftServer2Listener(store, conf, None, false,
+      new LinkedBlockingQueue(10000), Some(new LinkedBlockingQueue(10000))))
   }
 
   override def setupUI(ui: SparkUI): Unit = {

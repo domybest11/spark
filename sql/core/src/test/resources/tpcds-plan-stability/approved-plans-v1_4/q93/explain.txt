@@ -60,7 +60,7 @@ Input [9]: [ss_item_sk#1, ss_customer_sk#2, ss_ticket_number#3, ss_quantity#4, s
 Output [2]: [r_reason_sk#11, r_reason_desc#12]
 Batched: true
 Location [not included in comparison]/{warehouse_dir}/reason]
-PushedFilters: [IsNotNull(r_reason_desc), EqualTo(r_reason_desc,reason 28), IsNotNull(r_reason_sk)]
+PushedFilters: [IsNotNull(r_reason_desc), EqualTo(r_reason_desc,reason 28                                                                                           ), IsNotNull(r_reason_sk)]
 ReadSchema: struct<r_reason_sk:int,r_reason_desc:string>
 
 (10) ColumnarToRow [codegen id : 2]
@@ -68,7 +68,7 @@ Input [2]: [r_reason_sk#11, r_reason_desc#12]
 
 (11) Filter [codegen id : 2]
 Input [2]: [r_reason_sk#11, r_reason_desc#12]
-Condition : ((isnotnull(r_reason_desc#12) AND (r_reason_desc#12 = reason 28)) AND isnotnull(r_reason_sk#11))
+Condition : ((isnotnull(r_reason_desc#12) AND (r_reason_desc#12 = reason 28                                                                                           )) AND isnotnull(r_reason_sk#11))
 
 (12) Project [codegen id : 2]
 Output [1]: [r_reason_sk#11]
@@ -96,7 +96,7 @@ Results [3]: [ss_customer_sk#2, sum#17, isEmpty#18]
 
 (17) Exchange
 Input [3]: [ss_customer_sk#2, sum#17, isEmpty#18]
-Arguments: hashpartitioning(ss_customer_sk#2, 5), true, [id=#19]
+Arguments: hashpartitioning(ss_customer_sk#2, 5), ENSURE_REQUIREMENTS, [id=#19]
 
 (18) HashAggregate [codegen id : 4]
 Input [3]: [ss_customer_sk#2, sum#17, isEmpty#18]

@@ -108,7 +108,7 @@ Input [7]: [ss_item_sk#2, ss_store_sk#3, ss_sales_price#4, d_moy#7, s_store_sk#9
 Output [4]: [i_item_sk#13, i_brand#14, i_class#15, i_category#16]
 Batched: true
 Location [not included in comparison]/{warehouse_dir}/item]
-PushedFilters: [Or(And(In(i_category, [Home,Books,Electronics]),In(i_class, [wallpaper,parenting,musical])),And(In(i_category, [Shoes,Jewelry,Men]),In(i_class, [womens,birdal,pants]))), IsNotNull(i_item_sk)]
+PushedFilters: [Or(And(In(i_category, [Home                                              ,Books                                             ,Electronics                                       ]),In(i_class, [wallpaper                                         ,parenting                                         ,musical                                           ])),And(In(i_category, [Shoes                                             ,Jewelry                                           ,Men                                               ]),In(i_class, [womens                                            ,birdal                                            ,pants                                             ]))), IsNotNull(i_item_sk)]
 ReadSchema: struct<i_item_sk:int,i_brand:string,i_class:string,i_category:string>
 
 (18) ColumnarToRow [codegen id : 3]
@@ -116,7 +116,7 @@ Input [4]: [i_item_sk#13, i_brand#14, i_class#15, i_category#16]
 
 (19) Filter [codegen id : 3]
 Input [4]: [i_item_sk#13, i_brand#14, i_class#15, i_category#16]
-Condition : (((i_category#16 IN (Home,Books,Electronics) AND i_class#15 IN (wallpaper,parenting,musical)) OR (i_category#16 IN (Shoes,Jewelry,Men) AND i_class#15 IN (womens,birdal,pants))) AND isnotnull(i_item_sk#13))
+Condition : (((i_category#16 IN (Home                                              ,Books                                             ,Electronics                                       ) AND i_class#15 IN (wallpaper                                         ,parenting                                         ,musical                                           )) OR (i_category#16 IN (Shoes                                             ,Jewelry                                           ,Men                                               ) AND i_class#15 IN (womens                                            ,birdal                                            ,pants                                             ))) AND isnotnull(i_item_sk#13))
 
 (20) BroadcastExchange
 Input [4]: [i_item_sk#13, i_brand#14, i_class#15, i_category#16]
@@ -140,7 +140,7 @@ Results [7]: [i_category#16, i_class#15, i_brand#14, s_store_name#10, s_company_
 
 (24) Exchange
 Input [7]: [i_category#16, i_class#15, i_brand#14, s_store_name#10, s_company_name#11, d_moy#7, sum#19]
-Arguments: hashpartitioning(i_category#16, i_class#15, i_brand#14, s_store_name#10, s_company_name#11, d_moy#7, 5), true, [id=#20]
+Arguments: hashpartitioning(i_category#16, i_class#15, i_brand#14, s_store_name#10, s_company_name#11, d_moy#7, 5), ENSURE_REQUIREMENTS, [id=#20]
 
 (25) HashAggregate [codegen id : 5]
 Input [7]: [i_category#16, i_class#15, i_brand#14, s_store_name#10, s_company_name#11, d_moy#7, sum#19]
@@ -151,7 +151,7 @@ Results [8]: [i_category#16, i_class#15, i_brand#14, s_store_name#10, s_company_
 
 (26) Exchange
 Input [8]: [i_category#16, i_class#15, i_brand#14, s_store_name#10, s_company_name#11, d_moy#7, sum_sales#22, _w0#23]
-Arguments: hashpartitioning(i_category#16, i_brand#14, s_store_name#10, s_company_name#11, 5), true, [id=#24]
+Arguments: hashpartitioning(i_category#16, i_brand#14, s_store_name#10, s_company_name#11, 5), ENSURE_REQUIREMENTS, [id=#24]
 
 (27) Sort [codegen id : 6]
 Input [8]: [i_category#16, i_class#15, i_brand#14, s_store_name#10, s_company_name#11, d_moy#7, sum_sales#22, _w0#23]

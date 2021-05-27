@@ -20,6 +20,7 @@ package org.apache.spark.broadcast
 import scala.reflect.ClassTag
 
 import org.apache.spark.{SecurityManager, SparkConf}
+import org.apache.spark.rdd.RDD
 
 /**
  * A [[org.apache.spark.broadcast.Broadcast]] implementation that uses a BitTorrent-like
@@ -44,5 +45,12 @@ private[spark] class TorrentBroadcastFactory extends BroadcastFactory {
    */
   override def unbroadcast(id: Long, removeFromDriver: Boolean, blocking: Boolean): Unit = {
     TorrentBroadcast.unpersist(id, removeFromDriver, blocking)
+  }
+
+  override def newBroadcastOnExecutor[T: ClassTag, U: ClassTag](
+      rdd: RDD[T],
+      mode: BroadcastMode[T],
+      isLocal: Boolean, id: Long): Broadcast[U] = {
+    new TorrentExecutorBroadcast[T, U](rdd, mode, id)
   }
 }

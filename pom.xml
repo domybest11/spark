@@ -118,9 +118,9 @@
     <maven.version>3.6.3</maven.version>
     <exec-maven-plugin.version>1.6.0</exec-maven-plugin.version>
     <sbt.project.name>spark</sbt.project.name>
-    <slf4j.version>1.7.30</slf4j.version>
+    <slf4j.version>1.7.16</slf4j.version>
     <log4j.version>1.2.17</log4j.version>
-    <hadoop.version>3.2.0</hadoop.version>
+    <hadoop.version>2.8.4.1-bili-SNAPSHOT</hadoop.version>
     <protobuf.version>2.5.0</protobuf.version>
     <yarn.version>${hadoop.version}</yarn.version>
     <zookeeper.version>3.4.14</zookeeper.version>
@@ -128,8 +128,8 @@
     <hive.group>org.apache.hive</hive.group>
     <hive.classifier>core</hive.classifier>
     <!-- Version used in Maven Hive dependency -->
-    <hive.version>2.3.7</hive.version>
-    <hive23.version>2.3.7</hive23.version>
+    <hive.version>2.3.4.1-spark-bili-SNAPSHOT</hive.version>
+    <hive23.version>2.3.4.1-spark-bili-SNAPSHOT</hive23.version>
     <!-- Version used for internal directory structure -->
     <hive.version.short>2.3</hive.version.short>
     <!-- note that this should be compatible with Kafka brokers version 0.10 and up -->
@@ -188,7 +188,7 @@
     <joda.version>2.10.5</joda.version>
     <jodd.version>3.5.2</jodd.version>
     <jsr305.version>3.0.0</jsr305.version>
-    <libthrift.version>0.12.0</libthrift.version>
+    <libthrift.version>0.9.3</libthrift.version>
     <antlr4.version>4.8-1</antlr4.version>
     <jpam.version>1.1</jpam.version>
     <selenium.version>3.141.59</selenium.version>
@@ -260,11 +260,19 @@
   </properties>
   <repositories>
     <repository>
+      <id>bilibili-nexus-releases</id>
+      <url>http://nexus.bilibili.co/content/repositories/releases/</url>
+    </repository>
+    <repository>
+      <id>bilibili-nexus-snapshots</id>
+      <url>http://nexus.bilibili.co/content/repositories/snapshots/</url>
+    </repository>
+ <!--   <repository>
       <id>gcs-maven-central-mirror</id>
-      <!--
+      &lt;!&ndash;
         Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
         See https://storage-download.googleapis.com/maven-central/index.html
-      -->
+      &ndash;&gt;
       <name>GCS Maven Central mirror</name>
       <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
       <releases>
@@ -275,27 +283,42 @@
       </snapshots>
     </repository>
     <repository>
+    -->
+
       <!--
         This is used as a fallback when the first try fails.
       -->
-      <id>central</id>
-      <name>Maven Repository</name>
-      <url>https://repo.maven.apache.org/maven2</url>
-      <releases>
-        <enabled>true</enabled>
-      </releases>
-      <snapshots>
-        <enabled>false</enabled>
-      </snapshots>
-    </repository>
-  </repositories>
-  <pluginRepositories>
-    <pluginRepository>
-      <id>gcs-maven-central-mirror</id>
-      <!--
-        Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
-        See https://storage-download.googleapis.com/maven-central/index.html
-      -->
+    <!--
+     <id>central</id>
+     <name>Maven Repository</name>
+     <url>https://repo.maven.apache.org/maven2</url>
+     <releases>
+       <enabled>true</enabled>
+     </releases>
+     <snapshots>
+       <enabled>false</enabled>
+     </snapshots>
+   </repository>
+   -->
+ </repositories>
+ <pluginRepositories>
+   <pluginRepository>
+     <id>gcs-maven-central-mirror</id>
+     <!-- <url>https://repo.maven.apache.org/maven2</url> -->
+     <url>http://maven.aliyun.com/nexus/content/groups/public/</url>
+     <releases>
+       <enabled>true</enabled>
+     </releases>
+     <snapshots>
+       <enabled>false</enabled>
+     </snapshots>
+   </pluginRepository>
+<!--   <pluginRepository>
+     <id>gcs-maven-central-mirror</id>
+     &lt;!&ndash;
+       Google Mirror of Maven Central, placed first so that it's used instead of flaky Maven Central.
+       See https://storage-download.googleapis.com/maven-central/index.html
+     &ndash;&gt;
       <name>GCS Maven Central mirror</name>
       <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
       <releases>
@@ -304,7 +327,7 @@
       <snapshots>
         <enabled>false</enabled>
       </snapshots>
-    </pluginRepository>
+    </pluginRepository>-->
     <pluginRepository>
       <id>central</id>
       <url>https://repo.maven.apache.org/maven2</url>
@@ -1003,8 +1026,7 @@
       <dependency>
         <groupId>mysql</groupId>
         <artifactId>mysql-connector-java</artifactId>
-        <version>5.1.38</version>
-        <scope>test</scope>
+        <version>5.1.47</version>
       </dependency>
       <dependency>
         <groupId>org.mariadb.jdbc</groupId>
@@ -1138,6 +1160,10 @@
           <exclusion>
             <groupId>net.java.dev.jets3t</groupId>
             <artifactId>jets3t</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>javax.servlet</groupId>
+            <artifactId>servlet-api</artifactId>
           </exclusion>
           <!-- Hadoop-3.2 -->
           <exclusion>
@@ -1559,10 +1585,6 @@
           </exclusion>
           <exclusion>
             <groupId>${hive.group}</groupId>
-            <artifactId>hive-service-rpc</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>${hive.group}</groupId>
             <artifactId>hive-shims</artifactId>
           </exclusion>
           <exclusion>
@@ -1584,6 +1606,10 @@
           <exclusion>
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -1641,6 +1667,10 @@
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <dependency>
@@ -1672,6 +1702,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>commons-logging</groupId>
@@ -1732,12 +1766,15 @@
             <groupId>${hive.group}</groupId>
             <artifactId>hive-ant</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>${hive.group}</groupId>
+            <artifactId>hive-service-rpc</artifactId>
+          </exclusion>
           <!-- break the loop -->
           <exclusion>
             <groupId>${hive.group}</groupId>
             <artifactId>spark-client</artifactId>
           </exclusion>
-
           <!-- excluded dependencies & transitive.
            Some may be needed to be explicitly included-->
           <exclusion>
@@ -1808,6 +1845,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>commons-logging</groupId>
@@ -1907,6 +1948,10 @@
             <artifactId>log4j</artifactId>
           </exclusion>
           <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
           </exclusion>
@@ -1954,6 +1999,10 @@
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-log4j12</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
           </exclusion>
           <!-- Begin of Hive 2.3 exclusion -->
           <!-- Hive removes the HBase Metastore; see HIVE-17234 -->
@@ -2014,6 +2063,10 @@
           <exclusion>
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
           </exclusion>
           <exclusion>
             <groupId>commons-logging</groupId>
@@ -2106,6 +2159,10 @@
             <artifactId>log4j</artifactId>
           </exclusion>
           <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
+          </exclusion>
+          <exclusion>
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
           </exclusion>
@@ -2143,6 +2200,10 @@
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
           </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
+          </exclusion>
         </exclusions>
       </dependency>
       <!-- hive-llap-client is needed when run MapReduce test in Hive 2.3. -->
@@ -2179,6 +2240,10 @@
           <exclusion>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>org.slf4j</groupId>
+            <artifactId>log4j-over-slf4j</artifactId>
           </exclusion>
         </exclusions>
       </dependency>
@@ -2963,7 +3028,7 @@
         <version>1.0.0</version>
         <configuration>
           <verbose>false</verbose>
-          <failOnViolation>true</failOnViolation>
+          <failOnViolation>false</failOnViolation>
           <includeTestSourceDirectory>false</includeTestSourceDirectory>
           <failOnWarning>false</failOnWarning>
           <sourceDirectory>${basedir}/src/main/scala</sourceDirectory>

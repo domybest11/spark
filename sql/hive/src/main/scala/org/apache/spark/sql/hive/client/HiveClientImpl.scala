@@ -24,11 +24,13 @@ import java.nio.charset.StandardCharsets.UTF_8
 import java.util.{Locale, Map => JMap}
 import java.util.concurrent.TimeUnit._
 
+import org.apache.hadoop.conf.Configuration
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.hdfs.security.token.delegation.DelegationTokenIdentifier
 import org.apache.hadoop.hive.common.StatsSetupConst
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
@@ -42,9 +44,11 @@ import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.hadoop.hive.serde.serdeConstants
 import org.apache.hadoop.hive.serde2.MetadataTypedColumnsetSerDe
 import org.apache.hadoop.hive.serde2.`lazy`.LazySimpleSerDe
-import org.apache.hadoop.security.UserGroupInformation
-
+import org.apache.hadoop.io.Text
+import org.apache.hadoop.security.{Credentials, UserGroupInformation}
+import org.apache.hadoop.security.token.Token
 import org.apache.spark.{SparkConf, SparkException}
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.metrics.source.HiveCatalogMetrics
 import org.apache.spark.sql.AnalysisException
@@ -59,6 +63,7 @@ import org.apache.spark.sql.connector.catalog.SupportsNamespaces._
 import org.apache.spark.sql.execution.QueryExecutionException
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hive.HiveExternalCatalog.{DATASOURCE_SCHEMA, DATASOURCE_SCHEMA_NUMPARTS, DATASOURCE_SCHEMA_PART_PREFIX}
+import org.apache.spark.sql.hive.security.HiveDelegationTokenProvider
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.util.{CircularBuffer, Utils}
@@ -161,7 +166,8 @@ private[hive] class HiveClientImpl(
       s"(version ${version.fullVersion}) is ${conf.getVar(ConfVars.METASTOREWAREHOUSE)}")
 
   private def newState(): SessionState = {
-    val hiveConf = newHiveConf(sparkConf, hadoopConf, extraConfig, Some(initClassLoader))
+    val hiveAndHadoopConf = newHiveConf(sparkConf, hadoopConf, extraConfig, Some(initClassLoader))
+    val hiveConf = hiveAndHadoopConf._1
     val state = new SessionState(hiveConf)
     if (clientLoader.cachedHive != null) {
       Hive.set(clientLoader.cachedHive.asInstanceOf[Hive])
@@ -171,6 +177,34 @@ private[hive] class HiveClientImpl(
     // For this reason we cannot load the jars added by ADDJarCommand because of class loader
     // got changed. We reset it to clientLoader.ClassLoader here.
     state.getConf.setClassLoader(clientLoader.classLoader)
+    val tokenProvider = new HiveDelegationTokenProvider()
+    val useSasl = hiveConf.getBoolVar(HiveConf.ConfVars.METASTORE_USE_THRIFT_SASL)
+    if (useSasl && tokenProvider.delegationTokensRequired(sparkConf, hiveAndHadoopConf._2)) {
+      val credentials = new Credentials()
+      val principalKey = "hive.metastore.kerberos.principal"
+      val principal = hiveConf.getTrimmed(principalKey, "")
+      require(principal.nonEmpty, s"Hive principal $principalKey undefined")
+      val metastoreUri = hiveConf.getTrimmed("hive.metastore.uris", "")
+      require(metastoreUri.nonEmpty, "Hive metastore uri undefined")
+
+      val currentUser = UserGroupInformation.getCurrentUser()
+      logDebug(s"Getting Hive delegation token for ${currentUser.getUserName()} against " +
+        s"$principal at $metastoreUri")
+
+      tokenProvider.doAsRealUser {
+        withSetHiveState({
+          val hive = Hive.get(hiveConf, classOf[HiveConf])
+          val tokenStr = hive.getDelegationToken(currentUser.getUserName(), principal)
+          val hive2Token = new Token[DelegationTokenIdentifier]()
+          hive2Token.decodeFromUrlString(tokenStr)
+          hive2Token.setService(new Text(hiveConf.get("hive.metastore.token.signature",
+            "HiveServer2ImpersonationToken")))
+          logDebug(s"Get Token from hive metastore: ${hive2Token.toString}")
+          credentials.addToken(new Text("hive.metastore.delegation.token"), hive2Token)
+        }, hiveConf)
+      }
+      UserGroupInformation.getCurrentUser.addCredentials(credentials)
+    }
     SessionState.start(state)
     state.out = new PrintStream(outputBuffer, true, UTF_8.name())
     state.err = new PrintStream(outputBuffer, true, UTF_8.name())
@@ -297,6 +331,18 @@ private[hive] class HiveClientImpl(
       state.getConf.setClassLoader(originalConfLoader)
       Thread.currentThread().setContextClassLoader(original)
       HiveCatalogMetrics.incrementHiveClientCalls(1)
+    }
+    ret
+  }
+
+  def withSetHiveState[A](f: => A, conf : HiveConf): A = retryLocked {
+    val original = Thread.currentThread().getContextClassLoader
+    val originalConfLoader = conf.getClassLoader
+    Thread.currentThread().setContextClassLoader(clientLoader.classLoader)
+    conf.setClassLoader(clientLoader.classLoader)
+    val ret = try f finally {
+      conf.setClassLoader(originalConfLoader)
+      Thread.currentThread().setContextClassLoader(original)
     }
     ret
   }
@@ -1042,6 +1088,10 @@ private[hive] object HiveClientImpl extends Logging {
    * Converts the native table metadata representation format CatalogTable to Hive's Table.
    */
   def toHiveTable(table: CatalogTable, userName: Option[String] = None): HiveTable = {
+    var user: Option[String] = userName
+    if (SessionState.getSessionConf.getBoolean("spark.proxyuser.enabled", false)) {
+      user = Option.apply(UserGroupInformation.getCurrentUser.getShortUserName)
+    }
     val hiveTable = new HiveTable(table.database, table.identifier.table)
     hiveTable.setTableType(toHiveTableType(table.tableType))
     // For EXTERNAL_TABLE, we also need to set EXTERNAL field in the table properties.
@@ -1056,7 +1106,7 @@ private[hive] object HiveClientImpl extends Logging {
     }
     hiveTable.setFields(schema.asJava)
     hiveTable.setPartCols(partCols.asJava)
-    Option(table.owner).filter(_.nonEmpty).orElse(userName).foreach(hiveTable.setOwner)
+    Option(table.owner).filter(_.nonEmpty).orElse(user).foreach(hiveTable.setOwner)
     hiveTable.setCreateTime(MILLISECONDS.toSeconds(table.createTime).toInt)
     hiveTable.setLastAccessTime(MILLISECONDS.toSeconds(table.lastAccessTime).toInt)
     table.storage.locationUri.map(CatalogUtils.URIToString).foreach { loc =>
@@ -1229,7 +1279,7 @@ private[hive] object HiveClientImpl extends Logging {
       sparkConf: SparkConf,
       hadoopConf: JIterable[JMap.Entry[String, String]],
       extraConfig: Map[String, String],
-      classLoader: Option[ClassLoader] = None): HiveConf = {
+      classLoader: Option[ClassLoader] = None): (HiveConf, Configuration) = {
     val hiveConf = new HiveConf(classOf[SessionState])
     // HiveConf is a Hadoop Configuration, which has a field of classLoader and
     // the initial value will be the current thread's context class loader.
@@ -1246,9 +1296,12 @@ private[hive] object HiveClientImpl extends Logging {
     // has hive-site.xml. So, HiveConf will use that to override its default values.
     // 2: we set all spark confs to this hiveConf.
     // 3: we set all entries in config to this hiveConf.
+    val hadoopConfig = SparkHadoopUtil.get.newConfiguration(sparkConf)
     val confMap = (hadoopConf.iterator().asScala.map(kv => kv.getKey -> kv.getValue) ++
       sparkConf.getAll.toMap ++ extraConfig).toMap
-    confMap.foreach { case (k, v) => hiveConf.set(k, v) }
+    confMap.foreach { case (k, v) =>
+      hiveConf.set(k, v)
+      hadoopConfig.set(k, v) }
     SQLConf.get.redactOptions(confMap).foreach { case (k, v) =>
       logDebug(s"Applying Hadoop/Hive/Spark and extra properties to Hive Conf:$k=$v")
     }
@@ -1268,7 +1321,7 @@ private[hive] object HiveClientImpl extends Logging {
         " to disable useless hive logic")
       hiveConf.set("hive.execution.engine", "mr")
     }
-    hiveConf
+    (hiveConf, hadoopConfig)
   }
 }
 

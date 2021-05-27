@@ -249,7 +249,7 @@ Input [6]: [ws_ship_addr_sk#2, ws_web_site_sk#3, ws_order_number#4, ws_ext_ship_
 Output [2]: [web_site_sk#24, web_company_name#25]
 Batched: true
 Location [not included in comparison]/{warehouse_dir}/web_site]
-PushedFilters: [IsNotNull(web_company_name), EqualTo(web_company_name,pri), IsNotNull(web_site_sk)]
+PushedFilters: [IsNotNull(web_company_name), EqualTo(web_company_name,pri                                               ), IsNotNull(web_site_sk)]
 ReadSchema: struct<web_site_sk:int,web_company_name:string>
 
 (44) ColumnarToRow [codegen id : 8]
@@ -257,7 +257,7 @@ Input [2]: [web_site_sk#24, web_company_name#25]
 
 (45) Filter [codegen id : 8]
 Input [2]: [web_site_sk#24, web_company_name#25]
-Condition : ((isnotnull(web_company_name#25) AND (web_company_name#25 = pri)) AND isnotnull(web_site_sk#24))
+Condition : ((isnotnull(web_company_name#25) AND (web_company_name#25 = pri                                               )) AND isnotnull(web_site_sk#24))
 
 (46) Project [codegen id : 8]
 Output [1]: [web_site_sk#24]
@@ -285,7 +285,7 @@ Results [3]: [ws_order_number#4, sum#29, sum#30]
 
 (51) Exchange
 Input [3]: [ws_order_number#4, sum#29, sum#30]
-Arguments: hashpartitioning(ws_order_number#4, 5), true, [id=#31]
+Arguments: hashpartitioning(ws_order_number#4, 5), ENSURE_REQUIREMENTS, [id=#31]
 
 (52) HashAggregate [codegen id : 10]
 Input [3]: [ws_order_number#4, sum#29, sum#30]
@@ -303,7 +303,7 @@ Results [3]: [sum#29, sum#30, count#33]
 
 (54) Exchange
 Input [3]: [sum#29, sum#30, count#33]
-Arguments: SinglePartition, true, [id=#34]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [id=#34]
 
 (55) HashAggregate [codegen id : 11]
 Input [3]: [sum#29, sum#30, count#33]

@@ -1,16 +1,16 @@
 TakeOrderedAndProject [c_last_name,c_first_name,ca_city,bought_city,ss_ticket_number,amt,profit]
   WholeStageCodegen (16)
     Project [c_last_name,c_first_name,ca_city,bought_city,ss_ticket_number,amt,profit]
-      SortMergeJoin [c_customer_sk,ss_customer_sk,ca_city,bought_city]
-        InputAdapter
+      InputAdapter
+        SortMergeJoin [c_customer_sk,ss_customer_sk,ca_city,bought_city]
           WholeStageCodegen (6)
             Sort [c_customer_sk]
               InputAdapter
                 Exchange [c_customer_sk] #1
                   WholeStageCodegen (5)
                     Project [c_customer_sk,c_first_name,c_last_name,ca_city]
-                      SortMergeJoin [c_current_addr_sk,ca_address_sk]
-                        InputAdapter
+                      InputAdapter
+                        SortMergeJoin [c_current_addr_sk,ca_address_sk]
                           WholeStageCodegen (2)
                             Sort [c_current_addr_sk]
                               InputAdapter
@@ -20,7 +20,6 @@ TakeOrderedAndProject [c_last_name,c_first_name,ca_city,bought_city,ss_ticket_nu
                                       ColumnarToRow
                                         InputAdapter
                                           Scan parquet default.customer [c_customer_sk,c_current_addr_sk,c_first_name,c_last_name]
-                        InputAdapter
                           WholeStageCodegen (4)
                             Sort [ca_address_sk]
                               InputAdapter
@@ -30,7 +29,6 @@ TakeOrderedAndProject [c_last_name,c_first_name,ca_city,bought_city,ss_ticket_nu
                                       ColumnarToRow
                                         InputAdapter
                                           Scan parquet default.customer_address [ca_address_sk,ca_city]
-        InputAdapter
           WholeStageCodegen (15)
             Sort [ss_customer_sk]
               InputAdapter
@@ -39,8 +37,8 @@ TakeOrderedAndProject [c_last_name,c_first_name,ca_city,bought_city,ss_ticket_nu
                     HashAggregate [ss_ticket_number,ss_customer_sk,ss_addr_sk,ca_city,sum,sum] [sum(UnscaledValue(ss_coupon_amt)),sum(UnscaledValue(ss_net_profit)),bought_city,amt,profit,sum,sum]
                       HashAggregate [ss_ticket_number,ss_customer_sk,ss_addr_sk,ca_city,ss_coupon_amt,ss_net_profit] [sum,sum,sum,sum]
                         Project [ss_customer_sk,ss_addr_sk,ss_ticket_number,ss_coupon_amt,ss_net_profit,ca_city]
-                          SortMergeJoin [ss_addr_sk,ca_address_sk]
-                            InputAdapter
+                          InputAdapter
+                            SortMergeJoin [ss_addr_sk,ca_address_sk]
                               WholeStageCodegen (11)
                                 Sort [ss_addr_sk]
                                   InputAdapter
@@ -80,7 +78,6 @@ TakeOrderedAndProject [c_last_name,c_first_name,ca_city,bought_city,ss_ticket_nu
                                                       ColumnarToRow
                                                         InputAdapter
                                                           Scan parquet default.household_demographics [hd_demo_sk,hd_dep_count,hd_vehicle_count]
-                            InputAdapter
                               WholeStageCodegen (13)
                                 Sort [ca_address_sk]
                                   InputAdapter

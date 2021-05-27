@@ -178,6 +178,8 @@ object TypeCoercion {
           }
         case _ => None
       }
+    case (_: TimestampType, _: LongType) => Some(LongType)
+    case (_: LongType, _: TimestampType) => Some(LongType)
     case _ => None
   }
 

@@ -375,7 +375,7 @@ object DataType {
             l.name.equalsIgnoreCase(r.name) &&
               equalsIgnoreCaseAndNullability(l.dataType, r.dataType)
           }
-
+      case (fromDataType: TimestampType, toDataType: LongType) => true
       case (fromDataType, toDataType) => fromDataType == toDataType
     }
   }

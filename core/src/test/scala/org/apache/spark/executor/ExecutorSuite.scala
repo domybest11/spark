@@ -509,6 +509,7 @@ class ExecutorSuite extends SparkFunSuite
       stageId: Int): TaskDescription = {
     val serializedTaskMetrics = serializer.serialize(TaskMetrics.registered).array()
     val task = new ResultTask(
+      "",
       stageId = stageId,
       stageAttemptId = 0,
       taskBinary = taskBinary,

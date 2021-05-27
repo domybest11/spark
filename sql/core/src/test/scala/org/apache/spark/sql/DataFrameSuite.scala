@@ -1852,7 +1852,7 @@ class DataFrameSuite extends QueryTest
           case e: ShuffleExchangeExec => true }.size == 1)
       assert(
         collect(join2.queryExecution.executedPlan) {
-          case e: BroadcastExchangeExec => true }.size === 1)
+          case e: BroadcastExchangeExec[_] => true }.size === 1)
       assert(
         collect(join2.queryExecution.executedPlan) { case e: ReusedExchangeExec => true }.size == 4)
     }

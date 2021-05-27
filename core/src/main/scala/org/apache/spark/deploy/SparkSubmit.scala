@@ -83,6 +83,12 @@ private[spark] class SparkSubmit extends Logging {
     val uninitLog = initializeLogIfNecessary(true, silent = true)
 
     val appArgs = parseArguments(args)
+    appArgs.sparkProperties.foreach(entry => {
+      if (entry._1 == "spark.app.id" || entry._1 == "spark.app.name"
+        || entry._1 == "spark.trace.id") {
+        System.setProperty(entry._1, entry._2)
+      }
+    })
     if (appArgs.verbose) {
       logInfo(appArgs.toString)
     }
@@ -819,7 +825,14 @@ private[spark] class SparkSubmit extends Logging {
 
     // Ignore invalid spark.driver.host in cluster modes.
     if (deployMode == CLUSTER) {
+      sparkConf.set("spark.submit.host", Utils.localCanonicalHostName())
       sparkConf.remove(DRIVER_HOST_ADDRESS)
+    }
+
+    if (sparkConf.contains("spark.executorEnv.EXECUTOR_PRINCIPAL")) {
+      val principal = sparkConf.get("spark.executorEnv.EXECUTOR_PRINCIPAL")
+        .replace("_HOST", Utils.localCanonicalHostName())
+      sparkConf.set("spark.executorEnv.EXECUTOR_PRINCIPAL", principal)
     }
 
     // Resolve paths in certain spark properties

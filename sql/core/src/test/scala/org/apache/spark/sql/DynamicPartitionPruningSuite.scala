@@ -193,7 +193,7 @@ abstract class DynamicPartitionPruningSuiteBase
     subqueryBroadcast.foreach { s =>
       s.child match {
         case _: ReusedExchangeExec => // reuse check ok.
-        case b: BroadcastExchangeExec =>
+        case b: BroadcastExchangeExec[_] =>
           val hasReuse = plan.find {
             case ReusedExchangeExec(_, e) => e eq b
             case _ => false

@@ -38,6 +38,12 @@ private[spark] object Status {
     .timeConf(TimeUnit.NANOSECONDS)
     .createWithDefaultString("1s")
 
+  val LIVE_ENTITY_CLEAN_UP_PERIOD = ConfigBuilder("spark.ui.liveEntity.CleanUpPeriod")
+    .doc("Periodically clear the live entity to avoid premature removal of the live entity" +
+      " in memory.")
+    .timeConf(TimeUnit.NANOSECONDS)
+    .createWithDefaultString("120s")
+
   val MAX_RETAINED_JOBS = ConfigBuilder("spark.ui.retainedJobs")
     .version("1.2.0")
     .intConf
@@ -62,6 +68,30 @@ private[spark] object Status {
     .version("2.1.0")
     .intConf
     .createWithDefault(Int.MaxValue)
+
+  val FAILURE_JOB_COLLECTOR = ConfigBuilder("spark.failureJobCollector.enabled")
+    .booleanConf
+    .createWithDefault(false)
+
+  val TRACE_REPORTER_ENABLED = ConfigBuilder("spark.traceReporter.enabled")
+    .booleanConf
+    .createWithDefault(false)
+
+  val TRACE_REPORTER_APP = ConfigBuilder("spark.traceReporter.app")
+    .stringConf
+    .createWithDefault("task_trace")
+
+  val TRACE_REPORTER_SOURCE = ConfigBuilder("spark.traceReporter.source")
+    .stringConf
+    .createWithDefault("spark_trace")
+
+  val TRACE_REPORTER_LOG_ID = ConfigBuilder("spark.traceReporter.logId")
+    .stringConf
+    .createWithDefault(null)
+
+  val TRACE_REPORTER_LANCER_URL = ConfigBuilder("spark.lancer.url")
+    .stringConf
+    .createWithDefault(null)
 
   val METRICS_APP_STATUS_SOURCE_ENABLED =
     ConfigBuilder("spark.metrics.appStatusSource.enabled")

@@ -27,6 +27,7 @@ import org.apache.commons.collections.map.{AbstractReferenceMap, ReferenceMap}
 import org.apache.spark.{SecurityManager, SparkConf}
 import org.apache.spark.api.python.PythonBroadcast
 import org.apache.spark.internal.Logging
+import org.apache.spark.rdd.RDD
 
 private[spark] class BroadcastManager(
     val isDriver: Boolean,
@@ -75,6 +76,14 @@ private[spark] class BroadcastManager(
       case _ => // do nothing
     }
     broadcastFactory.newBroadcast[T](value_, isLocal, bid)
+  }
+
+  def newBroadcastOnExecutor[T: ClassTag, U: ClassTag](
+      rdd_ : RDD[T],
+      mode: BroadcastMode[T],
+      isLocal: Boolean): Broadcast[U] = {
+    broadcastFactory.newBroadcastOnExecutor[T, U](rdd_, mode, isLocal,
+      nextBroadcastId.getAndIncrement())
   }
 
   def unbroadcast(id: Long, removeFromDriver: Boolean, blocking: Boolean): Unit = {

@@ -23,6 +23,6 @@ import org.scalatest.Suite
 
 class HiveClientUserNameSuites extends Suite with HiveClientVersions {
   override def nestedSuites: IndexedSeq[Suite] = {
-    versions.map(new HiveClientUserNameSuite(_))
+    versions.filter(_ == "2.3").map(new HiveClientUserNameSuite(_))
   }
 }

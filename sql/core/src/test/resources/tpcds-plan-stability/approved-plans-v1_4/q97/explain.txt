@@ -84,7 +84,7 @@ Results [2]: [ss_customer_sk#3, ss_item_sk#2]
 
 (12) Exchange
 Input [2]: [ss_customer_sk#3, ss_item_sk#2]
-Arguments: hashpartitioning(ss_customer_sk#3, ss_item_sk#2, 5), true, [id=#7]
+Arguments: hashpartitioning(ss_customer_sk#3, ss_item_sk#2, 5), ENSURE_REQUIREMENTS, [id=#7]
 
 (13) HashAggregate [codegen id : 3]
 Input [2]: [ss_customer_sk#3, ss_item_sk#2]
@@ -132,7 +132,7 @@ Results [2]: [cs_bill_customer_sk#11, cs_item_sk#12]
 
 (22) Exchange
 Input [2]: [cs_bill_customer_sk#11, cs_item_sk#12]
-Arguments: hashpartitioning(cs_bill_customer_sk#11, cs_item_sk#12, 5), true, [id=#13]
+Arguments: hashpartitioning(cs_bill_customer_sk#11, cs_item_sk#12, 5), ENSURE_REQUIREMENTS, [id=#13]
 
 (23) HashAggregate [codegen id : 6]
 Input [2]: [cs_bill_customer_sk#11, cs_item_sk#12]
@@ -163,7 +163,7 @@ Results [3]: [sum#19, sum#20, sum#21]
 
 (28) Exchange
 Input [3]: [sum#19, sum#20, sum#21]
-Arguments: SinglePartition, true, [id=#22]
+Arguments: SinglePartition, ENSURE_REQUIREMENTS, [id=#22]
 
 (29) HashAggregate [codegen id : 8]
 Input [3]: [sum#19, sum#20, sum#21]

@@ -82,7 +82,12 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
     if (sparkConf.get(config.SHUFFLE_SERVICE_DB_ENABLED) && enabled) {
       new ExternalBlockHandler(conf, findRegisteredExecutorsDBFile(registeredExecutorsDB))
     } else {
-      new ExternalBlockHandler(conf, null)
+      var file: File = null
+      val filePath = conf.get("spark.shuffle.service.recovery.executor.path", null)
+      if (filePath != null) {
+        file = new File(filePath)
+      }
+      new ExternalBlockHandler(conf, file)
     }
   }
 

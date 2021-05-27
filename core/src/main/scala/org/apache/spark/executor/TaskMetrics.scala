@@ -56,6 +56,7 @@ class TaskMetrics private[spark] () extends Serializable {
   private val _diskBytesSpilled = new LongAccumulator
   private val _peakExecutionMemory = new LongAccumulator
   private val _updatedBlockStatuses = new CollectionAccumulator[(BlockId, BlockStatus)]
+  private val _skewKeys = new CollectionAccumulator[(String, String)]
 
   /**
    * Time taken on the executor to deserialize this task.
@@ -148,6 +149,10 @@ class TaskMetrics private[spark] () extends Serializable {
   private[spark] def setUpdatedBlockStatuses(v: Seq[(BlockId, BlockStatus)]): Unit =
     _updatedBlockStatuses.setValue(v.asJava)
 
+  private[spark] def incSkewKeys(v: (String, String)): Unit = _skewKeys.add(v)
+  private[spark] def setSkewKeys(v: java.util.List[(String, String)]): Unit =
+    _skewKeys.setValue(v)
+
   /**
    * Metrics related to reading data from a [[org.apache.spark.rdd.HadoopRDD]] or from persisted
    * data, defined only in tasks with input.
@@ -233,7 +238,8 @@ class TaskMetrics private[spark] () extends Serializable {
     input.BYTES_READ -> inputMetrics._bytesRead,
     input.RECORDS_READ -> inputMetrics._recordsRead,
     output.BYTES_WRITTEN -> outputMetrics._bytesWritten,
-    output.RECORDS_WRITTEN -> outputMetrics._recordsWritten
+    output.RECORDS_WRITTEN -> outputMetrics._recordsWritten,
+    TaskMetrics.DATA_SKEW_KEYS -> _skewKeys
   ) ++ testAccum.map(TEST_ACCUM -> _)
 
   @transient private[spark] lazy val internalAccums: Seq[AccumulatorV2[_, _]] =
@@ -271,6 +277,12 @@ class TaskMetrics private[spark] () extends Serializable {
 private[spark] object TaskMetrics extends Logging {
   import InternalAccumulator._
 
+  // It should be a internal metric which is defined in [[InternalAccumulator]].
+  // But adding a internal task metric is intricate because of tedious update operations
+  // for metric value at many places. So we just add a external accumulator which is registered
+  // with internal metrics.
+  val DATA_SKEW_KEYS = "metrics.dataSkewKeys"
+
   /**
    * Create an empty task metrics that doesn't register its accumulators.
    */
@@ -300,6 +312,8 @@ private[spark] object TaskMetrics extends Logging {
       val value = info.update.get
       if (name == UPDATED_BLOCK_STATUSES) {
         tm.setUpdatedBlockStatuses(value.asInstanceOf[java.util.List[(BlockId, BlockStatus)]])
+      } else if (name == DATA_SKEW_KEYS) {
+        tm.setSkewKeys(value.asInstanceOf[java.util.List[(String, String)]])
       } else {
         tm.nameToAccums.get(name).foreach(
           _.asInstanceOf[LongAccumulator].setValue(value.asInstanceOf[Long])

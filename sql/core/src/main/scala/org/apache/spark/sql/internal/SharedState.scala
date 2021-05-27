@@ -19,19 +19,21 @@ package org.apache.spark.sql.internal
 
 import java.net.URL
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import javax.annotation.concurrent.GuardedBy
+import java.util.concurrent.{ConcurrentHashMap, CopyOnWriteArrayList}
+import java.util.function.BiFunction
 
 import scala.reflect.ClassTag
 import scala.util.control.NonFatal
-
+import scala.util.Random
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FsUrlStreamHandlerFactory
-
+import org.apache.hadoop.security.UserGroupInformation
 import org.apache.spark.{SparkConf, SparkContext, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog._
-import org.apache.spark.sql.execution.CacheManager
+import org.apache.spark.sql.execution.{CacheManager, SparkEventKafkaReporter}
+import org.apache.spark.sql.execution.status.{SqlAppStatusScheduler, SqlAppStoreStatusStoreV1}
 import org.apache.spark.sql.execution.streaming.StreamExecution
 import org.apache.spark.sql.execution.ui.{SQLAppStatusListener, SQLAppStatusStore, SQLTab, StreamingQueryStatusStore}
 import org.apache.spark.sql.internal.StaticSQLConf._
@@ -94,11 +96,26 @@ private[sql] class SharedState(
    * [[org.apache.spark.scheduler.SparkListenerEvent]]s.
    */
   val statusStore: SQLAppStatusStore = {
-    val kvStore = sparkContext.statusStore.store.asInstanceOf[ElementTrackingStore]
-    val listener = new SQLAppStatusListener(conf, kvStore, live = true)
-    sparkContext.listenerBus.addToStatusQueue(listener)
-    val statusStore = new SQLAppStatusStore(kvStore, Some(listener))
-    sparkContext.ui.foreach(new SQLTab(statusStore, _))
+    var statusStore: SQLAppStatusStore = null
+    val enableThriftServer = sparkContext.conf.getBoolean("spark.thriftserver.model.enabled", false)
+    if (enableThriftServer) {
+      val kvStore = sparkContext.statusStore.store.asInstanceOf[ElementTrackingStore]
+      val listener = new SQLAppStatusListener(sparkContext.conf, kvStore, live = true)
+      sparkContext.listenerBus.addToStatusQueue(listener)
+      statusStore = new SQLAppStatusStore(kvStore, Some(listener))
+      sparkContext.ui.foreach(new SQLTab(statusStore, _))
+    } else {
+      val sqlAppStatusScheduler = new SqlAppStatusScheduler(sparkContext)
+      val kvStore = sparkContext.statusStore.store.asInstanceOf[ElementTrackingStore]
+      val listener = new SQLAppStatusListener(sparkContext.conf, kvStore, live = true,
+        Some(sqlAppStatusScheduler._executionInfoQueue))
+      sparkContext.listenerBus.addToStatusQueue(listener)
+      statusStore = new SQLAppStatusStore(kvStore, Some(listener))
+      sparkContext.ui.foreach(new SQLTab(statusStore, _))
+      val sqlAppStatusStoreV1 = new SqlAppStoreStatusStoreV1(Some(statusStore),
+        Some(sparkContext.statusStore), sparkContext.conf)
+      sqlAppStatusScheduler.start(sqlAppStatusStoreV1)
+    }
     statusStore
   }
 
@@ -118,35 +135,75 @@ private[sql] class SharedState(
     }
   }
 
-  /**
-   * A catalog that interacts with external systems.
-   */
-  lazy val externalCatalog: ExternalCatalogWithListener = {
-    val externalCatalog = SharedState.reflect[ExternalCatalog, SparkConf, Configuration](
-      SharedState.externalCatalogClassName(conf), conf, hadoopConf)
-
-    val defaultDbDefinition = CatalogDatabase(
-      SessionCatalog.DEFAULT_DATABASE,
-      "default database",
-      CatalogUtils.stringToURI(conf.get(WAREHOUSE_PATH)),
-      Map())
-    // Create default database if it doesn't exist
-    if (!externalCatalog.databaseExists(SessionCatalog.DEFAULT_DATABASE)) {
-      // There may be another Spark application creating default database at the same time, here we
-      // set `ignoreIfExists = true` to avoid `DatabaseAlreadyExists` exception.
-      externalCatalog.createDatabase(defaultDbDefinition, ignoreIfExists = true)
+  val eventReporter: SparkEventKafkaReporter = {
+    val needReport = sparkContext.conf.getBoolean("spark.report.logicalplan", false)
+    if (needReport) {
+      new SparkEventKafkaReporter(sparkContext.conf)
+    } else {
+      null
     }
-
-    // Wrap to provide catalog events
-    val wrapped = new ExternalCatalogWithListener(externalCatalog)
-
-    // Make sure we propagate external catalog events to the spark listener bus
-    wrapped.addListener((event: ExternalCatalogEvent) => sparkContext.listenerBus.post(event))
-
-    wrapped
   }
 
-  /**
+  val maxExternalCatalogCount = sparkContext.conf.get(MAX_EXTERNAL_CATALOG_COUNT)
+
+  private val externalCatalogList =
+    new ConcurrentHashMap[String, CopyOnWriteArrayList[ExternalCatalogWithListener]]
+
+  private val computeExternalCatalog =
+    new BiFunction[String, CopyOnWriteArrayList[ExternalCatalogWithListener],
+      CopyOnWriteArrayList[ExternalCatalogWithListener]] {
+      override def apply(username: String,
+                         catalogArray: CopyOnWriteArrayList[ExternalCatalogWithListener]):
+      CopyOnWriteArrayList[ExternalCatalogWithListener] = {
+        if (catalogArray == null) {
+          val newCatalogArray = new CopyOnWriteArrayList[ExternalCatalogWithListener]
+          (0 until maxExternalCatalogCount).foreach(v => {
+            val externalCatalog = SharedState.reflect[ExternalCatalog,
+              SparkConf, Configuration] (
+              SharedState.externalCatalogClassName(conf),
+              conf,
+              hadoopConf)
+
+            val defaultDbDefinition = CatalogDatabase(
+              SessionCatalog.DEFAULT_DATABASE,
+              "default database",
+              CatalogUtils.stringToURI(conf.get(WAREHOUSE_PATH)),
+              Map())
+            // Create default database if it doesn't exist
+            if (!externalCatalog.databaseExists(SessionCatalog.DEFAULT_DATABASE)) {
+              // There may be another Spark application creating default database at the same time,
+              // here we set `ignoreIfExists = true` to avoid `DatabaseAlreadyExists` exception.
+              externalCatalog.createDatabase(defaultDbDefinition, ignoreIfExists = true)
+            }
+            // Wrap to provide catalog events
+            val wrapped = new ExternalCatalogWithListener(externalCatalog)
+            // Make sure we propagate external catalog events to the spark listener bus
+            wrapped.addListener(new ExternalCatalogEventListener {
+              override def onEvent(event: ExternalCatalogEvent): Unit = {
+                sparkContext.listenerBus.post(event)
+              }
+            })
+            newCatalogArray.add(wrapped)
+          }
+          )
+          return newCatalogArray
+        }
+        catalogArray
+      }
+    }
+
+
+  def externalCatalog: ExternalCatalogWithListener = {
+    val user = UserGroupInformation.getCurrentUser.getShortUserName
+    if (maxExternalCatalogCount == 1) {
+      externalCatalogList.compute(user, computeExternalCatalog).get(0)
+    } else {
+      externalCatalogList.compute(user, computeExternalCatalog).get(
+        Random.nextInt(maxExternalCatalogCount))
+    }
+  }
+
+    /**
    * A manager for global temporary views.
    */
   lazy val globalTempViewManager: GlobalTempViewManager = {

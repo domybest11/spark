@@ -126,25 +126,10 @@ if [ ! "$(command -v "$MVN")" ] ; then
     exit -1;
 fi
 
-VERSION=$("$MVN" help:evaluate -Dexpression=project.version $@ \
-    | grep -v "INFO"\
-    | grep -v "WARNING"\
-    | tail -n 1)
-SCALA_VERSION=$("$MVN" help:evaluate -Dexpression=scala.binary.version $@ \
-    | grep -v "INFO"\
-    | grep -v "WARNING"\
-    | tail -n 1)
-SPARK_HADOOP_VERSION=$("$MVN" help:evaluate -Dexpression=hadoop.version $@ \
-    | grep -v "INFO"\
-    | grep -v "WARNING"\
-    | tail -n 1)
-SPARK_HIVE=$("$MVN" help:evaluate -Dexpression=project.activeProfiles -pl sql/hive $@ \
-    | grep -v "INFO"\
-    | grep -v "WARNING"\
-    | fgrep --count "<id>hive</id>";\
-    # Reset exit status to 0, otherwise the script stops here if the last grep finds nothing\
-    # because we use "set -o pipefail"
-    echo -n)
+VERSION=3.1.1
+SCALA_VERSION=2.12
+SPARK_HADOOP_VERSION=2.8.4.1-bili-SNAPSHOT
+SPARK_HIVE=1
 
 if [ "$NAME" == "none" ]; then
   NAME=$SPARK_HADOOP_VERSION
@@ -161,12 +146,12 @@ fi
 # Build uber fat JAR
 cd "$SPARK_HOME"
 
-export MAVEN_OPTS="${MAVEN_OPTS:--Xmx2g -XX:ReservedCodeCacheSize=1g}"
+export MAVEN_OPTS="${MAVEN_OPTS:--Xmx2g -XX:ReservedCodeCacheSize=512m}"
 
 # Store the command as an array because $MVN variable might have spaces in it.
 # Normal quoting tricks don't work.
 # See: http://mywiki.wooledge.org/BashFAQ/050
-BUILD_COMMAND=("$MVN" clean package -DskipTests $@)
+BUILD_COMMAND=("$MVN" -U clean package -DskipTests $@)
 
 # Actually build the jar
 echo -e "\nBuilding with..."
@@ -180,7 +165,10 @@ mkdir -p "$DISTDIR/jars"
 echo "Spark $VERSION$GITREVSTRING built for Hadoop $SPARK_HADOOP_VERSION" > "$DISTDIR/RELEASE"
 echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 
-# Copy jars
+# Download hudi jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/hudi/hudi-spark-bundle_2.12-0.5.1-incubating.jar
+
+# Copy jar
 cp "$SPARK_HOME"/assembly/target/scala*/jars/* "$DISTDIR/jars/"
 
 # Only create the yarn directory if the yarn artifacts were built.
@@ -264,7 +252,9 @@ fi
 
 # Copy other things
 mkdir "$DISTDIR/conf"
-cp "$SPARK_HOME"/conf/*.template "$DISTDIR/conf"
+mkdir "$DISTDIR/bilibili-conf"
+cp "$SPARK_HOME"/conf/* "$DISTDIR/conf"
+cp -r "$SPARK_HOME"/bilibili-conf/* "$DISTDIR/bilibili-conf"
 cp "$SPARK_HOME/README.md" "$DISTDIR"
 cp -r "$SPARK_HOME/bin" "$DISTDIR"
 cp -r "$SPARK_HOME/python" "$DISTDIR"

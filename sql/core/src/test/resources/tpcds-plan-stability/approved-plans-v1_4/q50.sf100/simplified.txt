@@ -6,8 +6,8 @@ TakeOrderedAndProject [s_store_name,s_company_id,s_street_number,s_street_name,s
           WholeStageCodegen (8)
             HashAggregate [s_store_name,s_company_id,s_street_number,s_street_name,s_street_type,s_suite_number,s_city,s_county,s_state,s_zip,sr_returned_date_sk,ss_sold_date_sk] [sum,sum,sum,sum,sum,sum,sum,sum,sum,sum]
               Project [ss_sold_date_sk,sr_returned_date_sk,s_store_name,s_company_id,s_street_number,s_street_name,s_street_type,s_suite_number,s_city,s_county,s_state,s_zip]
-                SortMergeJoin [ss_ticket_number,ss_item_sk,ss_customer_sk,sr_ticket_number,sr_item_sk,sr_customer_sk]
-                  InputAdapter
+                InputAdapter
+                  SortMergeJoin [ss_ticket_number,ss_item_sk,ss_customer_sk,sr_ticket_number,sr_item_sk,sr_customer_sk]
                     WholeStageCodegen (4)
                       Sort [ss_ticket_number,ss_item_sk,ss_customer_sk]
                         InputAdapter
@@ -35,7 +35,6 @@ TakeOrderedAndProject [s_store_name,s_company_id,s_street_number,s_street_name,s
                                           ColumnarToRow
                                             InputAdapter
                                               Scan parquet default.store [s_store_sk,s_store_name,s_company_id,s_street_number,s_street_name,s_street_type,s_suite_number,s_city,s_county,s_state,s_zip]
-                  InputAdapter
                     WholeStageCodegen (7)
                       Sort [sr_ticket_number,sr_item_sk,sr_customer_sk]
                         InputAdapter

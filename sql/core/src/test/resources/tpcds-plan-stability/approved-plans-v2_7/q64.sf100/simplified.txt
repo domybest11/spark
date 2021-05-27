@@ -4,8 +4,8 @@ WholeStageCodegen (88)
       Exchange [product_name,store_name,cnt,s1,s1] #1
         WholeStageCodegen (87)
           Project [product_name,store_name,store_zip,b_street_number,b_streen_name,b_city,b_zip,c_street_number,c_street_name,c_city,c_zip,syear,cnt,s1,s2,s3,s1,s2,s3,syear,cnt]
-            SortMergeJoin [item_sk,store_name,store_zip,item_sk,store_name,store_zip,cnt,cnt]
-              InputAdapter
+            InputAdapter
+              SortMergeJoin [item_sk,store_name,store_zip,item_sk,store_name,store_zip,cnt,cnt]
                 WholeStageCodegen (43)
                   Sort [item_sk,store_name,store_zip]
                     InputAdapter
@@ -23,16 +23,16 @@ WholeStageCodegen (88)
                                             Project [ss_item_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,d_year,d_year,hd_income_band_sk,ca_street_number,ca_street_name,ca_city,ca_zip,ca_street_number,ca_street_name,ca_city,ca_zip]
                                               BroadcastHashJoin [hd_income_band_sk,ib_income_band_sk]
                                                 Project [ss_item_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,d_year,d_year,hd_income_band_sk,hd_income_band_sk,ca_street_number,ca_street_name,ca_city,ca_zip,ca_street_number,ca_street_name,ca_city,ca_zip]
-                                                  SortMergeJoin [c_current_addr_sk,ca_address_sk]
-                                                    InputAdapter
+                                                  InputAdapter
+                                                    SortMergeJoin [c_current_addr_sk,ca_address_sk]
                                                       WholeStageCodegen (35)
                                                         Sort [c_current_addr_sk]
                                                           InputAdapter
                                                             Exchange [c_current_addr_sk] #4
                                                               WholeStageCodegen (34)
                                                                 Project [ss_item_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_addr_sk,d_year,d_year,hd_income_band_sk,hd_income_band_sk,ca_street_number,ca_street_name,ca_city,ca_zip]
-                                                                  SortMergeJoin [ss_addr_sk,ca_address_sk]
-                                                                    InputAdapter
+                                                                  InputAdapter
+                                                                    SortMergeJoin [ss_addr_sk,ca_address_sk]
                                                                       WholeStageCodegen (31)
                                                                         Sort [ss_addr_sk]
                                                                           InputAdapter
@@ -45,16 +45,16 @@ WholeStageCodegen (88)
                                                                                         Project [ss_item_sk,ss_hdemo_sk,ss_addr_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_hdemo_sk,c_current_addr_sk,d_year,d_year]
                                                                                           BroadcastHashJoin [ss_promo_sk,p_promo_sk]
                                                                                             Project [ss_item_sk,ss_hdemo_sk,ss_addr_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_hdemo_sk,c_current_addr_sk,d_year,d_year]
-                                                                                              SortMergeJoin [c_current_cdemo_sk,cd_demo_sk,cd_marital_status,cd_marital_status]
-                                                                                                InputAdapter
+                                                                                              InputAdapter
+                                                                                                SortMergeJoin [c_current_cdemo_sk,cd_demo_sk,cd_marital_status,cd_marital_status]
                                                                                                   WholeStageCodegen (24)
                                                                                                     Sort [c_current_cdemo_sk]
                                                                                                       InputAdapter
                                                                                                         Exchange [c_current_cdemo_sk] #6
                                                                                                           WholeStageCodegen (23)
                                                                                                             Project [ss_item_sk,ss_hdemo_sk,ss_addr_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_cdemo_sk,c_current_hdemo_sk,c_current_addr_sk,d_year,d_year,cd_marital_status]
-                                                                                                              SortMergeJoin [ss_cdemo_sk,cd_demo_sk]
-                                                                                                                InputAdapter
+                                                                                                              InputAdapter
+                                                                                                                SortMergeJoin [ss_cdemo_sk,cd_demo_sk]
                                                                                                                   WholeStageCodegen (20)
                                                                                                                     Sort [ss_cdemo_sk]
                                                                                                                       InputAdapter
@@ -65,8 +65,8 @@ WholeStageCodegen (88)
                                                                                                                                 Project [ss_item_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_cdemo_sk,c_current_hdemo_sk,c_current_addr_sk,c_first_shipto_date_sk,d_year]
                                                                                                                                   BroadcastHashJoin [c_first_sales_date_sk,d_date_sk]
                                                                                                                                     Project [ss_item_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_cdemo_sk,c_current_hdemo_sk,c_current_addr_sk,c_first_shipto_date_sk,c_first_sales_date_sk]
-                                                                                                                                      SortMergeJoin [ss_customer_sk,c_customer_sk]
-                                                                                                                                        InputAdapter
+                                                                                                                                      InputAdapter
+                                                                                                                                        SortMergeJoin [ss_customer_sk,c_customer_sk]
                                                                                                                                           WholeStageCodegen (14)
                                                                                                                                             Sort [ss_customer_sk]
                                                                                                                                               InputAdapter
@@ -79,8 +79,8 @@ WholeStageCodegen (88)
                                                                                                                                                             Project [ss_sold_date_sk,ss_item_sk,ss_customer_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_store_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt]
                                                                                                                                                               BroadcastHashJoin [ss_item_sk,cs_item_sk]
                                                                                                                                                                 Project [ss_sold_date_sk,ss_item_sk,ss_customer_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_store_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt]
-                                                                                                                                                                  SortMergeJoin [ss_item_sk,ss_ticket_number,sr_item_sk,sr_ticket_number]
-                                                                                                                                                                    InputAdapter
+                                                                                                                                                                  InputAdapter
+                                                                                                                                                                    SortMergeJoin [ss_item_sk,ss_ticket_number,sr_item_sk,sr_ticket_number]
                                                                                                                                                                       WholeStageCodegen (2)
                                                                                                                                                                         Sort [ss_item_sk,ss_ticket_number]
                                                                                                                                                                           InputAdapter
@@ -90,7 +90,6 @@ WholeStageCodegen (88)
                                                                                                                                                                                   ColumnarToRow
                                                                                                                                                                                     InputAdapter
                                                                                                                                                                                       Scan parquet default.store_sales [ss_sold_date_sk,ss_item_sk,ss_customer_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_store_sk,ss_promo_sk,ss_ticket_number,ss_wholesale_cost,ss_list_price,ss_coupon_amt]
-                                                                                                                                                                    InputAdapter
                                                                                                                                                                       WholeStageCodegen (4)
                                                                                                                                                                         Sort [sr_item_sk,sr_ticket_number]
                                                                                                                                                                           InputAdapter
@@ -111,8 +110,8 @@ WholeStageCodegen (88)
                                                                                                                                                                                 WholeStageCodegen (9)
                                                                                                                                                                                   HashAggregate [cs_item_sk,cs_ext_list_price,cr_refunded_cash,cr_reversed_charge,cr_store_credit] [sum,sum,isEmpty,sum,sum,isEmpty]
                                                                                                                                                                                     Project [cs_item_sk,cs_ext_list_price,cr_refunded_cash,cr_reversed_charge,cr_store_credit]
-                                                                                                                                                                                      SortMergeJoin [cs_item_sk,cs_order_number,cr_item_sk,cr_order_number]
-                                                                                                                                                                                        InputAdapter
+                                                                                                                                                                                      InputAdapter
+                                                                                                                                                                                        SortMergeJoin [cs_item_sk,cs_order_number,cr_item_sk,cr_order_number]
                                                                                                                                                                                           WholeStageCodegen (6)
                                                                                                                                                                                             Sort [cs_item_sk,cs_order_number]
                                                                                                                                                                                               InputAdapter
@@ -122,7 +121,6 @@ WholeStageCodegen (88)
                                                                                                                                                                                                       ColumnarToRow
                                                                                                                                                                                                         InputAdapter
                                                                                                                                                                                                           Scan parquet default.catalog_sales [cs_item_sk,cs_order_number,cs_ext_list_price]
-                                                                                                                                                                                        InputAdapter
                                                                                                                                                                                           WholeStageCodegen (8)
                                                                                                                                                                                             Sort [cr_item_sk,cr_order_number]
                                                                                                                                                                                               InputAdapter
@@ -146,7 +144,6 @@ WholeStageCodegen (88)
                                                                                                                                                                 ColumnarToRow
                                                                                                                                                                   InputAdapter
                                                                                                                                                                     Scan parquet default.store [s_store_sk,s_store_name,s_zip]
-                                                                                                                                        InputAdapter
                                                                                                                                           WholeStageCodegen (16)
                                                                                                                                             Sort [c_customer_sk]
                                                                                                                                               InputAdapter
@@ -165,7 +162,6 @@ WholeStageCodegen (88)
                                                                                                                                                 Scan parquet default.date_dim [d_date_sk,d_year]
                                                                                                                                 InputAdapter
                                                                                                                                   ReusedExchange [d_date_sk,d_year] #18
-                                                                                                                InputAdapter
                                                                                                                   WholeStageCodegen (22)
                                                                                                                     Sort [cd_demo_sk]
                                                                                                                       InputAdapter
@@ -175,7 +171,6 @@ WholeStageCodegen (88)
                                                                                                                               ColumnarToRow
                                                                                                                                 InputAdapter
                                                                                                                                   Scan parquet default.customer_demographics [cd_demo_sk,cd_marital_status]
-                                                                                                InputAdapter
                                                                                                   WholeStageCodegen (26)
                                                                                                     Sort [cd_demo_sk]
                                                                                                       InputAdapter
@@ -196,7 +191,6 @@ WholeStageCodegen (88)
                                                                                                     Scan parquet default.household_demographics [hd_demo_sk,hd_income_band_sk]
                                                                                     InputAdapter
                                                                                       ReusedExchange [hd_demo_sk,hd_income_band_sk] #21
-                                                                    InputAdapter
                                                                       WholeStageCodegen (33)
                                                                         Sort [ca_address_sk]
                                                                           InputAdapter
@@ -206,7 +200,6 @@ WholeStageCodegen (88)
                                                                                   ColumnarToRow
                                                                                     InputAdapter
                                                                                       Scan parquet default.customer_address [ca_address_sk,ca_street_number,ca_street_name,ca_city,ca_zip]
-                                                    InputAdapter
                                                       WholeStageCodegen (37)
                                                         Sort [ca_address_sk]
                                                           InputAdapter
@@ -228,7 +221,6 @@ WholeStageCodegen (88)
                                                   ColumnarToRow
                                                     InputAdapter
                                                       Scan parquet default.item [i_item_sk,i_current_price,i_color,i_product_name]
-              InputAdapter
                 WholeStageCodegen (86)
                   Sort [item_sk,store_name,store_zip]
                     InputAdapter
@@ -246,16 +238,16 @@ WholeStageCodegen (88)
                                             Project [ss_item_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,d_year,d_year,hd_income_band_sk,ca_street_number,ca_street_name,ca_city,ca_zip,ca_street_number,ca_street_name,ca_city,ca_zip]
                                               BroadcastHashJoin [hd_income_band_sk,ib_income_band_sk]
                                                 Project [ss_item_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,d_year,d_year,hd_income_band_sk,hd_income_band_sk,ca_street_number,ca_street_name,ca_city,ca_zip,ca_street_number,ca_street_name,ca_city,ca_zip]
-                                                  SortMergeJoin [c_current_addr_sk,ca_address_sk]
-                                                    InputAdapter
+                                                  InputAdapter
+                                                    SortMergeJoin [c_current_addr_sk,ca_address_sk]
                                                       WholeStageCodegen (78)
                                                         Sort [c_current_addr_sk]
                                                           InputAdapter
                                                             Exchange [c_current_addr_sk] #27
                                                               WholeStageCodegen (77)
                                                                 Project [ss_item_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_addr_sk,d_year,d_year,hd_income_band_sk,hd_income_band_sk,ca_street_number,ca_street_name,ca_city,ca_zip]
-                                                                  SortMergeJoin [ss_addr_sk,ca_address_sk]
-                                                                    InputAdapter
+                                                                  InputAdapter
+                                                                    SortMergeJoin [ss_addr_sk,ca_address_sk]
                                                                       WholeStageCodegen (74)
                                                                         Sort [ss_addr_sk]
                                                                           InputAdapter
@@ -268,16 +260,16 @@ WholeStageCodegen (88)
                                                                                         Project [ss_item_sk,ss_hdemo_sk,ss_addr_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_hdemo_sk,c_current_addr_sk,d_year,d_year]
                                                                                           BroadcastHashJoin [ss_promo_sk,p_promo_sk]
                                                                                             Project [ss_item_sk,ss_hdemo_sk,ss_addr_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_hdemo_sk,c_current_addr_sk,d_year,d_year]
-                                                                                              SortMergeJoin [c_current_cdemo_sk,cd_demo_sk,cd_marital_status,cd_marital_status]
-                                                                                                InputAdapter
+                                                                                              InputAdapter
+                                                                                                SortMergeJoin [c_current_cdemo_sk,cd_demo_sk,cd_marital_status,cd_marital_status]
                                                                                                   WholeStageCodegen (67)
                                                                                                     Sort [c_current_cdemo_sk]
                                                                                                       InputAdapter
                                                                                                         Exchange [c_current_cdemo_sk] #29
                                                                                                           WholeStageCodegen (66)
                                                                                                             Project [ss_item_sk,ss_hdemo_sk,ss_addr_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_cdemo_sk,c_current_hdemo_sk,c_current_addr_sk,d_year,d_year,cd_marital_status]
-                                                                                                              SortMergeJoin [ss_cdemo_sk,cd_demo_sk]
-                                                                                                                InputAdapter
+                                                                                                              InputAdapter
+                                                                                                                SortMergeJoin [ss_cdemo_sk,cd_demo_sk]
                                                                                                                   WholeStageCodegen (63)
                                                                                                                     Sort [ss_cdemo_sk]
                                                                                                                       InputAdapter
@@ -288,8 +280,8 @@ WholeStageCodegen (88)
                                                                                                                                 Project [ss_item_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_cdemo_sk,c_current_hdemo_sk,c_current_addr_sk,c_first_shipto_date_sk,d_year]
                                                                                                                                   BroadcastHashJoin [c_first_sales_date_sk,d_date_sk]
                                                                                                                                     Project [ss_item_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt,d_year,s_store_name,s_zip,c_current_cdemo_sk,c_current_hdemo_sk,c_current_addr_sk,c_first_shipto_date_sk,c_first_sales_date_sk]
-                                                                                                                                      SortMergeJoin [ss_customer_sk,c_customer_sk]
-                                                                                                                                        InputAdapter
+                                                                                                                                      InputAdapter
+                                                                                                                                        SortMergeJoin [ss_customer_sk,c_customer_sk]
                                                                                                                                           WholeStageCodegen (57)
                                                                                                                                             Sort [ss_customer_sk]
                                                                                                                                               InputAdapter
@@ -302,13 +294,12 @@ WholeStageCodegen (88)
                                                                                                                                                             Project [ss_sold_date_sk,ss_item_sk,ss_customer_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_store_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt]
                                                                                                                                                               BroadcastHashJoin [ss_item_sk,cs_item_sk]
                                                                                                                                                                 Project [ss_sold_date_sk,ss_item_sk,ss_customer_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_store_sk,ss_promo_sk,ss_wholesale_cost,ss_list_price,ss_coupon_amt]
-                                                                                                                                                                  SortMergeJoin [ss_item_sk,ss_ticket_number,sr_item_sk,sr_ticket_number]
-                                                                                                                                                                    InputAdapter
+                                                                                                                                                                  InputAdapter
+                                                                                                                                                                    SortMergeJoin [ss_item_sk,ss_ticket_number,sr_item_sk,sr_ticket_number]
                                                                                                                                                                       WholeStageCodegen (45)
                                                                                                                                                                         Sort [ss_item_sk,ss_ticket_number]
                                                                                                                                                                           InputAdapter
                                                                                                                                                                             ReusedExchange [ss_sold_date_sk,ss_item_sk,ss_customer_sk,ss_cdemo_sk,ss_hdemo_sk,ss_addr_sk,ss_store_sk,ss_promo_sk,ss_ticket_number,ss_wholesale_cost,ss_list_price,ss_coupon_amt] #9
-                                                                                                                                                                    InputAdapter
                                                                                                                                                                       WholeStageCodegen (47)
                                                                                                                                                                         Sort [sr_item_sk,sr_ticket_number]
                                                                                                                                                                           InputAdapter
@@ -324,7 +315,6 @@ WholeStageCodegen (88)
                                                                                                                                                                         Scan parquet default.date_dim [d_date_sk,d_year]
                                                                                                                                                         InputAdapter
                                                                                                                                                           ReusedExchange [s_store_sk,s_store_name,s_zip] #16
-                                                                                                                                        InputAdapter
                                                                                                                                           WholeStageCodegen (59)
                                                                                                                                             Sort [c_customer_sk]
                                                                                                                                               InputAdapter
@@ -333,12 +323,10 @@ WholeStageCodegen (88)
                                                                                                                                       ReusedExchange [d_date_sk,d_year] #18
                                                                                                                                 InputAdapter
                                                                                                                                   ReusedExchange [d_date_sk,d_year] #18
-                                                                                                                InputAdapter
                                                                                                                   WholeStageCodegen (65)
                                                                                                                     Sort [cd_demo_sk]
                                                                                                                       InputAdapter
                                                                                                                         ReusedExchange [cd_demo_sk,cd_marital_status] #19
-                                                                                                InputAdapter
                                                                                                   WholeStageCodegen (69)
                                                                                                     Sort [cd_demo_sk]
                                                                                                       InputAdapter
@@ -349,12 +337,10 @@ WholeStageCodegen (88)
                                                                                           ReusedExchange [hd_demo_sk,hd_income_band_sk] #21
                                                                                     InputAdapter
                                                                                       ReusedExchange [hd_demo_sk,hd_income_band_sk] #21
-                                                                    InputAdapter
                                                                       WholeStageCodegen (76)
                                                                         Sort [ca_address_sk]
                                                                           InputAdapter
                                                                             ReusedExchange [ca_address_sk,ca_street_number,ca_street_name,ca_city,ca_zip] #22
-                                                    InputAdapter
                                                       WholeStageCodegen (80)
                                                         Sort [ca_address_sk]
                                                           InputAdapter

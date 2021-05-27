@@ -74,7 +74,7 @@ private[spark] class ExecutorMetricsPoller(
    * Otherwise, this is called by the reportHeartBeat function defined in Executor and passed
    * to its Heartbeater.
    */
-  def poll(): Unit = {
+  def poll(): Array[Long] = {
     // Note: Task runner threads may update stageTCMP or read from taskMetricPeaks concurrently
     // with this function via calls to methods of this class.
 
@@ -93,6 +93,7 @@ private[spark] class ExecutorMetricsPoller(
 
     // for each running task, update the peaks
     taskMetricPeaks.forEachValue(LONG_MAX_VALUE, updatePeaks)
+    latestMetrics
   }
 
   /** Starts the polling thread. */

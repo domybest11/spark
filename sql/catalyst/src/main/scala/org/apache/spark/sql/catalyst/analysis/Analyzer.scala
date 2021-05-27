@@ -360,6 +360,10 @@ class Analyzer(override val catalogManager: CatalogManager)
         }
         case d @ Divide(l, r, f) if d.childrenResolved => (l.dataType, r.dataType) match {
           case (CalendarIntervalType, _) => DivideInterval(l, r, f)
+          case (TimestampType, LongType) =>
+            Divide(Cast(l, DoubleType), Cast(r, DoubleType), f)
+          case (LongType, TimestampType) =>
+            Divide(Cast(l, DoubleType), Cast(r, DoubleType), f)
           case _ => d
         }
       }
@@ -3145,10 +3149,12 @@ class Analyzer(override val catalogManager: CatalogManager)
    */
   object ResolveWindowOrder extends Rule[LogicalPlan] {
     def apply(plan: LogicalPlan): LogicalPlan = plan resolveExpressions {
+      /**
       case WindowExpression(wf: WindowFunction, spec) if spec.orderSpec.isEmpty =>
         failAnalysis(s"Window function $wf requires window to be ordered, please add ORDER BY " +
           s"clause. For example SELECT $wf(value_expr) OVER (PARTITION BY window_partition " +
           s"ORDER BY window_ordering) from table")
+       */
       case WindowExpression(rank: RankLike, spec) if spec.resolved =>
         val order = spec.orderSpec.map(_.child)
         WindowExpression(rank.withOrder(order), spec)

@@ -395,10 +395,9 @@ cannot resolve '(CAST(1 AS BIGINT) / CAST(1 AS BOOLEAN))' due to data type misma
 -- !query
 SELECT cast(1 as bigint) / cast('2017-12-11 09:30:00.0' as timestamp) FROM t
 -- !query schema
-struct<>
+struct<(CAST(CAST(1 AS BIGINT) AS DOUBLE) / CAST(CAST(2017-12-11 09:30:00.0 AS TIMESTAMP) AS DOUBLE)):double>
 -- !query output
-org.apache.spark.sql.AnalysisException
-cannot resolve '(CAST(1 AS BIGINT) / CAST('2017-12-11 09:30:00.0' AS TIMESTAMP))' due to data type mismatch: differing types in '(CAST(1 AS BIGINT) / CAST('2017-12-11 09:30:00.0' AS TIMESTAMP))' (bigint and timestamp).; line 1 pos 7
+6.609326791157302E-10
 
 
 -- !query
@@ -1056,10 +1055,9 @@ cannot resolve '(CAST('2017-12-11 09:30:00.0' AS TIMESTAMP) / CAST(1 AS INT))' d
 -- !query
 SELECT cast('2017-12-11 09:30:00.0' as timestamp) / cast(1 as bigint) FROM t
 -- !query schema
-struct<>
+struct<(CAST(CAST(2017-12-11 09:30:00.0 AS TIMESTAMP) AS DOUBLE) / CAST(CAST(1 AS BIGINT) AS DOUBLE)):double>
 -- !query output
-org.apache.spark.sql.AnalysisException
-cannot resolve '(CAST('2017-12-11 09:30:00.0' AS TIMESTAMP) / CAST(1 AS BIGINT))' due to data type mismatch: differing types in '(CAST('2017-12-11 09:30:00.0' AS TIMESTAMP) / CAST(1 AS BIGINT))' (timestamp and bigint).; line 1 pos 7
+1.5130134E9
 
 
 -- !query

@@ -20,14 +20,17 @@ package org.apache.spark.sql.execution
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Future => JFuture}
 import java.util.concurrent.atomic.AtomicLong
 
+import org.apache.commons.lang3.SerializationUtils
+
 import org.apache.spark.SparkContext
+import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.Tests.IS_TESTING
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.execution.ui.{SparkListenerSQLExecutionEnd, SparkListenerSQLExecutionStart}
 import org.apache.spark.sql.internal.StaticSQLConf.SQL_EVENT_TRUNCATE_LENGTH
 import org.apache.spark.util.Utils
 
-object SQLExecution {
+object SQLExecution extends Logging {
 
   val EXECUTION_ID_KEY = "spark.sql.execution.id"
 
@@ -68,6 +71,9 @@ object SQLExecution {
     val executionId = SQLExecution.nextExecutionId
     sc.setLocalProperty(EXECUTION_ID_KEY, executionId.toString)
     executionIdToQueryExecution.put(executionId, queryExecution)
+    sc.uiWebUrl.foreach { url =>
+      logInfo(s"SQL execution DAG is $url/SQL/execution/?id=$executionId")
+    }
     try {
       // sparkContext.getCallSite() would first try to pick up any call site that was previously
       // set, then fall back to Utils.getCallSite(); call Utils.getCallSite() directly on
@@ -99,7 +105,9 @@ object SQLExecution {
             // `queryExecution.executedPlan` triggers query planning. If it fails, the exception
             // will be caught and reported in the `SparkListenerSQLExecutionEnd`
             sparkPlanInfo = SparkPlanInfo.fromSparkPlan(queryExecution.executedPlan),
-            time = System.currentTimeMillis()))
+            time = System.currentTimeMillis(),
+            SerializationUtils.clone(sc.getLocalProperties),
+            sc.getLocalProperty("spark.trace.sqlIdentifier")))
           body
         } catch {
           case e: Throwable =>
@@ -122,6 +130,7 @@ object SQLExecution {
     } finally {
       executionIdToQueryExecution.remove(executionId)
       sc.setLocalProperty(EXECUTION_ID_KEY, oldExecutionId)
+      sc.setLocalProperty("spark.trace.sqlIdentifier", null)
     }
   }
 

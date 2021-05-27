@@ -6,8 +6,8 @@ TakeOrderedAndProject [substr(r_reason_desc, 1, 20),avg(ws_quantity),avg(wr_refu
           WholeStageCodegen (14)
             HashAggregate [r_reason_desc,ws_quantity,wr_refunded_cash,wr_fee] [sum,count,sum,count,sum,count,sum,count,sum,count,sum,count]
               Project [ws_quantity,wr_fee,wr_refunded_cash,r_reason_desc]
-                SortMergeJoin [wr_refunded_cdemo_sk,wr_returning_cdemo_sk,cd_demo_sk,cd_demo_sk,cd_marital_status,cd_education_status,ws_sales_price]
-                  InputAdapter
+                InputAdapter
+                  SortMergeJoin [wr_refunded_cdemo_sk,wr_returning_cdemo_sk,cd_demo_sk,cd_demo_sk,cd_marital_status,cd_education_status,ws_sales_price]
                     WholeStageCodegen (10)
                       Sort [wr_refunded_cdemo_sk,wr_returning_cdemo_sk]
                         InputAdapter
@@ -20,8 +20,8 @@ TakeOrderedAndProject [substr(r_reason_desc, 1, 20),avg(ws_quantity),avg(wr_refu
                                       Project [ws_quantity,ws_sales_price,ws_net_profit,wr_refunded_cdemo_sk,wr_refunded_addr_sk,wr_returning_cdemo_sk,wr_reason_sk,wr_fee,wr_refunded_cash]
                                         BroadcastHashJoin [ws_sold_date_sk,d_date_sk]
                                           Project [ws_sold_date_sk,ws_quantity,ws_sales_price,ws_net_profit,wr_refunded_cdemo_sk,wr_refunded_addr_sk,wr_returning_cdemo_sk,wr_reason_sk,wr_fee,wr_refunded_cash]
-                                            SortMergeJoin [ws_item_sk,ws_order_number,wr_item_sk,wr_order_number]
-                                              InputAdapter
+                                            InputAdapter
+                                              SortMergeJoin [ws_item_sk,ws_order_number,wr_item_sk,wr_order_number]
                                                 WholeStageCodegen (3)
                                                   Sort [ws_item_sk,ws_order_number]
                                                     InputAdapter
@@ -40,7 +40,6 @@ TakeOrderedAndProject [substr(r_reason_desc, 1, 20),avg(ws_quantity),avg(wr_refu
                                                                       ColumnarToRow
                                                                         InputAdapter
                                                                           Scan parquet default.web_page [wp_web_page_sk]
-                                              InputAdapter
                                                 WholeStageCodegen (5)
                                                   Sort [wr_item_sk,wr_order_number]
                                                     InputAdapter
@@ -73,7 +72,6 @@ TakeOrderedAndProject [substr(r_reason_desc, 1, 20),avg(ws_quantity),avg(wr_refu
                                             ColumnarToRow
                                               InputAdapter
                                                 Scan parquet default.customer_address [ca_address_sk,ca_state,ca_country]
-                  InputAdapter
                     WholeStageCodegen (13)
                       Sort [cd_demo_sk,cd_demo_sk]
                         InputAdapter

@@ -85,6 +85,7 @@ class DataFrameWindowFunctionsSuite extends QueryTest
     }
   }
 
+  /**
   test("window function should fail if order by clause is not specified") {
     val df = Seq((1, "1"), (2, "2"), (1, "2"), (2, "2")).toDF("key", "value")
     val e = intercept[AnalysisException](
@@ -92,6 +93,7 @@ class DataFrameWindowFunctionsSuite extends QueryTest
       df.select(row_number().over(Window.partitionBy("value"))).collect())
     assert(e.message.contains("requires window to be ordered"))
   }
+   */
 
   test("corr, covar_pop, stddev_pop functions in specific window") {
     withSQLConf(SQLConf.LEGACY_STATISTICAL_AGGREGATE.key -> "true") {

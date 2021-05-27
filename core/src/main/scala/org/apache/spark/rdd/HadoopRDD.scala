@@ -46,10 +46,11 @@ import org.apache.spark.util.{NextIterator, SerializableConfiguration, ShutdownH
 /**
  * A Spark split class that wraps around a Hadoop InputSplit.
  */
-private[spark] class HadoopPartition(rddId: Int, override val index: Int, s: InputSplit)
+private[spark] class HadoopPartition(rddId: Int, override val index: Int,
+  var inputSplit: SerializableWritable[InputSplit])
   extends Partition {
 
-  val inputSplit = new SerializableWritable[InputSplit](s)
+  // val inputSplit = new SerializableWritable[InputSplit](s)
 
   override def hashCode(): Int = 31 * (31 + rddId) + index
 
@@ -224,7 +225,7 @@ class HadoopRDD[K, V](
       }
       val array = new Array[Partition](inputSplits.size)
       for (i <- 0 until inputSplits.size) {
-        array(i) = new HadoopPartition(id, i, inputSplits(i))
+        array(i) = new HadoopPartition(id, i, new SerializableWritable[InputSplit](inputSplits(i)))
       }
       array
     } catch {
@@ -283,7 +284,13 @@ class HadoopRDD[K, V](
 
       reader =
         try {
-          inputFormat.getRecordReader(split.inputSplit.value, jobConf, Reporter.NULL)
+          if (split.inputSplit.value.getLength != 0) {
+            inputFormat.getRecordReader(split.inputSplit.value, jobConf, Reporter.NULL)
+          } else {
+            logWarning(s"Skipped the file size 0 file: ${split.inputSplit}")
+            finished = true
+            null
+          }
         } catch {
           case e: FileNotFoundException if ignoreMissingFiles =>
             logWarning(s"Skipped missing file: ${split.inputSplit}", e)
@@ -411,7 +418,7 @@ private[spark] object HadoopRDD extends Logging {
    */
   def getCachedMetadata(key: String): AnyRef = SparkEnv.get.hadoopJobMetadata.get(key)
 
-  private def putCachedMetadata(key: String, value: AnyRef): Unit =
+  def putCachedMetadata(key: String, value: AnyRef): Unit =
     SparkEnv.get.hadoopJobMetadata.put(key, value)
 
   /** Add Hadoop configuration specific to a single partition and attempt. */

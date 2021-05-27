@@ -69,6 +69,14 @@ object StaticSQLConf {
       .intConf
       .createWithDefault(4000)
 
+  val MAX_EXTERNAL_CATALOG_COUNT =
+    buildStaticConf("spark.sql.maxExternalCatalogCount")
+      .doc("A catalog that interacts with external system, we need to create " +
+        "metastore client for each user, not to share the same one")
+      .internal()
+      .intConf
+      .createWithDefault(1)
+
   val FILESOURCE_TABLE_RELATION_CACHE_SIZE =
     buildStaticConf("spark.sql.filesourceTableRelationCacheSize")
       .internal()

@@ -67,7 +67,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   // if minRegisteredRatio has not yet been reached
   private val maxRegisteredWaitingTimeNs = TimeUnit.MILLISECONDS.toNanos(
     conf.get(SCHEDULER_MAX_REGISTERED_RESOURCE_WAITING_TIME))
-  private val createTimeNs = System.nanoTime()
+  private lazy val createTimeNs = System.nanoTime()
 
   // Accessing `executorDataMap` in the inherited methods from ThreadSafeRpcEndpoint doesn't need
   // any protection. But accessing `executorDataMap` out of the inherited methods must be

@@ -623,6 +623,12 @@ object StructType extends AbstractDataType {
       case (leftUdt: UserDefinedType[_], rightUdt: UserDefinedType[_])
         if leftUdt.userClass == rightUdt.userClass => leftUdt
 
+      case (leftType: LongType, rightType: TimestampType) =>
+        leftType
+
+      case (leftType: TimestampType, rightType: LongType) =>
+        rightType
+
       case (leftType, rightType) if leftType == rightType =>
         leftType
 

@@ -35,7 +35,7 @@ private[hive] trait SparkOperation extends Operation with Logging {
 
   protected def sqlContext: SQLContext
 
-  protected var statementId = getHandle().getHandleIdentifier().getPublicId().toString()
+  var statementId = getHandle().getHandleIdentifier().getPublicId().toString()
 
   protected def cleanup(): Unit = () // noop by default
 
@@ -98,8 +98,10 @@ private[hive] trait SparkOperation extends Operation with Logging {
     case e: Throwable =>
       logError(s"Error operating $getType with $statementId", e)
       super.setState(OperationState.ERROR)
+      val traceId = sqlContext.sparkSession.conf.getOption("archer.trace.id")
+        .orElse(Option(""))
       HiveThriftServer2.eventManager.onStatementError(
-        statementId, e.getMessage, Utils.exceptionString(e))
+        statementId, traceId.getOrElse(""), e.getMessage, Utils.exceptionString(e))
       e match {
         case _: HiveSQLException => throw e
         case _ => throw new HiveSQLException(s"Error operating $getType ${e.getMessage}", e)

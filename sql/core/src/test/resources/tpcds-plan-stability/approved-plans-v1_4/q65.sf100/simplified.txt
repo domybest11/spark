@@ -1,8 +1,8 @@
 TakeOrderedAndProject [s_store_name,i_item_desc,revenue,i_current_price,i_wholesale_cost,i_brand]
   WholeStageCodegen (12)
     Project [s_store_name,i_item_desc,revenue,i_current_price,i_wholesale_cost,i_brand]
-      SortMergeJoin [ss_item_sk,i_item_sk]
-        InputAdapter
+      InputAdapter
+        SortMergeJoin [ss_item_sk,i_item_sk]
           WholeStageCodegen (9)
             Sort [ss_item_sk]
               InputAdapter
@@ -60,7 +60,6 @@ TakeOrderedAndProject [s_store_name,i_item_desc,revenue,i_current_price,i_wholes
                                 ColumnarToRow
                                   InputAdapter
                                     Scan parquet default.store [s_store_sk,s_store_name]
-        InputAdapter
           WholeStageCodegen (11)
             Sort [i_item_sk]
               InputAdapter

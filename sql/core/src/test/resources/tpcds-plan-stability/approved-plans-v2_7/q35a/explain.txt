@@ -246,7 +246,7 @@ Results [19]: [ca_state#19, cd_gender#22, cd_marital_status#23, cd_dep_count#24,
 
 (45) Exchange
 Input [19]: [ca_state#19, cd_gender#22, cd_marital_status#23, cd_dep_count#24, cd_dep_employed_count#25, cd_dep_college_count#26, count#41, sum#42, count#43, max#44, sum#45, sum#46, count#47, max#48, sum#49, sum#50, count#51, max#52, sum#53]
-Arguments: hashpartitioning(ca_state#19, cd_gender#22, cd_marital_status#23, cd_dep_count#24, cd_dep_employed_count#25, cd_dep_college_count#26, 5), true, [id=#54]
+Arguments: hashpartitioning(ca_state#19, cd_gender#22, cd_marital_status#23, cd_dep_count#24, cd_dep_employed_count#25, cd_dep_college_count#26, 5), ENSURE_REQUIREMENTS, [id=#54]
 
 (46) HashAggregate [codegen id : 10]
 Input [19]: [ca_state#19, cd_gender#22, cd_marital_status#23, cd_dep_count#24, cd_dep_employed_count#25, cd_dep_college_count#26, count#41, sum#42, count#43, max#44, sum#45, sum#46, count#47, max#48, sum#49, sum#50, count#51, max#52, sum#53]

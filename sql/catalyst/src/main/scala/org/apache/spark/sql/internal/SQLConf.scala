@@ -314,6 +314,16 @@ object SQLConf {
     .booleanConf
     .createWithDefault(true)
 
+  val MERGE_FILE_PER_TASK = buildConf("spark.sql.hive.merge.size.per.task")
+    .doc("The size of one file")
+    .bytesConf(ByteUnit.BYTE)
+    .createWithDefault(240 * 1024 * 1024)
+
+  val MERGE_SMALLFILE_SIZE = buildConf("spark.sql.hive.merge.smallfile.size")
+    .doc("The average size of smallfile")
+    .bytesConf(ByteUnit.BYTE)
+    .createWithDefault(80 * 1024 * 1024)
+
   val COLUMN_BATCH_SIZE = buildConf("spark.sql.inMemoryColumnarStorage.batchSize")
     .doc("Controls the size of batches for columnar caching.  Larger batch sizes can improve " +
       "memory utilization and compression, but risk OOMs when caching data.")
@@ -336,6 +346,18 @@ object SQLConf {
       .version("3.0.0")
       .booleanConf
       .createWithDefault(false)
+
+  val MERGE_FILES_IGNORE_LOCAL_WRITE =
+    buildConf("spark.sql.mergeFiles.ignoreLocalWrite")
+      .internal()
+      .doc("When true, avoid writing blocks to local node.")
+      .booleanConf
+      .createWithDefault(true)
+
+  val MERGE_HIVEFILES = buildConf("spark.sql.hive.mergeFiles")
+    .doc("Whether to merge files when inserting hive tables.")
+    .booleanConf
+    .createWithDefault(false)
 
   val CACHE_VECTORIZED_READER_ENABLED =
     buildConf("spark.sql.inMemoryColumnarStorage.enableVectorizedReader")
@@ -380,7 +402,7 @@ object SQLConf {
       "the files of data.")
     .version("1.1.0")
     .bytesConf(ByteUnit.BYTE)
-    .createWithDefaultString("10MB")
+    .createWithDefaultString("25MB")
 
   val LIMIT_SCALE_UP_FACTOR = buildConf("spark.sql.limit.scaleUpFactor")
     .internal()
@@ -555,6 +577,12 @@ object SQLConf {
       .version("3.1.0")
       .stringConf
       .createOptional
+
+  val ENABLE_FALL_BACK_TO_SMJ = buildConf("spark.sql.broadcast.fallBackToSMJ")
+    .doc("if broadcast join failed with oom, use smj")
+    .booleanConf
+    .createWithDefault(false)
+
 
   val SUBEXPRESSION_ELIMINATION_ENABLED =
     buildConf("spark.sql.subexpressionElimination.enabled")
@@ -923,6 +951,16 @@ object SQLConf {
     .version("1.3.0")
     .timeConf(TimeUnit.SECONDS)
     .createWithDefaultString(s"${5 * 60}")
+
+  val EXECUTOR_SIDE_BROADCAST_ENABLED = buildConf("spark.sql.executorSideBroadcast.enabled")
+    .doc("When true, we will use executor side broadcast for Broadcast-based join in sql. " +
+      "Notice that broadcasted pieces of data in executor-side broadcast are not persisted " +
+      "in the driver, but fetched from RDD pieces persisted in other executors. " +
+      "If one executor is lost before its piece is fetched by other executors, " +
+      "we can't recover it back and broadcasting will be failed. Thus it is not " +
+      "guaranteed completely safe when using with dynamic allocation.")
+    .booleanConf
+    .createWithDefault(false)
 
   // This is only used for the thriftserver
   val THRIFTSERVER_POOL = buildConf("spark.sql.thriftserver.scheduler.pool")
@@ -1929,6 +1967,14 @@ object SQLConf {
       .intConf
       .createWithDefault(ByteArrayMethods.MAX_ROUNDED_ARRAY_LENGTH)
 
+  val COMBINE_HIVE_INPUT_SPLITS_ENABLED =
+    buildConf("spark.sql.combine.hive.input.splits.enabled")
+      .internal()
+      .doc("When this parameter is enabled, it means that when reading the hive table, " +
+        "it will automatically merge small files.")
+      .booleanConf
+      .createWithDefault(false)
+
   val SORT_MERGE_JOIN_EXEC_BUFFER_SPILL_THRESHOLD =
     buildConf("spark.sql.sortMergeJoinExec.buffer.spill.threshold")
       .internal()
@@ -2363,6 +2409,10 @@ object SQLConf {
 
   object Replaced {
     val MAPREDUCE_JOB_REDUCES = "mapreduce.job.reduces"
+  }
+
+  object HiveVars {
+    val MAPJOIN_THRESHOLD = "hive.mapjoin.smalltable.filesize"
   }
 
   val CSV_PARSER_COLUMN_PRUNING = buildConf("spark.sql.csv.parser.columnPruning.enabled")
@@ -3238,6 +3288,10 @@ class SQLConf extends Serializable with Logging {
 
   def defaultNumShufflePartitions: Int = getConf(SHUFFLE_PARTITIONS)
 
+  def mergeHiveFiles: Boolean = getConf(MERGE_HIVEFILES)
+
+  def mergeFileSize: Long = getConf(MERGE_FILE_PER_TASK)
+
   def numShufflePartitions: Int = {
     if (adaptiveExecutionEnabled && coalesceShufflePartitionsEnabled) {
       getConf(COALESCE_PARTITIONS_INITIAL_PARTITION_NUM).getOrElse(defaultNumShufflePartitions)
@@ -3384,6 +3438,8 @@ class SQLConf extends Serializable with Logging {
   def subexpressionEliminationCacheMaxEntries: Int =
     getConf(SUBEXPRESSION_ELIMINATION_CACHE_MAX_ENTRIES)
 
+  def enableFallBackToSMJ: Boolean = getConf(ENABLE_FALL_BACK_TO_SMJ)
+
   def autoBroadcastJoinThreshold: Long = getConf(AUTO_BROADCASTJOIN_THRESHOLD)
 
   def limitScaleUpFactor: Int = getConf(LIMIT_SCALE_UP_FACTOR)
@@ -3427,6 +3483,8 @@ class SQLConf extends Serializable with Logging {
     val timeoutValue = getConf(BROADCAST_TIMEOUT)
     if (timeoutValue < 0) Long.MaxValue else timeoutValue
   }
+
+  def executorSideBroadcastEnabled: Boolean = getConf(EXECUTOR_SIDE_BROADCAST_ENABLED)
 
   def defaultDataSourceName: String = getConf(DEFAULT_DATA_SOURCE_NAME)
 
@@ -3603,6 +3661,8 @@ class SQLConf extends Serializable with Logging {
   def ansiEnabled: Boolean = getConf(ANSI_ENABLED)
 
   def nestedSchemaPruningEnabled: Boolean = getConf(NESTED_SCHEMA_PRUNING_ENABLED)
+
+  def combineHiveInputSplitsEnabled: Boolean = getConf(COMBINE_HIVE_INPUT_SPLITS_ENABLED)
 
   def serializerNestedSchemaPruningEnabled: Boolean =
     getConf(SERIALIZER_NESTED_SCHEMA_PRUNING_ENABLED)

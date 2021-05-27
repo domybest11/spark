@@ -136,7 +136,7 @@ Results [4]: [w_warehouse_name#6, i_item_id#9, sum#17, sum#18]
 
 (24) Exchange
 Input [4]: [w_warehouse_name#6, i_item_id#9, sum#17, sum#18]
-Arguments: hashpartitioning(w_warehouse_name#6, i_item_id#9, 5), true, [id=#19]
+Arguments: hashpartitioning(w_warehouse_name#6, i_item_id#9, 5), ENSURE_REQUIREMENTS, [id=#19]
 
 (25) HashAggregate [codegen id : 5]
 Input [4]: [w_warehouse_name#6, i_item_id#9, sum#17, sum#18]

@@ -20,7 +20,6 @@ package org.apache.spark.sql.hive
 import java.util.Properties
 
 import scala.collection.JavaConverters._
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{Path, PathFilter}
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants._
@@ -31,13 +30,12 @@ import org.apache.hadoop.hive.serde2.Deserializer
 import org.apache.hadoop.hive.serde2.objectinspector.{ObjectInspectorConverters, StructObjectInspector}
 import org.apache.hadoop.hive.serde2.objectinspector.primitive._
 import org.apache.hadoop.io.Writable
-import org.apache.hadoop.mapred.{FileInputFormat, InputFormat => oldInputClass, JobConf}
+import org.apache.hadoop.mapred.{FileInputFormat, JobConf, InputFormat => oldInputClass}
 import org.apache.hadoop.mapreduce.{InputFormat => newInputClass}
-
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
-import org.apache.spark.rdd.{EmptyRDD, HadoopRDD, NewHadoopRDD, RDD, UnionRDD}
+import org.apache.spark.rdd._
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.{InternalRow, SQLConfHelper}
 import org.apache.spark.sql.catalyst.analysis.CastSupport
@@ -198,11 +196,16 @@ class HadoopTableReader(
       }
     }
 
-    val hivePartitionRDDs = verifyPartitionPath(partitionToDeserializer)
+    val partitionPaths = verifyPartitionPath(partitionToDeserializer)
+    val partitionInfos = new Array[PartitionInfo](partitionPaths.size)
+    var i = 0
+    val hivePartitionRDDs = partitionPaths
       .map { case (partition, partDeserializer) =>
       val partDesc = Utilities.getPartitionDesc(partition)
       val partPath = partition.getDataLocation
       val inputPathStr = applyFilterIfNeeded(partPath, filterOpt)
+      val ifc = partDesc.getInputFileFormatClass
+        .asInstanceOf[java.lang.Class[oldInputClass[Writable, Writable]]]
       // Get partition field info
       val partSpec = partDesc.getPartSpec
       val partProps = partDesc.getProperties
@@ -217,6 +220,8 @@ class HadoopTableReader(
         partCols.map(col => new String(partSpec.get(col))).toArray
       }
 
+      partitionInfos(i) = PartitionInfo(partPath.toString, ifc)
+      i += 1
       val broadcastedHiveConf = _broadcastedHadoopConf
       val localDeserializer = partDeserializer
       val mutableRow = new SpecificInternalRow(attributes.map(_.dataType))
@@ -273,7 +278,19 @@ class HadoopTableReader(
     if (hivePartitionRDDs.size == 0) {
       new EmptyRDD[InternalRow](sparkSession.sparkContext)
     } else {
-      new UnionRDD(hivePartitionRDDs(0).context, hivePartitionRDDs)
+      val broadcastedHiveConf = _broadcastedHadoopConf
+      val localTableDesc = tableDesc
+      val initLocalJobConfFuncOpt = (path: String, jobConf: JobConf) => {
+        HadoopTableReader.initializeLocalJobConfFunc(path, localTableDesc)(jobConf)
+      }
+
+      new ParallelUnionHadoopRDD(
+        hivePartitionRDDs(0).context,
+        hivePartitionRDDs,
+        broadcastedHiveConf,
+        Some(initLocalJobConfFuncOpt),
+        partitionInfos)
+
     }
   }
 
@@ -314,12 +331,18 @@ class HadoopTableReader(
     val initializeJobConfFunc = HadoopTableReader.initializeLocalJobConfFunc(path, tableDesc) _
     val inputFormatClass = tableDesc.getInputFileFormatClass
       .asInstanceOf[Class[oldInputClass[Writable, Writable]]]
-
+    var inputFormatClassFinal: Class[oldInputClass[Writable, Writable]] = inputFormatClass
+    if(sparkSession.sqlContext.conf.combineHiveInputSplitsEnabled &&
+      HiveTableUtil.combineMap.contains(inputFormatClassFinal.getName)) {
+      inputFormatClassFinal = Utils.classForName(
+        HiveTableUtil.combineMap(inputFormatClassFinal.getName)).
+        asInstanceOf[Class[oldInputClass[Writable, Writable]]]
+    }
     val rdd = new HadoopRDD(
       sparkSession.sparkContext,
       _broadcastedHadoopConf.asInstanceOf[Broadcast[SerializableConfiguration]],
       Some(initializeJobConfFunc),
-      inputFormatClass,
+      inputFormatClassFinal,
       classOf[Writable],
       classOf[Writable],
       _minSplitsPerRDD)
@@ -337,10 +360,16 @@ class HadoopTableReader(
     HadoopTableReader.initializeLocalJobConfFunc(path, tableDesc)(newJobConf)
     val inputFormatClass = tableDesc.getInputFileFormatClass
       .asInstanceOf[Class[newInputClass[Writable, Writable]]]
-
+    var inputFormatClassFinal: Class[newInputClass[Writable, Writable]] = inputFormatClass
+    if(sparkSession.sqlContext.conf.combineHiveInputSplitsEnabled &&
+      HiveTableUtil.combineMap.contains(inputFormatClassFinal.getName)) {
+      inputFormatClassFinal = Utils.classForName(
+        HiveTableUtil.combineMap(inputFormatClassFinal.getName)).
+        asInstanceOf[Class[newInputClass[Writable, Writable]]]
+    }
     val rdd = new NewHadoopRDD(
       sparkSession.sparkContext,
-      inputFormatClass,
+      inputFormatClassFinal,
       classOf[Writable],
       classOf[Writable],
       newJobConf
@@ -353,6 +382,27 @@ class HadoopTableReader(
 }
 
 private[hive] object HiveTableUtil {
+
+  val combineMap = Map(
+    "org.apache.hadoop.mapred.SequenceFileInputFormat" ->
+      "org.apache.hadoop.mapred.lib.CombineSequenceFileInputFormat",
+
+    "org.apache.hadoop.hive.ql.io.RCFileInputFormat" ->
+      "org.apache.spark.sql.hive.io.CombineRCFileInputFormat",
+
+    "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat" ->
+      "org.apache.spark.sql.hive.io.CombineParquetInputFormat",
+
+    "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat" ->
+      "org.apache.spark.sql.hive.io.CombineOrcInputFormat",
+
+    "org.apache.hadoop.mapred.TextInputFormat" ->
+      "org.apache.hadoop.mapred.lib.CombineTextInputFormat",
+
+    "org.apache.hadoop.hive.ql.io.avro.AvroContainerInputFormat" ->
+      "org.apache.spark.sql.hive.io.CombineAvroContainerInputFormat"
+  )
+
 
   // copied from PlanUtils.configureJobPropertiesForStorageHandler(tableDesc)
   // that calls Hive.get() which tries to access metastore, but it's not valid in runtime

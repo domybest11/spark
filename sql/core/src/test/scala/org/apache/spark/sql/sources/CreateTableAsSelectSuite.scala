@@ -85,20 +85,22 @@ class CreateTableAsSelectSuite extends DataSourceTest with SharedSparkSession {
     path.mkdir()
     path.setWritable(false)
 
-    val e = intercept[SparkException] {
-      sql(
-        s"""
-           |CREATE TABLE jsonTable
-           |USING json
-           |OPTIONS (
-           |  path '${childPath.toURI}'
-           |) AS
-           |SELECT a, b FROM jt
+    if (System.getProperties.get("user.name") != "root") {
+      val e = intercept[SparkException] {
+        sql(
+          s"""
+             |CREATE TABLE jsonTable
+             |USING json
+             |OPTIONS (
+             |  path '${childPath.toURI}'
+             |) AS
+             |SELECT a, b FROM jt
          """.stripMargin)
-      sql("SELECT a, b FROM jsonTable").collect()
-    }
+        sql("SELECT a, b FROM jsonTable").collect()
+      }
 
-    assert(e.getMessage().contains("Job aborted"))
+      assert(e.getMessage().contains("Job aborted"))
+    }
     path.setWritable(true)
   }
 

@@ -100,6 +100,7 @@ class SQLExecutionUIData(
      */
     @JsonDeserialize(keyAs = classOf[JLong])
     val metricValues: Map[Long, String]) {
+  @volatile var finishAndReport: Boolean = false
 
   @JsonIgnore @KVIndex("completionTime")
   private def completionTimeIndex: Long = completionTime.map(_.getTime).getOrElse(-1L)

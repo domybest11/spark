@@ -17,18 +17,19 @@
 
 package org.apache.spark.sql.hive.thriftserver.ui
 
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
-
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import org.apache.hive.service.server.HiveServer2
-
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.Status.LIVE_ENTITY_UPDATE_PERIOD
+import org.apache.spark.metrics.event.LogErrorWrapEvent
 import org.apache.spark.scheduler._
 import org.apache.spark.sql.hive.thriftserver.HiveThriftServer2.ExecutionState
+import org.apache.spark.sql.hive.thriftserver.SparkSQLEnv
+import org.apache.spark.sql.hive.thriftserver.status.SQLJobData
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.status.{ElementTrackingStore, KVUtils, LiveEntity}
 
@@ -39,10 +40,20 @@ private[thriftserver] class HiveThriftServer2Listener(
     kvstore: ElementTrackingStore,
     sparkConf: SparkConf,
     server: Option[HiveServer2],
-    live: Boolean = true) extends SparkListener with Logging {
+    live: Boolean = true,
+    val executionQueue: LinkedBlockingQueue[LiveExecutionData],
+    val logErrorQueue: Option[LinkedBlockingQueue[LogErrorWrapEvent]])
+  extends SparkListener with Logging {
 
   private val sessionList = new ConcurrentHashMap[String, LiveSessionData]()
   private val executionList = new ConcurrentHashMap[String, LiveExecutionData]()
+
+  def getSessionList: Seq[LiveSessionData] = synchronized {
+    sessionList.values().toArray().toSeq.asInstanceOf[Seq[LiveSessionData]]
+  }
+
+  def getExecutionList: Seq[LiveExecutionData] = synchronized {
+    executionList.values.toArray().toSeq.asInstanceOf[Seq[LiveExecutionData]] }
 
   private val (retainedStatements: Int, retainedSessions: Int) = {
     (sparkConf.get(SQLConf.THRIFTSERVER_UI_STATEMENT_LIMIT),
@@ -129,6 +140,7 @@ private[thriftserver] class HiveThriftServer2Listener(
 
   private def onSessionCreated(e: SparkListenerThriftServerSessionCreated): Unit = {
     val session = getOrCreateSession(e.sessionId, e.startTime, e.ip, e.userName)
+    session.statementType = e.sessionType
     sessionList.put(e.sessionId, session)
     updateLiveStore(session)
   }
@@ -154,7 +166,7 @@ private[thriftserver] class HiveThriftServer2Listener(
     executionList.put(e.id, executionData)
     executionData.groupId = e.groupId
     updateLiveStore(executionData)
-
+    executionQueue.offer(executionData)
     Option(sessionList.get(e.sessionId)) match {
       case Some(sessionData) =>
         sessionData.totalExecution += 1
@@ -170,6 +182,7 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.executePlan = e.executionPlan
         executionData.state = ExecutionState.COMPILED
         updateLiveStore(executionData)
+        executionQueue.offer(executionList.get(e.id))
       case None => logWarning(s"onOperationParsed called with unknown operation id: ${e.id}")
     }
 
@@ -179,6 +192,8 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.finishTimestamp = e.finishTime
         executionData.state = ExecutionState.CANCELED
         updateLiveStore(executionData)
+        executionList.get(e.id).finishOrErroAndReport = true
+        executionQueue.offer(executionList.get(e.id))
       case None => logWarning(s"onOperationCanceled called with unknown operation id: ${e.id}")
     }
 
@@ -188,6 +203,8 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.finishTimestamp = e.finishTime
         executionData.state = ExecutionState.TIMEDOUT
         updateLiveStore(executionData)
+        executionList.get(e.id).finishOrErroAndReport = true
+        executionQueue.offer(executionList.get(e.id))
       case None => logWarning(s"onOperationCanceled called with unknown operation id: ${e.id}")
     }
 
@@ -198,6 +215,14 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.detail = e.errorMsg
         executionData.state = ExecutionState.FAILED
         updateLiveStore(executionData)
+        executionList.get(e.id).finishOrErroAndReport = true
+        executionQueue.offer(executionList.get(e.id))
+        if (logErrorQueue.isDefined) {
+          logErrorQueue.get.offer(new LogErrorWrapEvent("SparkThriftServer", "Error",
+            executionList.get(e.id).statementType, e.traceId,
+            SparkSQLEnv.sparkContext.getConf.get("spark.app.id"),
+            System.currentTimeMillis, e.errorMsg, e.errorTrace))
+        }
       case None => logWarning(s"onOperationError called with unknown operation id: ${e.id}")
     }
 
@@ -207,6 +232,8 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.finishTimestamp = e.finishTime
         executionData.state = ExecutionState.FINISHED
         updateLiveStore(executionData)
+        executionList.get(e.id).finishOrErroAndReport = true
+        executionQueue.offer(executionList.get(e.id))
       case None => logWarning(s"onOperationFinished called with unknown operation id: ${e.id}")
     }
 
@@ -265,7 +292,7 @@ private[thriftserver] class HiveThriftServer2Listener(
     }
     val view = kvstore.view(classOf[ExecutionInfo]).index("finishTime").first(0L)
     val toDelete = KVUtils.viewToSeq(view, countToDelete.toInt) { j =>
-      j.finishTimestamp != 0
+      j.finishTimestamp != 0 && j.finishOrErroAndReport
     }
     toDelete.foreach { j => kvstore.delete(j.getClass, j.execId) }
   }
@@ -307,9 +334,13 @@ private[thriftserver] class LiveExecutionData(
     var closeTimestamp: Long = 0L
     var executePlan: String = ""
     var detail: String = ""
+    var statementType: String = ""
     var state: ExecutionState.Value = ExecutionState.STARTED
     val jobId: ArrayBuffer[String] = ArrayBuffer[String]()
     var groupId: String = ""
+    var finishOrErroAndReport: Boolean = false
+    var jobs : ListBuffer[SQLJobData] = ListBuffer.empty
+    var executionId : Long = -1
 
   override protected def doUpdate(): Any = {
     new ExecutionInfo(
@@ -324,7 +355,8 @@ private[thriftserver] class LiveExecutionData(
       detail,
       state,
       jobId,
-      groupId)
+      groupId,
+      finishOrErroAndReport)
   }
 }
 
@@ -334,6 +366,7 @@ private[thriftserver] class LiveSessionData(
     val ip: String,
     val username: String) extends LiveEntity {
 
+  var statementType: String = ""
   var finishTimestamp: Long = 0L
   var totalExecution: Int = 0
 

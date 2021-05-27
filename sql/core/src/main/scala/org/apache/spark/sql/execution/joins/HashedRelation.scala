@@ -27,7 +27,7 @@ import org.apache.spark.internal.config.{BUFFER_PAGESIZE, MEMORY_OFFHEAP_ENABLED
 import org.apache.spark.memory._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.plans.physical.BroadcastMode
+import org.apache.spark.sql.catalyst.plans.physical.RowBroadcastMode
 import org.apache.spark.sql.types.LongType
 import org.apache.spark.unsafe.Platform
 import org.apache.spark.unsafe.map.BytesToBytesMap
@@ -1127,7 +1127,7 @@ case object HashedRelationWithAllNullKeys extends HashedRelation {
 
 /** The HashedRelationBroadcastMode requires that rows are broadcasted as a HashedRelation. */
 case class HashedRelationBroadcastMode(key: Seq[Expression], isNullAware: Boolean = false)
-  extends BroadcastMode {
+  extends RowBroadcastMode  {
 
   override def transform(rows: Array[InternalRow]): HashedRelation = {
     transform(rows.iterator, Some(rows.length))

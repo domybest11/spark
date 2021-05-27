@@ -92,7 +92,7 @@ private[hive] object SparkSQLCLIDriver extends Logging {
     val hadoopConf = SparkHadoopUtil.get.newConfiguration(sparkConf)
     val extraConfigs = HiveUtils.formatTimeVarsForHiveClient(hadoopConf)
 
-    val cliConf = HiveClientImpl.newHiveConf(sparkConf, hadoopConf, extraConfigs)
+    val cliConf = HiveClientImpl.newHiveConf(sparkConf, hadoopConf, extraConfigs)._1
 
     val sessionState = new CliSessionState(cliConf)
 
@@ -387,16 +387,15 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
             rc.getException match {
               case e: AnalysisException => e.cause match {
                 case Some(_) if !sessionState.getIsSilent =>
-                  err.println(
-                    s"""Error in query: ${e.getMessage}
-                       |${org.apache.hadoop.util.StringUtils.stringifyException(e)}
+                  logError( s"""Error in query: ${e.getMessage}
+                               |${org.apache.hadoop.util.StringUtils.stringifyException(e)}
                      """.stripMargin)
                 // For analysis exceptions in silent mode or simple ones that only related to the
                 // query itself, such as `NoSuchDatabaseException`, only the error is printed out
                 // to the console.
-                case _ => err.println(s"""Error in query: ${e.getMessage}""")
+                case _ =>  logError(s"""Error in query: ${e.getMessage}""")
               }
-              case _ => err.println(rc.getErrorMessage())
+              case _ => logError(s"""Error in query: ${rc.getErrorMessage()}""")
             }
             driver.close()
             return ret

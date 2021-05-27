@@ -140,7 +140,7 @@ Results [7]: [i_product_name#16, i_brand#17, i_class#18, i_category#19, spark_gr
 
 (25) Exchange
 Input [7]: [i_product_name#16, i_brand#17, i_class#18, i_category#19, spark_grouping_id#20, sum#23, count#24]
-Arguments: hashpartitioning(i_product_name#16, i_brand#17, i_class#18, i_category#19, spark_grouping_id#20, 5), true, [id=#25]
+Arguments: hashpartitioning(i_product_name#16, i_brand#17, i_class#18, i_category#19, spark_grouping_id#20, 5), ENSURE_REQUIREMENTS, [id=#25]
 
 (26) HashAggregate [codegen id : 5]
 Input [7]: [i_product_name#16, i_brand#17, i_class#18, i_category#19, spark_grouping_id#20, sum#23, count#24]

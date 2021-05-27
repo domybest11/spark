@@ -26,7 +26,7 @@ import scala.io.Codec
 
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.io.{LongWritable, Text}
-import org.apache.hadoop.mapred.{FileSplit, JobConf, TextInputFormat}
+import org.apache.hadoop.mapred.{FileSplit, InputSplit, JobConf, TextInputFormat}
 import org.scalatest.concurrent.Eventually
 
 import org.apache.spark._
@@ -274,7 +274,7 @@ class PipedRDDSuite extends SparkFunSuite with SharedSparkContext with Eventuall
   def generateFakeHadoopPartition(): HadoopPartition = {
     val split = new FileSplit(new Path("/some/path"), 0, 1,
       Array[String]("loc1", "loc2", "loc3", "loc4", "loc5"))
-    new HadoopPartition(sc.newRddId(), 1, split)
+    new HadoopPartition(sc.newRddId(), 1, new SerializableWritable[InputSplit](split))
   }
 
 }

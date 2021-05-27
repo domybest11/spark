@@ -28,8 +28,8 @@ class JoinSelectionHelperSuite extends PlanTest with JoinSelectionHelper {
 
   private val left = StatsTestPlan(
     outputList = Seq('a.int, 'b.int, 'c.int),
-    rowCount = 20000000,
-    size = Some(20000000),
+    rowCount = 30000000,
+    size = Some(30000000),
     attributeStats = AttributeMap(Seq()))
 
   private val right = StatsTestPlan(
