@@ -186,11 +186,12 @@ private[hive] trait SaveAsHiveFile extends DataWritingCommand {
       hadoopConf: Configuration,
       stagingDir: String): Path = {
     val extURI: URI = path.toUri
-    if (extURI.getScheme == "viewfs") {
-      getExtTmpPathRelTo(path.getParent, hadoopConf, stagingDir)
-    } else {
-      new Path(getExternalScratchDir(extURI, hadoopConf, stagingDir), "-ext-10000")
-    }
+//    if (extURI.getScheme == "viewfs") {
+//      getExtTmpPathRelTo(path.getParent, hadoopConf, stagingDir)
+//    } else {
+//      new Path(getExternalScratchDir(extURI, hadoopConf, stagingDir), "-ext-10000")
+//    }
+    new Path(getExternalScratchDir(extURI, hadoopConf, stagingDir), "-ext-10000")
   }
 
   private def getExtTmpPathRelTo(
