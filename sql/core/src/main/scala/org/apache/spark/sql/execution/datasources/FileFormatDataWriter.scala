@@ -17,10 +17,9 @@
 package org.apache.spark.sql.execution.datasources
 
 import scala.collection.mutable
-
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.TaskAttemptContext
-
+import org.apache.spark.internal.Logging
 import org.apache.spark.internal.io.FileCommitProtocol
 import org.apache.spark.internal.io.FileCommitProtocol.TaskCommitMessage
 import org.apache.spark.sql.catalyst.InternalRow
@@ -38,7 +37,7 @@ import org.apache.spark.util.SerializableConfiguration
 abstract class FileFormatDataWriter(
     description: WriteJobDescription,
     taskAttemptContext: TaskAttemptContext,
-    committer: FileCommitProtocol) extends DataWriter[InternalRow] {
+    committer: FileCommitProtocol) extends DataWriter[InternalRow]  with Logging{
   /**
    * Max number of files a single task writes out due to file size. In most cases the number of
    * files written should be very small. This is just a safe guard to protect some really bad
@@ -119,7 +118,7 @@ class SingleDirectoryDataWriter(
       taskAttemptContext,
       None,
       f"-c$fileCounter%03d" + ext)
-
+    logInfo(s"current write path: $currentPath")
     currentWriter = description.outputWriterFactory.newInstance(
       path = currentPath,
       dataSchema = description.dataColumns.toStructType,
@@ -234,7 +233,7 @@ class DynamicPartitionDataWriter(
     } else {
       committer.newTaskTempFile(taskAttemptContext, partDir, ext)
     }
-
+    logInfo(s"current write path: $currentPath")
     currentWriter = description.outputWriterFactory.newInstance(
       path = currentPath,
       dataSchema = description.dataColumns.toStructType,

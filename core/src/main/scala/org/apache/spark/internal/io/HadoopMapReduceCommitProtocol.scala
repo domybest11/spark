@@ -202,7 +202,8 @@ class HadoopMapReduceCommitProtocol(
         logDebug(s"Clean up default partition directories for overwriting: $partitionPaths")
         for (part <- partitionPaths) {
           val finalPartPath = new Path(path, part)
-          if (!fs.delete(finalPartPath, true) && !fs.exists(finalPartPath.getParent)) {
+          fs.delete(finalPartPath, true)
+          if (!fs.exists(finalPartPath.getParent)) {
             // According to the official hadoop FileSystem API spec, delete op should assume
             // the destination is no longer present regardless of return value, thus we do not
             // need to double check if finalPartPath exists before rename.

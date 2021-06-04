@@ -15,20 +15,19 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hive.merge
-
-import java.io.{DataOutputStream, InputStream}
+package org.apache.spark.sql.merge
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hive.ql.exec.AbstractFileMergeOperator
 import org.apache.hadoop.hive.ql.plan.FileMergeDesc
 import org.apache.hadoop.hive.ql.plan.api.OperatorType
-import org.apache.hadoop.io.compress.{CodecPool, CompressionCodec, CompressionCodecFactory, SplittableCompressionCodec}
 import org.apache.hadoop.io.compress.SplittableCompressionCodec.READ_MODE
-
+import org.apache.hadoop.io.compress.{CodecPool, CompressionCodec, CompressionCodecFactory, SplittableCompressionCodec}
 import org.apache.spark.SparkException
 import org.apache.spark.internal.Logging
+
+import java.io.{DataOutputStream, InputStream}
 
 class TextFileMergeOperator(conf: Configuration)
   extends AbstractFileMergeOperator[FileMergeDesc] with Logging {

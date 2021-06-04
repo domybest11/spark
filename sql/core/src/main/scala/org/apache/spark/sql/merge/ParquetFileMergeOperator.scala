@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hive.merge
-
-import java.util
+package org.apache.spark.sql.merge
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -25,11 +23,12 @@ import org.apache.hadoop.hive.ql.exec.AbstractFileMergeOperator
 import org.apache.hadoop.hive.ql.plan.FileMergeDesc
 import org.apache.hadoop.hive.ql.plan.api.OperatorType
 import org.apache.parquet.hadoop.{ParquetFileWriter, ParquetWriter}
-
 import org.apache.spark.SparkException
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.datasources.parquet.SparkToParquetSchemaConverter
 import org.apache.spark.sql.types.StructType
+
+import java.util
 
 class ParquetFileMergeOperator(conf: Configuration, schema: StructType)
   extends AbstractFileMergeOperator[FileMergeDesc] with Logging {

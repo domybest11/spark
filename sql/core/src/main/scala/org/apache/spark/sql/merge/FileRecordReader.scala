@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.spark.sql.hive.merge
+package org.apache.spark.sql.merge
 
 import org.apache.hadoop.mapred.RecordReader
 
