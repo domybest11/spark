@@ -18,11 +18,13 @@
 package org.apache.spark.sql.execution.datasources
 
 import java.util.{Date, UUID}
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileAlreadyExistsException, Path}
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
+
 import org.apache.spark._
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.io.{FileCommitProtocol, SparkHadoopWriterUtils}
@@ -37,7 +39,7 @@ import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReferences
 import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, ExprCode}
 import org.apache.spark.sql.catalyst.plans.physical.HashPartitioning
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateTimeUtils}
-import org.apache.spark.sql.execution.{ProjectExec, SQLExecution, SortExec, SparkPlan}
+import org.apache.spark.sql.execution.{ProjectExec, SortExec, SparkPlan, SQLExecution}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.unsafe.types.UTF8String
@@ -231,7 +233,10 @@ object FileFormatWriter extends Logging {
     }
   }
 
-  /** Writes rdd into outputSpec, move to final path by committer, it's only used by merge small file. */
+  /* Writes rdd into outputSpec,
+   * move to final path by committer,
+   * it's only used by merge small file.
+   */
   def writeHiveTableRDD(
       sparkSession: SparkSession,
       rdd: RDD[InternalRow],
@@ -316,7 +321,7 @@ object FileFormatWriter extends Logging {
       rdd: RDD[InternalRow],
       fileFormat: FileFormat,
       partitionCommitterMap: Map[Int, (FileCommitProtocol, String)],
-      committerJobPair:Seq[(FileCommitProtocol,Job)],
+      committerJobPair: Seq[(FileCommitProtocol, Job)],
       outputSpec: OutputSpec,
       hadoopConf: Configuration,
       partitionColumns: Seq[Attribute],
@@ -351,9 +356,7 @@ object FileFormatWriter extends Logging {
       statsTrackers = statsTrackers
     )
 
-    committerJobPair.foreach{ case (commit, job)=>
-      commit.setupJob(job)
-    }
+    committerJobPair.foreach{pair => pair._1.setupJob(pair._2)}
 
     try {
       val jobIdInstant = new Date().getTime
@@ -376,7 +379,7 @@ object FileFormatWriter extends Logging {
         })
 
       val commitMsgs = ret.map(_.commitMsg)
-      committerJobPair.foreach{pair=>pair._1.commitJob(pair._2,commitMsgs)}
+      committerJobPair.foreach{pair => pair._1.commitJob(pair._2, commitMsgs)}
       logInfo(s"Write Job ${description.uuid} committed.")
 
       processStats(description.statsTrackers, ret.map(_.summary.stats))
@@ -386,7 +389,7 @@ object FileFormatWriter extends Logging {
       ret.map(_.summary.updatedPartitions).reduceOption(_ ++ _).getOrElse(Set.empty)
     } catch { case cause: Throwable =>
       logError(s"Aborting job ${description.uuid}.", cause)
-      committerJobPair.foreach{pair=>pair._1.abortJob(pair._2)}
+      committerJobPair.foreach{pair => pair._1.abortJob(pair._2)}
       throw new SparkException("Job aborted.", cause)
     }
   }

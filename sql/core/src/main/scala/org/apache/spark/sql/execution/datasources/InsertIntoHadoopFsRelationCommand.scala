@@ -17,11 +17,14 @@
 
 package org.apache.spark.sql.execution.datasources
 
-import java.util
 import java.io.IOException
+
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.mapreduce.Job
 import org.apache.hadoop.mapreduce.lib.output.{FileOutputCommitter, FileOutputFormat}
+
 import org.apache.spark.SparkException
 import org.apache.spark.internal.io.FileCommitProtocol
 import org.apache.spark.rdd.{RDD, UnionPartition, UnionRDD}
@@ -39,9 +42,6 @@ import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PartitionOverwriteMode
 import org.apache.spark.sql.merge.MergeUtils
 import org.apache.spark.sql.util.SchemaUtils
-
-import scala.collection.JavaConversions.asJavaCollection
-import scala.collection.mutable.ArrayBuffer
 
 
 
@@ -129,16 +129,17 @@ case class InsertIntoHadoopFsRelationCommand(
     val canMerge = mergeEnabled && bucketSpec.isEmpty && customPartitionLocations.isEmpty
 
     val mergeDir = ".merge-temp-" + java.util.UUID.randomUUID().toString
-    if(canMerge){
+    if (canMerge) {
       qualifiedOutputPath = new Path(qualifiedOutputPath, mergeDir)
     }
     logInfo("merge job tmp output path " + qualifiedOutputPath)
 
     val jobId = java.util.UUID.randomUUID().toString
+    // if can merge writer data into tmp path
     val committer = FileCommitProtocol.instantiate(
       sparkSession.sessionState.conf.fileCommitProtocolClass,
       jobId = jobId,
-      outputPath = qualifiedOutputPath.toString,//if can merge writer data into tmp path
+      outputPath = qualifiedOutputPath.toString,
       dynamicPartitionOverwrite = dynamicPartitionOverwrite)
 
 
@@ -219,14 +220,15 @@ case class InsertIntoHadoopFsRelationCommand(
 
       logInfo("updated partition paths " + updatedPartitionPaths.mkString(","))
       logInfo("updated partition total " + updatedPartitionPaths.size)
-      if(canMerge){
-        updatedPartitionPaths = updatedPartitionPaths.map(p=>p.replace("/"+ mergeDir,""))
+      if (canMerge) {
+        updatedPartitionPaths = updatedPartitionPaths.map(p => p.replace("/" + mergeDir, ""))
         try {
           logInfo("enable merge files for " + qualifiedOutputPath)
-          val directRenamePathList: Seq[String] = Seq.empty
+          val directRenamePathList: ListBuffer[String] = ListBuffer.empty
           val dataAttr = outputColumns.filterNot(AttributeSet(partitionColumns).contains)
           if (partitionColumns.isEmpty) {
             logInfo("non partition insert, merge single dir " + qualifiedOutputPath)
+            // scalastyle:off
             val rePartitionNum = MergeUtils.getTargetFileNum(qualifiedOutputPath, hadoopConf, avgConditionSize, outputAverageSize)
             logInfo(s"[mergeFile] static $qualifiedOutputPath rePartionNum is: " + rePartitionNum)
             if (rePartitionNum > 0) {
@@ -242,7 +244,7 @@ case class InsertIntoHadoopFsRelationCommand(
             } else {
               logInfo(s"direct rename $qualifiedOutputPath's files")
               val files = fs.listStatus(qualifiedOutputPath)
-              files.foreach(file => directRenamePathList.add(file.getPath.toString))
+              files.foreach(file => directRenamePathList+= file.getPath.toString)
             }
           } else {
             logInfo("has partition insert, merge multi dir " + qualifiedOutputPath)
@@ -254,7 +256,7 @@ case class InsertIntoHadoopFsRelationCommand(
             if (mergeRule.nonEmpty) {
               val committerJobPair = new ArrayBuffer[(FileCommitProtocol, Job)]()
               val rdds = mergeRule.map { r =>
-                val finalPartPath = r.path.toString.replace("/"+mergeDir, "")
+                val finalPartPath = r.path.toString.replace("/" + mergeDir, "")
                 logInfo(s"[makeMergedRDDForPartitionedTable] create rdd for ${r.path} to $finalPartPath coalesce ${r.numFiles}")
                 val partitionCommitter = FileCommitProtocol.instantiate(
                   sparkSession.sessionState.conf.fileCommitProtocolClass,
@@ -275,10 +277,10 @@ case class InsertIntoHadoopFsRelationCommand(
 
               // index partition id of unionrdd with repsective committer
               val union = new UnionRDD(rdds.head.context, rdds)
-              val rddIndex2Committer = union.rdds.zipWithIndex.map(_._2).zip(committerJobPair.map(pair=>(pair._1,pair._2.getConfiguration.get(FileOutputFormat.OUTDIR)))).toMap
+              val rddIndex2Committer = union.rdds.zipWithIndex.map(_._2).zip(committerJobPair.map(pair => (pair._1, pair._2.getConfiguration.get(FileOutputFormat.OUTDIR)))).toMap
               val map4Committer = union.getPartitions.map { p =>
                 val up = p.asInstanceOf[UnionPartition[RDD[InternalRow]]]
-                val (withCommitter, finalPath)= rddIndex2Committer(up.parentRddIndex)
+                val (withCommitter, finalPath) = rddIndex2Committer(up.parentRddIndex)
                 logInfo(s"partition index ${up.index} correspond with rdd ${up.parentRddIndex} writer data into ${finalPath}")
                 (up.index, (withCommitter, finalPath))
               }.toMap
@@ -292,12 +294,13 @@ case class InsertIntoHadoopFsRelationCommand(
             directRenamePathList.foreach { path_string =>
               val path = new Path(path_string)
               if (fs.isDirectory(path)) {
+                // scalastyle:off
                 val (destPath, existed) = MergeUtils.checkPartitionDirExists(fs, path, qualifiedOutputPath, finalOutputPath)
                 if (existed) {
                   val files = fs.listStatus(path)
                   files.foreach { f =>
-                    if(f.getPath.getName == FileOutputCommitter.SUCCEEDED_FILE_NAME){
-                      if(!fs.rename(f.getPath, destPath))
+                    if (f.getPath.getName == FileOutputCommitter.SUCCEEDED_FILE_NAME) {
+                      if (!fs.rename(f.getPath, destPath))
                         logInfo("skip rename marked success file, maybe already exists")
                     } else {
                       if (!fs.rename(f.getPath, destPath)) throw new IOException(s"direct rename fail from ${f.getPath} to $destPath")
@@ -309,8 +312,8 @@ case class InsertIntoHadoopFsRelationCommand(
                   logInfo("direct rename dir [" + path + " to " + destPath + "]")
                 }
               } else {
-                if(path.getName == FileOutputCommitter.SUCCEEDED_FILE_NAME){
-                  if(!fs.rename(path, finalOutputPath))
+                if (path.getName == FileOutputCommitter.SUCCEEDED_FILE_NAME) {
+                  if (!fs.rename(path, finalOutputPath))
                     logInfo("skip rename marked success file, maybe already exists")
                 } else {
                   if (!fs.rename(path, finalOutputPath)) throw new IOException(s"direct rename fail from $path to $finalOutputPath")
@@ -353,7 +356,6 @@ case class InsertIntoHadoopFsRelationCommand(
 
     Seq.empty[Row]
   }
-
 
 
   /**
