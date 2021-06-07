@@ -1,18 +1,25 @@
+
 package org.apache.spark.sql.merge
 
+import java.io.IOException
 import java.nio.file.Paths
+import java.util.concurrent.TimeUnit.MILLISECONDS
+
 import scala.collection.JavaConverters._
+import scala.collection.mutable
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.common.FileUtils
+import org.apache.hadoop.hive.metastore.{TableType => HiveTableType}
 import org.apache.hadoop.hive.metastore.api.{FieldSchema, Order}
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants.DDL_TIME
-import org.apache.hadoop.hive.ql.metadata.{Table => HiveTable}
-import org.apache.hadoop.hive.metastore.{TableType => HiveTableType}
 import org.apache.hadoop.hive.ql.exec.{AbstractFileMergeOperator, OrcFileMergeOperator, RCFileMergeOperator, Utilities}
 import org.apache.hadoop.hive.ql.io.HiveOutputFormat
 import org.apache.hadoop.hive.ql.io.orc.OrcFileStripeMergeRecordReader
 import org.apache.hadoop.hive.ql.io.rcfile.merge.RCFileBlockMergeRecordReader
+import org.apache.hadoop.hive.ql.metadata.{Table => HiveTable}
 import org.apache.hadoop.hive.ql.metadata.HiveException
 import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer.HIVE_COLUMN_ORDER_ASC
 import org.apache.hadoop.hive.ql.plan.{FileMergeDesc, OrcFileMergeDesc, RCFileMergeDesc, TableDesc}
@@ -20,11 +27,12 @@ import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.mapred.{FileOutputFormat, FileSplit, JobConf, RecordReader}
 import org.apache.hadoop.security.UserGroupInformation
+
 import org.apache.spark.{SparkContext, SparkException, TaskContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.{AnalysisException, SparkSession}
+import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable, CatalogTableType, CatalogUtils}
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.util.CharVarcharUtils
@@ -34,12 +42,6 @@ import org.apache.spark.sql.execution.datasources.{FileFormat, HadoopFsRelation,
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.{ArrayType, DataType, MapType, NullType, StructField, StructType}
 import org.apache.spark.util.{RpcUtils, SerializableJobConf, Utils}
-
-import java.io.IOException
-import java.util.concurrent.TimeUnit.MILLISECONDS
-import scala.collection.JavaConversions.asJavaCollection
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 
 object MergeUtils extends Logging {
 
@@ -53,6 +55,7 @@ object MergeUtils extends Logging {
 
   def getMergeFileReader[K, V](outputFormat: String, file: String, conf: Configuration)
   : RecordReader[K, V] = {
+    //scalastyle:off
     val fs = FileSystem.get(conf)
     val fileStatus = fs.getFileStatus(new Path(file))
     outputFormat match {
@@ -267,12 +270,13 @@ object MergeUtils extends Logging {
 
   case class DynamicMergeRule(path: String, files: Seq[String], numFiles: Int)
 
-  def generateDynamicMergeRule(fs: FileSystem,
-                               path: Path,
-                               conf: Configuration,
-                               avgConditionSize: Long,
-                               targetFileSize: Long,
-                               directRenamePathList: Seq[String]): Seq[DynamicMergeRule] = {
+  def generateDynamicMergeRule(
+     fs: FileSystem,
+     path: Path,
+     conf: Configuration,
+     avgConditionSize: Long,
+     targetFileSize: Long,
+     directRenamePathList: ListBuffer[String]): Seq[DynamicMergeRule] = {
     val tmpDynamicPartInfos = getTmpDynamicPartPathInfo(fs, path, conf)
     logDebug("[generateDynamicMergeRule] partInfo size: " + tmpDynamicPartInfos.size)
     val avgMergeSize: Long = if (!tmpDynamicPartInfos.isEmpty) {
@@ -290,7 +294,7 @@ object MergeUtils extends Logging {
           logInfo("mark to rename [" + part._1.toString + " to "
             + part._1.toString.replace("-ext-10000", TEMP_DIR)
             + "]; number of files under " + part._1.toString + " is: " + part._2.numFiles)
-          directRenamePathList.add(part._1)
+          directRenamePathList += part._1
         } else {
           val numFiles = computeMergePartitionNum(part._2, avgConditionSize, targetFileSize)
           mergeRule += DynamicMergeRule(part._1, part._2.files, numFiles)
@@ -301,55 +305,63 @@ object MergeUtils extends Logging {
   }
 
   def getRdd(
-     sparkSession:SparkSession,
-     input:Path, dataAttr:Seq[Attribute],
-     fileFormat:FileFormat,
-     options: Map[String, String]): RDD[InternalRow]={
+     sparkSession: SparkSession,
+     input: Path,
+     dataAttr: Seq[Attribute],
+     fileFormat: FileFormat,
+     options: Map[String, String]): RDD[InternalRow] = {
     val fi = new InMemoryFileIndex(sparkSession, Seq(input), Map.empty, None)
-    val relation = HadoopFsRelation(fi,new StructType(),dataAttr.toStructType,None,fileFormat,options)(sparkSession)
+    val relation = HadoopFsRelation(fi, new StructType(), dataAttr.toStructType, None, fileFormat, options)(sparkSession)
     val fsScanExec = FileSourceScanExec(relation, dataAttr, dataAttr.toStructType, Seq.empty, None, None, Seq.empty, None)
-    QueryExecution.prepareExecutedPlan(sparkSession,fsScanExec).execute()
+    QueryExecution.prepareExecutedPlan(sparkSession, fsScanExec).execute()
   }
 
-  def deleteExistingPartition(fs:FileSystem, paths:Seq[Path], mergedir:String): Unit ={
-    paths.foreach{ p=>
-      val finalPartPath = new Path(p.toString.replace("/"+ mergedir,""))
-      if(fs.exists(finalPartPath)){
-        fs.delete(finalPartPath,true)
+  def deleteExistingPartition(fs: FileSystem, paths: Seq[Path], mergedir: String): Unit = {
+    paths.foreach { p =>
+      val finalPartPath = new Path(p.toString.replace("/" + mergedir, ""))
+      if (fs.exists(finalPartPath)) {
+        fs.delete(finalPartPath, true)
         logInfo("delete overwrite dir " + finalPartPath)
       }
     }
   }
 
   //compatible with insert into/overwrite case that the dest dir handle
-  def checkPartitionDirExists(fs: FileSystem, tempPath:Path, qualifiedPath:Path, finalOutputPath:Path):(Path,Boolean)={
+  def checkPartitionDirExists(fs: FileSystem, tempPath: Path, qualifiedPath: Path, finalOutputPath: Path): (Path, Boolean) = {
     val tempJavaPath = Paths.get(tempPath.toUri.getPath)
     val qualifiedJavaPath = Paths.get(qualifiedPath.toUri.getPath)
     val relativeJavaPath = qualifiedJavaPath.relativize(tempJavaPath)
-    val finalDestPath = new Path(finalOutputPath,relativeJavaPath.toString)
+    val finalDestPath = new Path(finalOutputPath, relativeJavaPath.toString)
     val finalDestParent = finalDestPath.getParent
-    if(!fs.exists(finalDestParent)){
+    if (!fs.exists(finalDestParent)) {
       fs.mkdirs(finalDestParent)
       logInfo("mkdir direct parent " + finalDestParent)
     }
-    if(fs.exists(finalDestPath)){
+    if (fs.exists(finalDestPath)) {
       logInfo(s"existing dest dir $finalDestPath")
       (finalDestPath, true)
-    }else{
+    } else {
       logInfo(s"non existing dest dir $finalDestPath")
       (finalDestPath, false)
     }
   }
 
 
-  def mergePathRDD(sc: SparkContext, files: Array[(String, Array[String])],
-                   numFiles: Int): RDD[(String, Array[String])] = {
+  def mergePathRDD(
+     sc: SparkContext,
+     files: Array[(String, Array[String])],
+     numFiles: Int): RDD[(String, Array[String])] = {
     sc.parallelize(files, numFiles)
   }
 
-  def mergeAction(conf: SerializableJobConf, outputClassName: String,
-                  files: Array[String], outputDir: String, tmpMergeLocationDir: String,
-                  extension: String, waitTime: Long): Unit = {
+  def mergeAction(
+     conf: SerializableJobConf,
+     outputClassName: String,
+     files: Array[String],
+     outputDir: String,
+     tmpMergeLocationDir: String,
+     extension: String,
+     waitTime: Long): Unit = {
     val jobConf = conf.value
     val context = TaskContext.get()
     val taskId = "_" + "%06d".format(context.partitionId()) + "_" + context.attemptNumber()
@@ -399,17 +411,17 @@ object MergeUtils extends Logging {
 
 
   def mergeFile(
-                 path: Path,
-                 fs: FileSystem,
-                 fileSinkConf: FileSinkDesc,
-                 conf: SerializableJobConf,
-                 directRenamePathList: Seq[String],
-                 speculationEnabled: Boolean,
-                 existDynamicPartition: Boolean,
-                 retryWaitMs: Long,
-                 avgConditionSize: Long,
-                 targetFileSize: Long,
-                 sparkSession: SparkSession): Unit = {
+     path: Path,
+     fs: FileSystem,
+     fileSinkConf: FileSinkDesc,
+     conf: SerializableJobConf,
+     directRenamePathList: ListBuffer[String],
+     speculationEnabled: Boolean,
+     existDynamicPartition: Boolean,
+     retryWaitMs: Long,
+     avgConditionSize: Long,
+     targetFileSize: Long,
+     sparkSession: SparkSession): Unit = {
     val hiveOutputFormat: HiveOutputFormat[AnyRef, Writable] = conf.value.getOutputFormat
       .asInstanceOf[HiveOutputFormat[AnyRef, Writable]]
     val extension = Utilities.getFileExtension(conf.value,
@@ -441,7 +453,8 @@ object MergeUtils extends Logging {
           specFiles.foreach(f => {
             logInfo("delete speculative task output temp file, path:" +
               f.getPath)
-            fs.delete(f.getPath)})
+            fs.delete(f.getPath)
+          })
         }
       }
     } else {
@@ -472,12 +485,12 @@ object MergeUtils extends Logging {
   }
 
 
-  def mergeHiveTableOutput(sparkSession: SparkSession,
-                           table: CatalogTable,
-                           tmpLocation: Path,
-                           hadoopConf: Configuration,
-                           existDynamicPartition: Boolean
-                          ): JobConf = {
+  def mergeHiveTableOutput(
+     sparkSession: SparkSession,
+     table: CatalogTable,
+     tmpLocation: Path,
+     hadoopConf: Configuration,
+     existDynamicPartition: Boolean): JobConf = {
     val jobConf = new JobConf(hadoopConf)
     val hiveQlTable = toHiveTable(table)
     // Have to pass the TableDesc object to RDD.mapPartitions and then instantiate new serializer
@@ -504,8 +517,8 @@ object MergeUtils extends Logging {
     FileOutputFormat.setOutputPath(jobConf, tmpLocation)
     if (mergeHiveFiles && targetFileSize > 0 &&
       MergeUtils.SUPPORTED_FORMAT.contains(outputFormatClass)) {
-      val directRenamePathList = Seq.empty[String]
-      val rollbackPathList = new java.util.ArrayList[String]()
+      val directRenamePathList = ListBuffer.empty[String]
+      val rollbackPathList = ListBuffer.empty[String]
       val fs = tmpLocation.getFileSystem(hadoopConf)
       try {
         val ignoreLocalWriter = sparkSession.conf.get(SQLConf.MERGE_FILES_IGNORE_LOCAL_WRITE)
@@ -517,10 +530,10 @@ object MergeUtils extends Logging {
         mergeFile(tmpLocation, fs, fileSinkConf, new SerializableJobConf(jobConf),
           directRenamePathList, speculationEnabled, existDynamicPartition, retryWaitMs,
           avgConditionSize, targetFileSize, sparkSession)
-        if (!directRenamePathList.isEmpty) {
+        if (directRenamePathList.nonEmpty) {
           directRenamePathList.foreach { path =>
             val destPathStr = path.replace("-ext-10000", MergeUtils.TEMP_DIR)
-            rollbackPathList.add(path)
+            rollbackPathList+= path
             logInfo("rename [" + path + " to " + destPathStr + "]")
             val destPath = new Path(destPathStr)
             if (!fs.exists(destPath.getParent)) {
@@ -534,8 +547,8 @@ object MergeUtils extends Logging {
           logInfo("Merge file of " + tmpLocation + " failed!", ex)
           fileSinkConf.dir = tmpLocation.toString
           FileOutputFormat.setOutputPath(jobConf, tmpLocation)
-          if (!rollbackPathList.isEmpty) {
-            rollbackPathList.asScala.foreach { path =>
+          if (rollbackPathList.nonEmpty) {
+            rollbackPathList.foreach { path =>
               val srcPath = path.replace("-ext-10000", MergeUtils.TEMP_DIR)
               logInfo("rename [" + srcPath + " to "
                 + path + "]")
@@ -549,9 +562,9 @@ object MergeUtils extends Logging {
 
 
   private class FileSinkDesc(
-                                        var dir: String,
-                                        var tableInfo: TableDesc,
-                                        var compressed: Boolean)
+      var dir: String,
+      var tableInfo: TableDesc,
+      var compressed: Boolean)
     extends Serializable with Logging {
     var compressCodec: String = _
     var compressType: String = _
@@ -581,16 +594,15 @@ object MergeUtils extends Logging {
   }
 
 
-
-
-
   /**
    * Converts the native table metadata representation format CatalogTable to Hive's Table.
    */
   private def toHiveTable(table: CatalogTable, userName: Option[String] = None): HiveTable = {
     case object HiveVoidType extends DataType {
       override def defaultSize: Int = 1
+
       override def asNullable: DataType = HiveVoidType
+
       override def simpleString: String = "void"
 
       def replaceVoidType(dt: DataType): DataType = dt match {
@@ -683,9 +695,9 @@ object MergeUtils extends Logging {
       }
 
       private def getColumnNamesByType(
-                                        props: Map[String, String],
-                                        colType: String,
-                                        typeName: String): Seq[String] = {
+         props: Map[String, String],
+         colType: String,
+         typeName: String): Seq[String] = {
         for {
           numCols <- props.get(s"spark.sql.sources.schema.num${colType.capitalize}Cols").toSeq
           index <- 0 until numCols.toInt
@@ -731,6 +743,7 @@ object MergeUtils extends Logging {
             s"Unknown table type is found at toHiveTableType: $t")
       }
     }
+
     def toHiveColumn(c: StructField): FieldSchema = {
       // For Hive Serde, we still need to to restore the raw type for char and varchar type.
       // When reading data in parquet, orc, or avro file format with string type for char,
@@ -768,7 +781,8 @@ object MergeUtils extends Logging {
     hiveTable.setCreateTime(MILLISECONDS.toSeconds(table.createTime).toInt)
     hiveTable.setLastAccessTime(MILLISECONDS.toSeconds(table.lastAccessTime).toInt)
     table.storage.locationUri.map(CatalogUtils.URIToString).foreach { loc =>
-      hiveTable.getTTable.getSd.setLocation(loc)}
+      hiveTable.getTTable.getSd.setLocation(loc)
+    }
     table.storage.inputFormat.map(toInputFormat).foreach(hiveTable.setInputFormatClass)
     table.storage.outputFormat.map(toOutputFormat).foreach(hiveTable.setOutputFormatClass)
     hiveTable.setSerializationLib(
