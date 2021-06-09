@@ -30,7 +30,7 @@ import org.apache.spark.sql.execution.{PartialReducerPartitionSpec, QueryExecuti
 import org.apache.spark.sql.execution.command.DataWritingCommandExec
 import org.apache.spark.sql.execution.datasources.noop.NoopDataSource
 import org.apache.spark.sql.execution.datasources.v2.V2TableWriteExec
-import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ENSURE_REQUIREMENTS, Exchange, REPARTITION, REPARTITION_WITH_NUM, ReusedExchangeExec, ShuffleExchangeExec, ShuffleExchangeLike, ShuffleOrigin}
+import org.apache.spark.sql.execution.exchange.{BroadcastExchangeExec, ENSURE_REQUIREMENTS, Exchange, REPARTITION_BY_COL, REPARTITION_BY_NUM, ReusedExchangeExec, ShuffleExchangeExec, ShuffleExchangeLike, ShuffleOrigin}
 import org.apache.spark.sql.execution.joins.{BaseJoinExec, BroadcastHashJoinExec, ShuffledHashJoinExec, ShuffledJoin, SortMergeJoinExec}
 import org.apache.spark.sql.execution.metric.SQLShuffleReadMetricsReporter
 import org.apache.spark.sql.execution.ui.SparkListenerSQLAdaptiveExecutionUpdate
@@ -1339,7 +1339,7 @@ class AdaptiveQueryExecSuite
     def hasRepartitionShuffle(plan: SparkPlan): Boolean = {
       find(plan) {
         case s: ShuffleExchangeLike =>
-          s.shuffleOrigin == REPARTITION || s.shuffleOrigin == REPARTITION_WITH_NUM
+          s.shuffleOrigin == REPARTITION_BY_COL || s.shuffleOrigin == REPARTITION_BY_NUM
         case _ => false
       }.isDefined
     }
@@ -1533,7 +1533,7 @@ class AdaptiveQueryExecSuite
         (1 to 100).map(i => TestData(i, i.toString)), 10).toDF()
 
       // partition size [1420, 1420]
-      checkNoCoalescePartitions(df.repartition(), REPARTITION)
+      checkNoCoalescePartitions(df.repartition($"key"), REPARTITION_BY_COL)
       // partition size [1140, 1119]
       checkNoCoalescePartitions(df.sort($"key"), ENSURE_REQUIREMENTS)
     }
@@ -1588,6 +1588,38 @@ class AdaptiveQueryExecSuite
       assert(coalesceReader.length == 1)
       // RANGE(10) is a very small dataset and AQE coalescing should produce one partition.
       assert(coalesceReader.head.partitionSpecs.length == 1)
+    }
+  }
+
+  test("SPARK-35650: Coalesce number of partitions by AEQ") {
+    withSQLConf(SQLConf.COALESCE_PARTITIONS_MIN_PARTITION_NUM.key -> "1") {
+      val query = "SELECT /*+ REPARTITION */ * FROM testData"
+      val (_, adaptivePlan) = runAdaptiveAndVerifyResult(query)
+      collect(adaptivePlan) {
+        case r: CustomShuffleReaderExec => r
+      } match {
+        case Seq(customShuffleReader) =>
+          assert(customShuffleReader.partitionSpecs.size === 1)
+          assert(!customShuffleReader.isLocalReader)
+        case _ =>
+          fail("There should be a CustomShuffleReaderExec")
+      }
+    }
+  }
+
+  test("SPARK-35650: Use local shuffle reader if can not coalesce number of partitions") {
+    withSQLConf(SQLConf.ADVISORY_PARTITION_SIZE_IN_BYTES.key -> "2") {
+      val query = "SELECT /*+ REPARTITION */ * FROM testData"
+      val (_, adaptivePlan) = runAdaptiveAndVerifyResult(query)
+      collect(adaptivePlan) {
+        case r: CustomShuffleReaderExec => r
+      } match {
+        case Seq(customShuffleReader) =>
+          assert(customShuffleReader.partitionSpecs.size === 4)
+          assert(customShuffleReader.isLocalReader)
+        case _ =>
+          fail("There should be a CustomShuffleReaderExec")
+      }
     }
   }
 }
