@@ -215,6 +215,7 @@ private class ShuffleStatus(
   def removeOutputsOnHost(host: String): Unit = withWriteLock {
     logDebug(s"Removing outputs for host ${host}")
     removeOutputsByFilter(x => x.host == host)
+    removeMergeResultsByFilter(x => x.host == host)
   }
 
   /**
@@ -239,6 +240,12 @@ private class ShuffleStatus(
         invalidateSerializedMapOutputStatusCache()
       }
     }
+  }
+
+  /**
+   * Removes all shuffle merge result which satisfies the filter.
+   */
+  def removeMergeResultsByFilter(f: BlockManagerId => Boolean): Unit = withWriteLock {
     for (reduceId <- mergeStatuses.indices) {
       if (mergeStatuses(reduceId) != null && f(mergeStatuses(reduceId).location)) {
         _numAvailableMergeResults -= 1
@@ -714,19 +721,20 @@ private[spark] class MapOutputTrackerMaster(
     }
   }
 
-  /** Unregister all map output information of the given shuffle. */
-  def unregisterAllMapOutput(shuffleId: Int): Unit = {
+  /** Unregister all map and merge output information of the given shuffle. */
+  def unregisterAllMapAndMergeOutput(shuffleId: Int): Unit = {
     shuffleStatuses.get(shuffleId) match {
       case Some(shuffleStatus) =>
         shuffleStatus.removeOutputsByFilter(x => true)
+        shuffleStatus.removeMergeResultsByFilter(x => true)
         incrementEpoch()
       case None =>
         throw new SparkException(
-          s"unregisterAllMapOutput called for nonexistent shuffle ID $shuffleId.")
+          s"unregisterAllMapAndMergeOutput called for nonexistent shuffle ID $shuffleId.")
     }
   }
 
-  def registerMergeResult(shuffleId: Int, reduceId: Int, status: MergeStatus) {
+  def registerMergeResult(shuffleId: Int, reduceId: Int, status: MergeStatus): Unit = {
     shuffleStatuses(shuffleId).addMergeResult(reduceId, status)
   }
 
@@ -737,30 +745,42 @@ private[spark] class MapOutputTrackerMaster(
   }
 
   /**
-   * Unregisters a merge result corresponding to the reduceId if present. If the optional mapId
-   * is specified, it will only unregister the merge result if the mapId is part of that merge
+   * Unregisters a merge result corresponding to the reduceId if present. If the optional mapIndex
+   * is specified, it will only unregister the merge result if the mapIndex is part of that merge
    * result.
    *
    * @param shuffleId the shuffleId.
    * @param reduceId  the reduceId.
    * @param bmAddress block manager address.
-   * @param mapId     the optional mapId which should be checked to see it was part of the merge
-   *                  result.
+   * @param mapIndex  the optional mapIndex which should be checked to see it was part of the
+   *                  merge result.
    */
   def unregisterMergeResult(
-    shuffleId: Int,
-    reduceId: Int,
-    bmAddress: BlockManagerId,
-    mapId: Option[Int] = None) {
+      shuffleId: Int,
+      reduceId: Int,
+      bmAddress: BlockManagerId,
+      mapIndex: Option[Int] = None): Unit = {
     shuffleStatuses.get(shuffleId) match {
       case Some(shuffleStatus) =>
         val mergeStatus = shuffleStatus.mergeStatuses(reduceId)
-        if (mergeStatus != null && (mapId.isEmpty || mergeStatus.tracker.contains(mapId.get))) {
+        if (mergeStatus != null &&
+          (mapIndex.isEmpty || mergeStatus.tracker.contains(mapIndex.get))) {
           shuffleStatus.removeMergeResult(reduceId, bmAddress)
           incrementEpoch()
         }
       case None =>
         throw new SparkException("unregisterMergeResult called for nonexistent shuffle ID")
+    }
+  }
+
+  def unregisterAllMergeResult(shuffleId: Int): Unit = {
+    shuffleStatuses.get(shuffleId) match {
+      case Some(shuffleStatus) =>
+        shuffleStatus.removeMergeResultsByFilter(x => true)
+        incrementEpoch()
+      case None =>
+        throw new SparkException(
+          s"unregisterAllMergeResult called for nonexistent shuffle ID $shuffleId.")
     }
   }
 
@@ -1100,16 +1120,6 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
    */
   private val fetchingLock = new KeyLock[Int]
 
-  val partitionStatistics: Map[Int, (Array[Long], Long)] =
-    new ConcurrentHashMap[Int, (Array[Long], Long)]().asScala
-  private val calculating = new HashSet[Int]
-
-  val autoDetectDataSkewEnabled: Boolean =
-    conf.getBoolean("spark.sql.autoDetectDataSkewEnabled", false)
-  val targetPartitionSize: Long =
-    conf.getLong("spark.sql.adaptive.shuffle.targetPostShuffleInputSize", 64 * 1024 * 1024)
-  val SKEWNESS_MULTIPLIER: Double = conf.getDouble("spark.sql.autoDetectDataSkewMultiplier", 2)
-
   override def getMapSizesByExecutorId(
       shuffleId: Int,
       startMapIndex: Int,
@@ -1256,80 +1266,6 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
       }
     }
   }
-
-  override def checkDataSkewTask(
-      shuffleId: Int, numPartitions: Int, startPartition: Int, endPartition: Int): Boolean = {
-    var isSkew: Boolean = false
-    if (autoDetectDataSkewEnabled && endPartition - startPartition == 1) {
-      val startTime = System.currentTimeMillis()
-      var partitionStat = partitionStatistics.get(shuffleId).orNull
-      if (partitionStat == null) {
-        calculating.synchronized {
-          while (calculating.contains(shuffleId)) {
-            try {
-              calculating.wait()
-            } catch {
-              case e: InterruptedException =>
-            }
-          }
-
-          partitionStat = partitionStatistics.get(shuffleId).orNull
-          if (partitionStat == null) {
-            calculating += shuffleId
-          }
-        }
-
-        if (partitionStat == null) {
-          try {
-            partitionStat = calculatePartitionStats(shuffleId, numPartitions)
-          } catch {
-            case e: MetadataFetchFailedException =>
-              logError("Check data skew get map status failed", e)
-          }
-          finally {
-            calculating.synchronized {
-              calculating -= shuffleId
-              calculating.notifyAll()
-            }
-          }
-        }
-      }
-      val costTime = System.currentTimeMillis() - startTime
-      logInfo(s"Check data skew task cost $costTime ms")
-      if (partitionStat != null) {
-        val total = partitionStat._1
-        val threshold = (partitionStat._2 * SKEWNESS_MULTIPLIER).toLong
-        if (total(startPartition) >= threshold) {
-          logInfo(s"Check data skew found " +
-            s"$shuffleId $startPartition ${total(startPartition)} $threshold")
-          isSkew = true
-        }
-      }
-    }
-    isSkew
-  }
-
-  def calculatePartitionStats(shuffleId: Int, numPartitions: Int): (Array[Long], Long) = {
-    val statuses = getStatuses(shuffleId, conf)._1
-    val totalSizes = new Array[Long](numPartitions)
-    for (s <- statuses) {
-      for (i <- 0 until numPartitions) {
-        totalSizes(i) += s.getSizeForBlock(i)
-      }
-    }
-    val partitionSizes = new MedianHeap()
-    totalSizes.foreach(s => {
-      // Exclude small size partitions which cause to improper median size
-      if (s > targetPartitionSize) {
-        partitionSizes.insert(s)
-      }
-    })
-    val medianSize =
-      if (partitionSizes.size() <= 1) targetPartitionSize else partitionSizes.median.toLong
-    partitionStatistics.put(shuffleId, (totalSizes, medianSize))
-    (totalSizes, medianSize)
-  }
-
 
   /** Unregister shuffle data. */
   def unregisterShuffle(shuffleId: Int): Unit = {
