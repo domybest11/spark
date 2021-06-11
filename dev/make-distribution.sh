@@ -171,6 +171,9 @@ wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sd
 # Download iceberg jar
 wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/iceberg/iceberg-spark3-runtime-0.11.1-bili-0.1.jar
 
+# Download lineage jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/spark-3.1/SparkLineageCollector-1.0-SNAPSHOT.jar
+
 # Copy jar
 cp "$SPARK_HOME"/assembly/target/scala*/jars/* "$DISTDIR/jars/"
 

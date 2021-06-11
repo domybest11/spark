@@ -3,11 +3,11 @@
 export SPARK_HOME=/data/service/spark3.1
 export SPARK_YARN_MODE=true
 export PATH=$PATH:$SPARK_HOME/bin
-export YARN_CONF_DIR=/etc/prd/kerberos-hadoop
-export HADOOP_CONF_DIR=/etc/prd/kerberos-hadoop
+export YARN_CONF_DIR=/etc/hadoop
+export HADOOP_CONF_DIR=/etc/hadoop
 export SPARK_DIST_CLASSPATH="$SPARK_DIST_CLASSPATH:${LZO_CLASSPATH}"
 
-export CONF_USE_CONF=false
+export CONF_USE_CONF=true
 export CONF_VERSION=spark-sink
 export CONF_HOST=config.bilibili.co
 export CONF_PATH=/tmp/spark-conf
@@ -17,6 +17,3 @@ export TREE_ID=143974
 export DEPLOY_ENV=prod
 export ZONE=sz001
 export SPRING_CONFIG_LOCATION=/tmp/spark
-
-
-

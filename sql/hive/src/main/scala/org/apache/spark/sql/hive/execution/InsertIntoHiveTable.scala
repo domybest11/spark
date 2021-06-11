@@ -18,11 +18,13 @@
 package org.apache.spark.sql.hive.execution
 
 import java.util.Locale
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hive.ql.ErrorMsg
 import org.apache.hadoop.hive.ql.plan.TableDesc
 import org.apache.hadoop.mapred.FileOutputFormat
+
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog._
@@ -35,8 +37,8 @@ import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hive.HiveShim.{ShimFileSinkDesc => FileSinkDesc}
 import org.apache.spark.sql.hive.client.HiveClientImpl
 import org.apache.spark.sql.hive.client.hive._
-import org.apache.spark.sql.merge.MergeUtils
 import org.apache.spark.sql.internal.SQLConf
+import org.apache.spark.sql.merge.MergeUtils
 
 
 /**
@@ -215,7 +217,8 @@ case class InsertIntoHiveTable(
       fileSinkConf = fileSinkConf,
       outputLocation = tmpLocation.toString,
       partitionAttributes = partitionAttributes)
-    val jobConf = MergeUtils.mergeHiveTableOutput(sparkSession, table, tmpLocation,hadoopConf,numDynamicPartitions > 0)
+    val jobConf = MergeUtils.mergeHiveTableOutput(sparkSession,
+      table, tmpLocation, hadoopConf, numDynamicPartitions > 0)
     val outputPath = FileOutputFormat.getOutputPath(jobConf)
     if (partition.nonEmpty) {
       if (numDynamicPartitions > 0) {
