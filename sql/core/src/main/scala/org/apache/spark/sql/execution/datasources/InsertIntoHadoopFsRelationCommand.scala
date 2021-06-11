@@ -122,9 +122,11 @@ case class InsertIntoHadoopFsRelationCommand(
       customPartitionLocations = getCustomPartitionLocations(
         fs, catalogTable.get, qualifiedOutputPath, matchingPartitions)
     }
-    val table = catalogTable.get
-    if (SQLConf.get.mirrorExecute && !table.identifier.database.get.startsWith("dolphin")) {
-      throw new SparkException(s"forbid insert into ${table.identifier.database.get}")
+    if (SQLConf.get.mirrorExecute &&
+      catalogTable.isDefined &&
+      !catalogTable.get.identifier.database.get.startsWith("dolphin")
+    ) {
+      throw new SparkException(s"forbid insert into ${catalogTable.get.identifier.database.get}")
     }
     val canMerge = mergeEnabled && bucketSpec.isEmpty && customPartitionLocations.isEmpty
 
