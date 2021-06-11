@@ -36,6 +36,8 @@ import org.apache.hive.service.cli.HiveSQLException;
 import org.apache.hive.service.rpc.thrift.TGetQueryIdReq;
 import org.apache.hive.service.rpc.thrift.TGetQueryIdResp;
 import org.apache.hive.service.server.ThreadFactoryWithGarbageCleanup;
+import org.apache.hive.service.server.ThriftServerProbeManager;
+import org.apache.hive.service.server.ThriftServerProbeServer;
 import org.apache.thrift.TException;
 import org.apache.thrift.TProcessorFactory;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -109,6 +111,18 @@ public class ThriftBinaryCLIService extends ThriftCLIService {
       String msg = "Starting " + ThriftBinaryCLIService.class.getSimpleName() + " on port "
           + portNum + " with " + minWorkerThreads + "..." + maxWorkerThreads + " worker threads";
       LOG.info(msg);
+
+      if (hiveConf.get("spark.thriftserver.probe.enable", "false").equals("true")) {
+        // start thrift server probe server
+        ThriftServerProbeServer probeServer = new ThriftServerProbeServer();
+        probeServer.serverStart();
+
+        // start check thrift server
+        ThriftServerProbeManager thriftServerProbeManager = new ThriftServerProbeManager();
+        thriftServerProbeManager.init(portNum,
+            hiveConf.get("spark.app.id", "not known"),
+            hiveConf.get("spark.yarn.queue", "not known"));
+      }
     } catch (Exception t) {
       throw new ServiceException("Error initializing " + getName(), t);
     }

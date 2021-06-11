@@ -119,11 +119,11 @@
 
   <property>
     <name>hive.server2.authentication.kerberos.principal</name>
-    <value>hive@BILIBILI.CO</value>
+    <value>hive/jssz-bigdata-spark-01.host.bilibili.co@BILIBILI.CO</value>
   </property>
   <property>
     <name>hive.server2.authentication.kerberos.keytab</name>
-    <value>/etc/security/keytabs/hive.keytab</value>
+    <value>/etc/security/keytabs/spark.service.keytab</value>
   </property>
 
   <property>
