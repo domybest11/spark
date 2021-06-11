@@ -59,4 +59,11 @@ export SUBMIT_USAGE_FUNCTION=usage
 
 ip=`hostname -I`
 
-exec "${SPARK_HOME}"/sbin/spark-daemon.sh submit $CLASS 1 --name "Thrift JDBC/ODBC Server" --conf spark.driver.host=$ip "$@"
+"${SPARK_HOME}"/sbin/spark-daemon.sh submit $CLASS 1 --name "Thrift JDBC/ODBC Server" --conf spark.driver.host=$ip "$@"
+
+/etc/init.d/nslcd start
+echo "Spark thriftserver has been submitted, you can exit this script using 'ctrl + c'"
+
+while [ true ]; do
+    sleep 60
+done

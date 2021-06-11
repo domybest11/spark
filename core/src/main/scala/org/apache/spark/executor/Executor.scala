@@ -188,7 +188,8 @@ private[spark] class Executor(
   private val runningTasks = new ConcurrentHashMap[Long, TaskRunner]
 
   private val appAttemptId = conf.get("spark.yarn.app.attempt.id", "1")
-  if (conf.get(CONTAINER_METRICS_COLLECTION_ENABLE)) {
+  if (!conf.get("spark.master").contains("local")
+    && conf.get(CONTAINER_METRICS_COLLECTION_ENABLE)) {
     val url = conf.get(METRICS_SINK_LANCER_URL)
     val logId = conf.get(METRICS_SINK_LOG_ID)
     val kafkaHttpSinkUsedResource = new KafkaHttpSink(url, logId)
@@ -198,7 +199,7 @@ private[spark] class Executor(
     sinkUsedResourceScheduler.start()
   }
 
-  if (conf.get(JVM_PAUSE_MONITOR_ENABLE)) {
+  if (!conf.get("spark.master").contains("local") && conf.get(JVM_PAUSE_MONITOR_ENABLE)) {
     jvmPauseMonitor = new JvmPauseMonitor(conf, conf.getAppId, appAttemptId.toInt, executorId)
     jvmPauseMonitor.start()
   }

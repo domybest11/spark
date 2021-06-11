@@ -1,0 +1,65 @@
+rules:
+  - pattern: Hadoop<service=DataNode, name=DataNodeActivity-(.*)-50010><>([\w]+)
+    name: hadoop_DataNode_DataNodeActivity_$2
+    labels:
+      sub: "$2"
+  - pattern: Hadoop<service=DataNode, name=DataNodeInfo><>([\w]+)
+    name: hadoop_DataNode_DataNodeInfo_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=DataNode, name=FSDatasetState><>([\w]+)
+    name: hadoop_DataNode_FSDatasetState_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=([\w]+), name=JvmMetrics><>([\w]+)
+    name: hadoop_$1_JvmMetrics_$2
+    labels:
+      sub: "$2"
+  - pattern: Hadoop<service=DataNode, name=RpcActivityForPort50020><>([\w]+)
+    name: hadoop_DataNode_RpcActivity_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=([\w]+), name=UgiMetrics><>([\w]+)
+    name: hadoop_$1_UgiMetrics_$2
+    labels:
+      sub: "$2"
+  - pattern: Hadoop<service=NameNode, name=BlockStats><>((.*))
+    name: hadoop_NameNode_BlockStats_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=NameNode, name=FSNamesystem><>([\w]+)
+    name: hadoop_NameNode_FSNamesystem_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=NameNode, name=FSNamesystemState><>([\w]+)
+    name: hadoop_NameNode_FSNamesystemState_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=NameNode, name=NameNodeActivity><>([\w]+)
+    name: hadoop_NameNode_NameNodeActivity_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=NameNode, name=NameNodeInfo><>([\w]+)
+    name: hadoop_NameNode_NameNodeInfo_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=NameNode, name=NameNodeStatus><>([\w]+)
+    name: hadoop_NameNode_NameNodeStatus_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=NameNode, name=RetryCache.NameNodeRetryCache><>([\w]+)
+    name: hadoop_NameNode_RetryCache.NameNodeRetryCache_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=NameNode, name=RpcActivityForPort9000><>([\w.]+)
+    name: hadoop_NameNode_RpcActivityForPort9000_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=NameNode, name=RpcDetailedActivityForPort9000><>([\w.]+)
+    name: hadoop_NameNode_RpcDetailedActivityForPort9000_$1
+    labels:
+      sub: "$1"
+  - pattern: Hadoop<service=NameNode, name=StartupProgress><>([\w.]+)
+    name: hadoop_NameNode_StartupProgress_$1
+    labels:
+      sub: "$1"

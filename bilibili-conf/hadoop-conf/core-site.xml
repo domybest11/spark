@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+<!-- <configuration> -->
+
+<configuration xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="mount-table.xml" />
+  <property>
+    <name>fs.defaultFS</name>
+    <value>viewfs://jssz-bigdata-cluster</value>
+  </property>
+  <property>
+    <name>fs.viewfs.rename.strategy</name>
+    <value>SAME_FILESYSTEM_ACROSS_MOUNTPOINT</value>
+  </property>
+  <property>
+    <name>fs.trash.interval</name>
+    <value>1440</value>
+  </property>
+  <property>
+    <name>dfs.bytes-per-checksum</name>
+    <value>4096</value>
+  </property>
+  <property>
+    <name>io.file.buffer.size</name>
+    <value>131072</value>
+  </property>
+  <property>
+    <name>ipc.maximum.response.length</name>
+    <value>268435456</value>
+  </property>
+  <property>
+    <name>ipc.server.listen.queue.size</name>
+    <value>20480</value>
+  </property>
+
+  <property>
+    <name>io.compression.codecs</name>
+    <value>
+      org.apache.hadoop.io.compress.GzipCodec,
+      org.apache.hadoop.io.compress.DefaultCodec,
+      com.hadoop.compression.lzo.LzoCodec,
+      com.hadoop.compression.lzo.LzopCodec,
+      org.apache.hadoop.io.compress.SnappyCodec,
+      org.apache.hadoop.io.compress.BZip2Codec
+    </value>
+  </property>
+  <property>
+    <name>io.compression.codec.lzo.class</name>
+    <value>com.hadoop.compression.lzo.LzoCodec</value>
+  </property>
+
+  <property>
+    <name>ha.zookeeper.quorum</name>
+    <value>10.69.8.34:2181,10.69.1.30:2181,10.69.1.31:2181/ex1-ha</value>
+  </property>
+  <property>
+    <name>ha.zookeeper.session-timeout.ms</name>
+    <value>50000</value>
+  </property>
+
+  <property>
+    <name>net.topology.script.file.name</name>
+    <value>/etc/hadoop/rack-topology.sh</value>
+  </property>
+
+  <property>
+    <name>hadoop.http.staticuser.user</name>
+    <value>root</value>
+  </property>
+
+  <property>
+    <name>fs.getspaceused.classname</name>
+    <value>org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.ReplicaCachingGetSpaceUsed</value>
+    <description>
+        The class that can tell estimate much space is used in a directory.
+        There are four impl classes that being supported:
+        org.apache.hadoop.fs.DU(default), org.apache.hadoop.fs.WindowsGetSpaceUsed
+        org.apache.hadoop.fs.DFCachingGetSpaceUsed and
+        org.apache.hadoop.hdfs.server.datanode.fsdataset.impl.ReplicaCachingGetSpaceUsed.
+        And the ReplicaCachingGetSpaceUsed impl class only used in HDFS module.
+    </description>
+  </property>
+  <property>
+    <name>fs.getspaceused.jitterMillis</name>
+    <value>60000</value>
+    <description>
+        fs space usage statistics refresh jitter in msec.
+    </description>
+  </property>
+
+  <!-- security config -->
+  <property>
+    <name>hadoop.security.authentication</name>
+    <value>kerberos</value>
+  </property>
+  <property>
+    <name>hadoop.security.authorization</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hadoop.rpc.protection</name>
+    <value>authentication</value>
+  </property>
+  <property>
+    <name>ipc.client.fallback-to-simple-auth-allowed</name>
+    <value>true</value>
+  </property>
+
+  <property>
+          <name>hadoop.proxyuser.hive.groups</name>
+          <value>*</value>
+  </property>
+  <property>
+          <name>hadoop.proxyuser.hive.hosts</name>
+          <value>*</value>
+  </property>
+</configuration>

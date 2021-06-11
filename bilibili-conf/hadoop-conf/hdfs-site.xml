@@ -1,0 +1,363 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+
+<!--
+       Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License. See accompanying LICENSE file.
+-->
+<!-- Put site-specific property overrides in this file. -->
+<configuration>
+  <property>
+    <name>dfs.nameservices</name>
+   <value>jssz-bigdata-ns1,jssz-bigdata-ns2,jssz-bigdata-ns3,jssz-bigdata-ns4,jssz-bigdata-proxy-ns1</value> 
+ </property>
+
+<!-- jssz-bigdata-ns3 start -->
+<property>
+  <name>dfs.ha.namenodes.jssz-bigdata-ns3</name>
+  <value>nn-0,nn-1</value>
+</property>
+<property>
+  <name>dfs.namenode.rpc-address.jssz-bigdata-ns3.nn-0</name>
+  <value>jssz-bigdata-namenode-19.host.bilibili.co:9000</value>
+</property>
+<property>
+  <name>dfs.namenode.http-address.jssz-bigdata-ns3.nn-0</name>
+  <value>jssz-bigdata-namenode-19.host.bilibili.co:50070</value>
+</property>
+<property>
+  <name>dfs.namenode.rpc-address.jssz-bigdata-ns3.nn-1</name>
+  <value>jssz-bigdata-namenode-21.host.bilibili.co:9000</value>
+</property>
+<property>
+  <name>dfs.namenode.http-address.jssz-bigdata-ns3.nn-1</name>
+  <value>jssz-bigdata-namenode-21.host.bilibili.co:50070</value>
+</property>
+<property>
+  <name>dfs.namenode.lifeline.rpc-address.jssz-bigdata-ns3.nn-0</name>
+  <value>jssz-bigdata-namenode-19.host.bilibili.co:9030</value>
+</property>
+<property>
+  <name>dfs.namenode.lifeline.rpc-address.jssz-bigdata-ns3.nn-1</name>
+  <value>jssz-bigdata-namenode-21.host.bilibili.co:9030</value>
+</property>
+<property>
+  <name>dfs.namenode.servicerpc-address.jssz-bigdata-ns3.nn-0</name>
+  <value>jssz-bigdata-namenode-19.host.bilibili.co:9010</value>
+</property>
+<property>
+  <name>dfs.namenode.servicerpc-address.jssz-bigdata-ns3.nn-1</name>
+  <value>jssz-bigdata-namenode-21.host.bilibili.co:9010</value>
+</property>
+<property>
+  <name>dfs.client.failover.proxy.provider.jssz-bigdata-ns3</name>
+  <value>org.apache.hadoop.hdfs.server.namenode.ha.RequestHedgingProxyProvider</value>
+</property>
+<!-- jssz-bigdata-ns3 end -->
+ 
+<!-- jssz-bigdata-ns4 start -->
+<property>
+  <name>dfs.ha.namenodes.jssz-bigdata-ns4</name>
+  <value>nn-0,nn-1</value>
+</property>
+<property>
+  <name>dfs.namenode.rpc-address.jssz-bigdata-ns4.nn-0</name>
+  <value>jssz-bigdata-namenode-20.host.bilibili.co:9000</value>
+</property>
+<property>
+  <name>dfs.namenode.http-address.jssz-bigdata-ns4.nn-0</name>
+  <value>jssz-bigdata-namenode-20.host.bilibili.co:50070</value>
+</property>
+<property>
+  <name>dfs.namenode.rpc-address.jssz-bigdata-ns4.nn-1</name>
+  <value>jssz-bigdata-namenode-22.host.bilibili.co:9000</value>
+</property>
+<property>
+  <name>dfs.namenode.http-address.jssz-bigdata-ns4.nn-1</name>
+  <value>jssz-bigdata-namenode-22.host.bilibili.co:50070</value>
+</property>
+<property>
+  <name>dfs.namenode.lifeline.rpc-address.jssz-bigdata-ns4.nn-0</name>
+  <value>jssz-bigdata-namenode-20.host.bilibili.co:9030</value>
+</property>
+<property>
+  <name>dfs.namenode.lifeline.rpc-address.jssz-bigdata-ns4.nn-1</name>
+  <value>jssz-bigdata-namenode-22.host.bilibili.co:9030</value>
+</property>
+<property>
+  <name>dfs.namenode.servicerpc-address.jssz-bigdata-ns4.nn-0</name>
+  <value>jssz-bigdata-namenode-20.host.bilibili.co:9010</value>
+</property>
+<property>
+  <name>dfs.namenode.servicerpc-address.jssz-bigdata-ns4.nn-1</name>
+  <value>jssz-bigdata-namenode-22.host.bilibili.co:9010</value>
+</property>
+<property>
+  <name>dfs.client.failover.proxy.provider.jssz-bigdata-ns4</name>
+  <value>org.apache.hadoop.hdfs.server.namenode.ha.RequestHedgingProxyProvider</value>
+</property>
+<!-- jssz-bigdata-ns4 end -->
+ 
+<!-- jssz-bigdata-proxy-ns1 start -->
+<property>
+  <name>dfs.ha.namenodes.jssz-bigdata-proxy-ns1</name>
+  <value>nn-0,nn-1,nn-2</value>
+</property>
+<property>
+  <name>dfs.namenode.rpc-address.jssz-bigdata-proxy-ns1.nn-0</name>
+  <value>nnproxy-01.bilibili.co:56310</value>
+</property>
+<property>
+  <name>dfs.namenode.rpc-address.jssz-bigdata-proxy-ns1.nn-1</name>
+  <value>nnproxy-02.bilibili.co:56310</value>
+</property>
+<property>
+  <name>dfs.namenode.rpc-address.jssz-bigdata-proxy-ns1.nn-2</name>
+  <value>nnproxy-03.bilibili.co:56310</value>
+</property>
+<property>
+  <name>dfs.client.failover.proxy.provider.jssz-bigdata-proxy-ns1</name>
+  <value>org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider</value>
+</property>
+<!-- jssz-bigdata-proxy-ns1 end -->
+
+  <!-- jssz-bigdata-ns1 start -->
+  <property>
+    <name>dfs.ha.namenodes.jssz-bigdata-ns1</name>
+    <value>nn-0,nn-1</value>
+  </property>
+  <property>
+    <name>dfs.namenode.rpc-address.jssz-bigdata-ns1.nn-0</name>
+    <value>jssz-bigdata-namenode-01.host.bilibili.co:9000</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-address.jssz-bigdata-ns1.nn-0</name>
+    <value>jssz-bigdata-namenode-01.host.bilibili.co:50070</value>
+  </property>
+  <property>
+    <name>dfs.namenode.rpc-address.jssz-bigdata-ns1.nn-1</name>
+    <value>jssz-bigdata-namenode-02.host.bilibili.co:9000</value>
+  </property>
+  <property>
+    <name>dfs.namenode.http-address.jssz-bigdata-ns1.nn-1</name>
+    <value>jssz-bigdata-namenode-02.host.bilibili.co:50070</value>
+  </property>
+  <property>
+    <name>dfs.namenode.lifeline.rpc-address.jssz-bigdata-ns1.nn-0</name>
+    <value>jssz-bigdata-namenode-01.host.bilibili.co:9030</value>
+    </property>
+  <property>
+    <name>dfs.namenode.lifeline.rpc-address.jssz-bigdata-ns1.nn-1</name>
+    <value>jssz-bigdata-namenode-02.host.bilibili.co:9030</value>
+  </property>
+  <property>
+    <name>dfs.namenode.servicerpc-address.jssz-bigdata-ns1.nn-0</name>
+    <value>jssz-bigdata-namenode-01.host.bilibili.co:9010</value>
+  </property>
+  <property>
+    <name>dfs.namenode.servicerpc-address.jssz-bigdata-ns1.nn-1</name>
+    <value>jssz-bigdata-namenode-02.host.bilibili.co:9010</value>
+  </property>
+  <property>
+    <name>dfs.client.failover.proxy.provider.jssz-bigdata-ns1</name>
+    <value>org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider</value>
+  </property>
+<!-- jssz-bigdata-ns2 namespace -->
+<property>
+  <name>dfs.ha.namenodes.jssz-bigdata-ns2</name>
+  <value>nn-0,nn-1</value>
+</property>
+<property>
+  <name>dfs.namenode.rpc-address.jssz-bigdata-ns2.nn-0</name>
+  <value>jssz-bigdata-namenode-03.host.bilibili.co:9000</value>
+</property>
+<property>
+  <name>dfs.namenode.servicerpc-address.jssz-bigdata-ns2.nn-0</name>
+  <value>jssz-bigdata-namenode-03.host.bilibili.co:9010</value>
+</property>
+<property>
+  <name>dfs.namenode.lifeline.rpc-address.jssz-bigdata-ns2.nn-0</name>
+  <value>jssz-bigdata-namenode-03.host.bilibili.co:9030</value>
+</property>
+<property>
+  <name>dfs.namenode.http-address.jssz-bigdata-ns2.nn-0</name>
+  <value>jssz-bigdata-namenode-03.host.bilibili.co:50070</value>
+</property>
+<property>
+  <name>dfs.namenode.rpc-address.jssz-bigdata-ns2.nn-1</name>
+  <value>jssz-bigdata-namenode-04.host.bilibili.co:9000</value>
+</property>
+<property>
+  <name>dfs.namenode.servicerpc-address.jssz-bigdata-ns2.nn-1</name>
+  <value>jssz-bigdata-namenode-04.host.bilibili.co:9010</value>
+</property>
+<property>
+  <name>dfs.namenode.lifeline.rpc-address.jssz-bigdata-ns2.nn-1</name>
+  <value>jssz-bigdata-namenode-04.host.bilibili.co:9030</value>
+</property>
+<property>
+  <name>dfs.namenode.http-address.jssz-bigdata-ns2.nn-1</name>
+  <value>jssz-bigdata-namenode-04.host.bilibili.co:50070</value>
+</property>
+<property>
+  <name>dfs.client.failover.proxy.provider.jssz-bigdata-ns2</name>
+  <value>org.apache.hadoop.hdfs.server.namenode.ha.ConfiguredFailoverProxyProvider</value>
+</property>
+ <property>
+    <name>dfs.client.socket-timeout</name>
+    <value>120000</value>
+  </property>
+  <!--  datanode configuration  -->
+  <property>
+    <name>dfs.client.block.write.replace-datanode-on-failure.policy</name>
+    <value>ALWAYS</value>
+  </property>
+  <property>
+    <name>dfs.client.block.write.replace-datanode-on-failure.best-effort</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>dfs.permissions.superusergroup</name>
+    <value>hadoop</value>
+  </property>
+  <property>
+    <name>dfs.permissions.supergroup</name>
+    <value>hadoop</value>
+  </property>
+  <property>
+    <name>dfs.client.read.shortcircuit</name>
+    <value>true</value>
+  </property>
+    <property>
+    <name>dfs.domain.socket.path</name>
+    <value>/run/hadoop/dfs.socket</value>
+  </property>
+  <property>
+    <name>dfs.datanode.fsdataset.volume.choosing.policy</name>
+    <value>org.apache.hadoop.hdfs.server.datanode.fsdataset.AvailableSpaceVolumeChoosingPolicy</value>
+  </property>
+<property>
+    <name>dfs.datanode.du.reserved</name>
+    <value>150000000000</value>
+</property>
+<property>
+    <name>fs.du.interval</name>
+    <value>1800000</value>
+</property>
+  <property>
+    <name>dfs.datanode.cached-replica.check.interval.ms</name>
+    <value>600000</value>
+    <discription>datanode replica cache expiration time</discription>
+  </property>
+  <property>
+    <name>dfs.datanode.cached-dfsused.check.interval.ms</name>
+    <value>86400000</value>
+    <discription>datanode dfsused cache expiration time</discription>
+  </property>
+  <property>
+    <name>dfs.blockreport.initialDelay</name>
+    <value>300</value>
+    <discription>datanode bloack report delay time in s</discription>
+  </property>
+  <property>
+    <name>dfs.datanode.peer.stats.enabled</name>
+    <value>true</value>
+    <discription>是否开启datanode慢节点检查</discription>
+  </property>
+  <property>
+    <name>dfs.datanode.slow.peers.report.interval</name>
+    <value>300000</value>
+    <discription>datanode上报慢节点report的时间间隔</discription>
+  </property>
+  <property>
+    <name>dfs.metrics.rolling.average.num.windows</name>
+    <value>15</value>
+    <discription>datanode统计pactet包处理时间的时间窗数量</discription>
+  </property>
+  <property>
+    <name>dfs.metrics.low.threshold.ms</name>
+    <value>1</value>
+    <discription>datanode定义为慢节点的阈值(datanode处理packet的评价时间)</discription>
+  </property>
+  <property>
+    <name>dfs.metrics.min.outlier.detection.peers</name>
+    <value>5</value>
+    <discription>datanode统计慢节点时最少统计的批次</discription>
+  </property>
+  <property>
+    <name>dfs.client.promethus.gateway.url</name>
+    <value>hawkeye-pushgateway.bilibili.co/X-Authorization-Pushgateway=d36693824c5199716ae73f88e26ef824dce56758</value>
+  </property>
+  <property>
+    <name>dfs.client.replace.datanode.threshold.ms</name>
+    <value>5000</value>
+  </property>
+  <!-- security config -->
+  <property>
+    <name>dfs.datanode.kerberos.principal</name>
+    <value>dn/_HOST@BILIBILI.CO</value>
+  </property>
+  <property>
+    <name>dfs.datanode.kerberos.https.principal</name>
+    <value>HTTP/_HOST@BILIBILI.CO</value>
+  </property>
+  <property>
+    <name>dfs.namenode.kerberos.principal</name>
+    <value>nn/_HOST@BILIBILI.CO</value>
+  </property>
+  <property>
+    <name>dfs.namenode.kerberos.internal.spnego.principal</name>
+    <value>HTTP/_HOST@BILIBILI.CO</value>
+  </property>
+  <property>
+    <name>dfs.journalnode.kerberos.principal</name>
+    <value>jn/_HOST@BILIBILI.CO</value>
+  </property>
+  <property>
+    <name>dfs.journalnode.kerberos.internal.spnego.principal</name>
+    <value>HTTP/_HOST@BILIBILI.CO</value>
+  </property>
+  <!-- end security config -->
+
+  <property>
+    <name>dfs.client.fast.switch.read.cwnd.rate.threshold.bytes.per.millis</name>
+    <value>6711</value>
+  </property>
+  <property>
+    <name>dfs.client.fast.switch.read.cwnd.time.millis</name>
+    <value>64</value>
+  </property>
+  <property>
+    <name>dfs.client.fast.switch.socket-read-timeout</name>
+    <value>128</value>
+  </property>
+  <property>
+    <name>dfs.client.fast.switch.max-socket-read-timeout</name>
+    <value>30000</value>
+  </property>
+  <property>
+    <name>dfs.datanode.loadbalancer.stats.enabled</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>dfs.metrics.loadbalancer.averages.window.length</name>
+    <value>100</value>
+  </property>
+ <property>
+   <name>hadoop.caller.context.enabled</name>
+   <value>true</value>
+ </property>
+ <property>
+   <name>dfs.namenode.kerberos.principal.pattern</name>
+   <value>*</value>
+ </property>
+</configuration>
