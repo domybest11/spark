@@ -168,6 +168,9 @@ echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 # Download hudi jar
 wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/hudi/hudi-spark-bundle_2.12-0.5.1-incubating.jar
 
+# Download iceberg jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/iceberg/iceberg-spark3-runtime-0.11.1-bili-0.1.jar
+
 # Copy jar
 cp "$SPARK_HOME"/assembly/target/scala*/jars/* "$DISTDIR/jars/"
 
