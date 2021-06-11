@@ -1,510 +1,179 @@
-<?xml version="1.0"?>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
-<!--
-        Licensed to the Apache Software Foundation (ASF) under one or more
-   contributor license agreements.  See the NOTICE file distributed with
-   this work for additional information regarding copyright ownership.
-   The ASF licenses this file to You under the Apache License, Version 2.0
-   (the "License"); you may not use this file except in compliance with
-   the License.  You may obtain a copy of the License at
-
-       http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
--->
-
 <configuration>
   <!-- hive metastore start -->
+  <!--
+    <property>
+      <name>hive.metastore.uris</name>
+      <value>thrift://jssz-bigdata-odatanode-05.host.bilibili.co:9083,thrift://jssz-bigdata-odatanode-06.host.bilibili.co:9083,thrift://jssz-bigdata-odatanode-07.host.bilibili.co:9083</value>
+    </property>
+    <property>
+      <name>hive.metastore.sasl.enabled</name>
+      <value>true</value>
+    </property>
+    <property>
+      <name>hive.metastore.kerberos.principal</name>
+      <value>hive/_HOST@BILIBILI.CO</value>
+    </property>
+
+    <property>
+      <name>hive.metastore.kerberos.keytab.file</name>
+      <value>/etc/security/keytabs/hive.service.keytab</value>
+    </property>
+
+    <property>
+      <name>hive.metastore.token.signature</name>
+      <value>HiveServer2ImpersonationToken</value>
+    </property>
+   -->
   <property>
-    <name>hive.metastore.uris</name>
-    <value>thrift://jssz-bigdata-odatanode-05.host.bilibili.co:9083,thrift://jssz-bigdata-odatanode-06.host.bilibili.co:9083,thrift://jssz-bigdata-odatanode-07.host.bilibili.co:9083</value>
+    <name>hive.exec.orc.split.strategy.etl.max.files</name>
+    <value>500</value>
   </property>
   <property>
-    <name>hive.metastore.sasl.enabled</name>
+    <name>hive.cli.print.header</name>
     <value>true</value>
   </property>
   <property>
-    <name>hive.metastore.kerberos.principal</name>
-    <value>hive/_HOST@BILIBILI.CO</value>
+    <name>hive.exec.dynamic.partition.mode</name>
+    <value>nonstrict</value>
   </property>
-  <!-- hive metastore end -->
-
-  <!-- mysql metastore start -->
   <property>
-    <name>hive.async.log.enabled</name>
+    <name>hive.reload.functions</name>
     <value>false</value>
   </property>
-
-  <property>
-    <name>hive.server2.enable.doAs</name>
-    <value>false</value>
-  </property>
-
-  <property>
-    <name>hive.server2.thrift.worker.keepalive.time</name>
-    <value>120s</value>
-  </property>
-
-  <property>
-    <name>hive.server2.async.exec.async.compile</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.driver.parallel.compilation</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.server2.idle.session.check.operation</name>
-    <value>false</value>
-  </property>
-
-
-  <!-- mysql metastore end -->
-
-  <property>
-    <name>hive.zookeeper.quorum</name>
-    <value>10.69.8.34:2181,10.69.1.30:2181,10.69.1.31:2181</value>
-  </property>
-
-  <property>
-    <name>hive.support.concurrency</name>
-    <value>false</value>
-  </property>
-
   <property>
     <name>hive.metastore.warehouse.dir</name>
     <value>viewfs://jssz-bigdata-cluster/warehouse1</value>
   </property>
+  <property>
+    <name>hive.support.sql11.reserved.keywords</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hive.cbo.enable</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hive.warehouse.subdir.inherit.perms</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hive.mapred.supports.subdirectories</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>hive.server2.thrift.min.worker.threads</name>
+    <value>0</value>
+  </property>
+  <property>
+    <name>hive.server2.thrift.max.worker.threads</name>
+    <value>1024</value>
+  </property>
+  <property>
+    <name>hive.server2.async.exec.threads</name>
+    <value>100</value>
+  </property>
+  <!--
+    <property>
+      <name>hive.exec.scratchdir</name>
+      <value>/data/log/hive/hive-scratchdir/</value>
+    </property>
+  -->
+  <!--
+    <property>
+      <name>hive.exec.stagingdir</name>
+      <value>/tmp/hive-stagingdir/spark</value>
+    </property>
+  -->
+  <property>
+    <name>hive.server2.logging.operation.enabled</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>hive.server2.logging.operation.level</name>
+    <value>verbose</value>
+  </property>
+  <property>
+    <name>hive.server2.logging.operation.log.location</name>
+    <value>/data/log/hive/spark/operation_logs</value>
+  </property>
+  <property>
+    <name>hive.security.authorization.enabled</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>hive.security.authorization.manager</name>
+    <value>org.apache.hadoop.hive.ql.security.authorization.plugin.sqlstd.SQLStdHiveAuthorizerFactory</value>
+  </property>
+  <property>
+    <name>hive.server2.enable.doAs</name>
+    <value>true</value>
+  </property>
+  <!--
+    <property>
+      <name>hive.semantic.analyzer.hook</name>
+      <value>com.eleme.hive.plugin.EleAuthHook</value>
+    </property>
+  -->
+  <!--Hive 元数据的 URI，多个 thrift://地址，以英文逗号分隔-->
 
   <property>
-    <name>hive.mapred.mode</name>
-    <value>strict</value>
+    <name>hive.metastore.uris</name>
+    <value>thrift://10.68.69.21:9083,thrift://10.68.69.22:9083,thrift://10.68.69.23:9083</value>
+    <description>Thrift URI for the remote metastore. Used by metastore client to connect to remote metastore.</description>
   </property>
 
+  <!--连接到 Thrift 元数据服务的最大重试次数-->
   <property>
-    <name>hive.querylog.location</name>
-    <value>/data/log/hive/${system:user.name}</value>
+    <name>hive.metastore.connect.retries</name>
+    <value>10</value>
+    <description>Number of retries while opening a connection to metastore</description>
   </property>
-
-
+  <property>
+    <name>hive.metastore.failure.retries</name>
+    <value>25</value>
+    <description>Number of retries upon failure of Thrift metastore calls</description>
+  </property>
+  <property>
+    <name>hive.metastore.client.connect.retry.delay</name>
+    <value>6s</value>
+    <description>
+      Expects a time value with unit (d/day, h/hour, m/min, s/sec, ms/msec, us/usec, ns/nsec), which is sec if not specified.
+      Number of seconds for the client to wait between consecutive connection attempts
+    </description>
+  </property>
+  <property>
+    <name>hive.metastore.client.socket.timeout</name>
+    <value>600s</value>
+    <description>
+      Expects a time value with unit (d/day, h/hour, m/min, s/sec, ms/msec, us/usec, ns/nsec), which is sec if not specified.
+      MetaStore Client socket timeout in seconds
+    </description>
+  </property>
+  <property>
+    <name>hive.server2.thrift.port</name>
+    <value>10003</value>
+  </property>
+  <!--
   <property>
     <name>hive.aux.jars.path</name>
-    <value>file:///data/service/hive/lib/hive-contrib-2.3.4.jar,file:///data/service/hive/lib/com.bilibili.hiveudf.jar,file:///data/service/hive/lib/bilibili-hive-sdk-0.0.1-SNAPSHOT-jar-with-dependencies.jar,file:///data/service/hive/lib/cypress-hive-0.1.16-SNAPSHOT.jar</value>
-  </property>
-
-
+    <value>file:///data/service/hive/lib/hive-contrib-2.3.4.jar,file:///data/service/hive/lib/com.bilibili.hiveudf.jar,file:///data/service/hive/lib/bilibili-hive-sdk-0.0.1-SNAPSHOT-jar-with-dependencies.jar,file:///data/service/hive/lib/cypress-hive-0.1.1-SNAPSHOT.jar</value>
+  </property> -->
   <property>
     <name>hive.exec.post.hooks</name>
-    <value>com.bilibili.statistics.hive.sdk.hooks.HiveProgressHook,org.apache.hadoop.hive.ql.hooks.LineageLogger</value>
+    <value>com.bilibili.statistics.hive.sdk.hooks.HiveProgressHook,com.bilibili.cypress.hive.hook.QueryExcuteHookContext</value>
   </property>
   <property>
     <name>hive.insert.into.multilevel.dirs</name>
     <value>true</value>
   </property>
-
-  <property>
-    <name>datanucleus.fixedDatastore</name>
-    <value>false</value>
-  </property>
-
-  <property>
-    <name>datanucleus.autoCreateSchema</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>datanucleus.autoCreateTables</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>datanucleus.autoCreateColumns</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.metastore.schema.verification</name>
-    <value>false</value>
-  </property>
-
-  <property>
-    <name>hive.metastore.execute.setugi</name>
-    <value>false</value>
-  </property>
-
-
-  <property>
-    <name>hive.metastore.authorization.storage.checks</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.security.authorization.createtable.owner.grants</name>
-    <value>ALL</value>
-  </property>
-
   <property>
     <name>hive.semantic.analyzer.hook</name>
     <value>com.bilibili.statistics.hive.sdk.hooks.AdminAuthHook</value>
   </property>
-
-  <property>
-    <name>hive.exec.failure.hooks</name>
-    <value>org.apache.hadoop.hive.ql.hooks.FailureJobCollector</value>
-  </property>
-
-  <!-- hive metastore end -->
-
-  <!-- hbase start -->
-
-  <!--
-      <property>
-          <name>hbase.zookeeper.property.clientPort</name>
-          <value>2181</value>
-      </property>
-  -->
   <property>
     <name>hbase.zookeeper.quorum</name>
     <value>10.69.8.16,10.69.8.17,10.69.8.15</value>
   </property>
-
-
-
-  <!-- hbase end -->
-
-  <!-- hive server2 start -->
-
-  <property>
-    <name>hive.server2.thrift.min.worker.threads</name>
-    <value>50</value>
-  </property>
-
-  <property>
-    <name>hive.server2.thrift.max.worker.threads</name>
-    <value>800</value>
-  </property>
-
-
-  <property>
-    <name>hive.server2.thrift.port</name>
-    <value>10001</value>
-  </property>
-
-
-  <property>
-    <name>hive.server2.logging.operation.log.location</name>
-    <value>/data/log/hive/hive/operation_logs</value>
-  </property>
-
-  <property>
-    <name>hive.server2.support.dynamic.service.discovery</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.server2.zookeeper.namespace</name>
-    <value>hive12</value>
-  </property>
-
-  <property>
-    <name>hive.merge.smallfiles.avgsize</name>
-    <value>80000000</value>
-  </property>
-
-  <property>
-    <name>hive.server2.authentication</name>
-    <!--<value>NOSASL</value> -->
-    <value>NONE</value>
-  </property>
-
-
-  <!-- hive server2 end -->
-
-  <property>
-    <name>hive.hbase.snapshot.restoredir</name>
-    <value>/data/log/hive</value>
-  </property>
-
-  <property>
-    <name>hive.downloaded.resources.dir</name>
-    <value>/data/log/hive/resources/${hive.session.id}_resources</value>
-    <description>Temporary local directory for added resources in the remote file system.</description>
-  </property>
-
-
-  <property>
-    <name>hive.strict.checks.type.safety</name>
-    <value>false</value>
-  </property>
-
-  <property>
-    <name>hive.server2.async.exec.threads</name>
-    <value>800</value>
-    <description>Number of threads in the async thread pool for HiveServer2</description>
-  </property>
-
-  <property>
-    <name>hive.server2.async.exec.wait.queue.size</name>
-    <value>2000</value>
-  </property>
-
-  <property>
-    <name>hive.server2.webui.host</name>
-    <value>0.0.0.0</value>
-  </property>
-
-  <property>
-    <name>hive.server2.webui.port</name>
-    <value>10002</value>
-  </property>
-  <property>
-    <name>hive.server2.webui.max.threads</name>
-    <value>100</value>
-  </property>
-
-  <property>
-    <name>datanucleus.connectionPool.maxPoolSize</name>
-    <value>100</value>
-  </property>
-
-  <property>
-    <name>hive.driver.parallel.compilation</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.server2.metrics.enabled</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.log4j.file</name>
-    <value>/data/config/hive/hive-log4j2.properties</value>
-  </property>
-
-  <!--重试策略,每次间隔10s,重试36次 -->
-  <property>
-    <name>yarn.app.mapreduce.client.job.max-retries</name>
-    <value>36</value>
-  </property>
-
-  <property>
-    <name>yarn.app.mapreduce.client.job.retry-interval</name>
-    <value>10000</value>
-  </property>
-
-
-  <!-- 新创建的表/分区是否自动计算统计数据 -->
-  <property>
-    <name>hive.compute.query.using.stats</name>
-    <value>false</value>
-  </property>
-  <property>
-    <name>hive.stats.autogather</name>
-    <value>false</value>
-  </property>
-  <property>
-    <name>hive.stats.fetch.column.stats</name>
-    <value>false</value>
-  </property>
-  <property>
-    <name>hive.stats.fetch.partition.stats</name>
-    <value>false</value>
-  </property>
-  <!-- 新创建的表/分区是否自动计算统计数据 -->
-  <!--
-  <property>
-      <name>mapreduce.task.timeout</name>
-      <value>100000</value>
-  </property>
-  -->
-  <property>
-    <name>hive.fetch.task.conversion</name>
-    <value>minimal</value>
-  </property>
-
-  <property>
-    <name>hive.metastore.metrics.enabled</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.service.metrics.class</name>
-    <value>org.apache.hadoop.hive.common.metrics.metrics2.CodahaleMetrics</value>
-  </property>
-
-  <property>
-    <name>hive.service.metrics.reporter</name>
-    <value>JMX</value>
-  </property>
-
-  <property>
-    <name>hive.merge.mapredfiles</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.exec.parallel</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.exec.parallel.thread.number</name>
-    <value>8</value>
-  </property>
-
-  <!-- Thrift服务器池中工作线程的最小数量，默认值为200。 -->
-  <property>
-    <name>hive.metastore.server.min.threads</name>
-    <value>200</value>
-    <description>Minimum number of worker threads in the Thrift server's pool.</description>
-  </property>
-
-  <!-- Thrift 服务器池中工作线程的最大数量，默认值为1000。 -->
-  <property>
-    <name>hive.metastore.server.max.threads</name>
-    <value>4000</value>
-    <description>Maximum number of worker threads in the Thrift server's pool.</description>
-  </property>
-
-  <!-- 降低直连MySQL模式下的MS错误重试次数到3，重试间隔到1s -->
-  <property>
-    <name>hive.hmshandler.retry.attempts</name>
-    <value>3</value>
-  </property>
-  <property>
-    <name>hive.hmshandler.retry.interval</name>
-    <value>1000ms</value>
-  </property>
-
-  <!-- hive mr作业中间结果开启压缩-->
-  <property>
-    <name>hive.exec.compress.intermediate</name>
-    <value>true</value>
-  </property>
-  <property>
-    <name>hive.intermediate.compression.codec</name>
-    <value>com.hadoop.compression.lzo.LzoCodec</value>
-  </property>
-  <property>
-    <name>hive.intermediate.compression.type</name>
-    <value>BLOCK</value>
-  </property>
-
-  <property>
-    <name>hive.rpc.query.plan</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.exec.input.listing.max.threads</name>
-    <value>3</value>
-  </property>
-  <property>
-    <name>hive.exec.scratchdir</name>
-    <value>hdfs://jssz-bigdata-ns4/tmp/hive</value>
-  </property>
-
-  <property>
-    <name>hive.execution.final.check.miss.stage</name>
-    <value>check</value>
-  </property>
-
-  <property>
-    <name>hive.conf.yarn.queue.resource.use.detail.link</name>
-    <value>https://info.bilibili.co/pages/viewpage.action?pageId=146288953</value>
-  </property>
-
-  <property>
-    <name>hive.conf.yarn.chrome.agent.guide.link</name>
-    <value>https://info.bilibili.co/pages/viewpage.action?pageId=154617504</value>
-  </property>
-
-  <!--hive trace-->
-  <property>
-    <name>hive.trace.lancer.bsk.log.id</name>
-    <value>007464</value>
-  </property>
-
-  <property>
-    <name>hive.trace.lancer.luck.bear.log.id</name>
-    <value>007830</value>
-  </property>
-
-  <property>
-    <name>hive.trace.lancer.service.host</name>
-    <value>http://dataflow.biliapi.com</value>
-  </property>
-
-  <property>
-    <name>hive.mapred.local.mem</name>
-    <value>2048</value>
-  </property>
-
-  <property>
-    <name>hive.auto.convert.sortmerge.join</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.limit.pushdown.memory.usage</name>
-    <value>0.04</value>
-  </property>
-
-  <property>
-    <name>hive.optimize.sort.dynamic.partition</name>
-    <value>true</value>
-  </property>
-
-  <property>
-    <name>hive.merge.smallfiles.avgsize</name>
-    <value>256000000</value>
-  </property>
-
-  <property>
-    <name>hive.merge.size.per.task</name>
-    <value>512000000</value>
-  </property>
-
-  <property>
-    <name>hive.exec.reducers.max</name>
-    <value>2027</value>
-  </property>
-
-  <property>
-    <name>hive.exec.log4j.file</name>
-    <value>/data/config/hive/hive-exec-log4j2.properties</value>
-  </property>
-
-  <property>
-    <name>hive.map.aggr.hash.percentmemory</name>
-    <value>0.3</value>
-  </property>
-
-  <property>
-    <name>hive.map.aggr.hash.force.flush.memory.threshold</name>
-    <value>0.8</value>
-  </property>
-
-  <property>
-    <name>hive.map.aggr.hash.min.reduction</name>
-    <value>0.8</value>
-  </property>
-
-  <property>
-    <name>hive.exec.orc.default.block.size</name>
-    <value>536870912</value>
-  </property>
-
-  <property>
-    <name>hive.detect.skewjoin.key.rows</name>
-    <value>10000000000</value>
-  </property>
-
 </configuration>
