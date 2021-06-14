@@ -124,10 +124,11 @@ class ThriftServerAppStatusScheduler extends Logging{
     })
   }
 
-   def sendOnceKafka(liveExecutionData: LiveExecutionData): Unit = {
+   def sendOnceKafka(liveExecutionData: LiveExecutionData): ThriftServerReportWrap = {
    logDebug("starting to send an metrics to Kafka")
+     var reportWrap: ThriftServerReportWrap = null
     if (null == liveExecutionData ) {
-      return
+      return reportWrap
     }
      logDebug("starting to assemble an executionInfo from appStatusStore")
       var applicationSQLExecutionData: ApplicationSQLExecutionData = null
@@ -146,10 +147,11 @@ class ThriftServerAppStatusScheduler extends Logging{
       } catch {
         case e: Exception =>
           logWarning(s"assemble the executionInfo occurred errors: ${e.getMessage}")
-          return
+          return reportWrap
       }
+
       try {
-        val reportWrap: ThriftServerReportWrap =
+          reportWrap =
           new ThriftServerReportWrap(applicationSQLExecutionData.appId,
           applicationSQLExecutionData.attemptId, applicationSQLExecutionData.role,
           applicationSQLExecutionData.service, applicationSQLExecutionData.user,
@@ -161,9 +163,10 @@ class ThriftServerAppStatusScheduler extends Logging{
       } catch {
         case e: Exception =>
           logWarning(s"send an metrics to Kafka occurred errors: ${e.getMessage}")
-          return
+          return reportWrap
       }
      logDebug("ended to send an metrics to Kafka")
+     reportWrap
   }
 }
 

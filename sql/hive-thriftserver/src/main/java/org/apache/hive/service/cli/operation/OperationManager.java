@@ -39,6 +39,12 @@ import org.apache.hive.service.cli.RowSetFactory;
 import org.apache.hive.service.cli.TableSchema;
 import org.apache.hive.service.cli.session.HiveSession;
 import org.apache.log4j.Appender;
+import org.apache.spark.sql.hive.thriftserver.HiveThriftServer2;
+import org.apache.spark.sql.hive.thriftserver.SparkExecuteStatementOperation;
+import org.apache.spark.sql.hive.thriftserver.status.ThriftServerAppStatusScheduler;
+import org.apache.spark.sql.hive.thriftserver.status.ThriftServerReportWrap;
+import org.apache.spark.sql.hive.thriftserver.ui.LiveExecutionData;
+import org.apache.spark.sql.hive.thriftserver.ui.SessionStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

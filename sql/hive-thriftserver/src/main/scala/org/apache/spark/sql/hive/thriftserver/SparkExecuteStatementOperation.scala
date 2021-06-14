@@ -24,7 +24,6 @@ import java.util.concurrent.{Executors, RejectedExecutionException, TimeUnit}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.hive.metastore.api.FieldSchema
 import org.apache.hadoop.hive.shims.Utils
@@ -32,11 +31,11 @@ import org.apache.hadoop.security.UserGroupInformation._
 import org.apache.hive.service.cli._
 import org.apache.hive.service.cli.operation.ExecuteStatementOperation
 import org.apache.hive.service.cli.session.HiveSession
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{DataFrame, SQLContext, Row => SparkRow}
 import org.apache.spark.sql.execution.HiveResult.{TimeFormatters, getTimeFormatters, toHiveString}
 import org.apache.spark.sql.execution.command.SetCommand
+import org.apache.spark.sql.hive.thriftserver.ui.{LiveExecutionData, SessionStatus}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.VariableSubstitution
 import org.apache.spark.sql.types._
@@ -402,6 +401,15 @@ private[hive] class SparkExecuteStatementOperation(
           }
         }
     } finally {
+        val sessionId = getParentSession.getSessionHandle.getSessionId.toString
+        val thriftServerSqlStatusStore = HiveThriftServer2.thriftServerAppStatusScheduler
+        val sessionEnd = new LiveExecutionData(SessionStatus.SESSION_END, "",
+          sessionId, System.currentTimeMillis, "")
+        val thriftServerReportWrap = thriftServerSqlStatusStore.sendOnceKafka(sessionEnd)
+        if (thriftServerReportWrap != null && thriftServerReportWrap.getContent.executionCost.length > 0)
+        {
+          operationLog.writeOperationLog(s"${thriftServerReportWrap.getContent.executionCost}\n")
+        }
       synchronized {
         if (!getStatus.getState.isTerminal) {
           setState(OperationState.FINISHED)

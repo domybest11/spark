@@ -19,6 +19,8 @@ package org.apache.spark.sql.hive.thriftserver.status
 import org.apache.spark.sql.hive.thriftserver.ui.LiveExecutionData
 import org.apache.spark.status.api.v1.StageStatus
 
+import scala.collection.mutable.ListBuffer
+
 class ApplicationSQLExecutionData(
     var appId: String = "",
     var appName: String = "",
@@ -34,7 +36,12 @@ class ApplicationSQLExecutionData(
     var status: String = "",
     var user: String = "hive",
     var role: String = "STS",
-    var sqlExecutionData: Option[LiveExecutionData] = None)
+    var sqlExecutionData: Option[LiveExecutionData] = Some(new LiveExecutionData()),
+    var sqlExecutionDatas: Option[ListBuffer[LiveExecutionData]] = Some(ListBuffer.empty[LiveExecutionData]),
+    var sparkVersion: String = "spark3.1",
+    var tarceId: String = "") {
+    var executionCost = ""
+}
 
 class SQLExecutionDataV1(
     val executionId: Long,
@@ -100,7 +107,9 @@ class SQLStageData(
     var taskRackLocalRate: Double = 0,
     var taskAnyRate: Double = 0,
     val taskAvgMetrics: Option[SQLTaskAvgMetrics] = None,
-    val taskMaxMetrics: Option[SQLTaskMaxMetrics] = None)
+    val taskMaxMetrics: Option[SQLTaskMaxMetrics] = None,
+    var inComing: Int = -1,
+    var outGoing: Int = -1)
 
 class SQLTaskAvgMetrics(
     val executorDeserializeTime: Double,

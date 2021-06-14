@@ -27,6 +27,7 @@ public class ThriftServerReportWrap {
     private String jsonType;
     private String host;
     private Long currentTime;
+    private String executionCost;
     private ApplicationSQLExecutionData content;
 
     public ThriftServerReportWrap(String appId, String attemptId, String role, String service,
@@ -40,6 +41,14 @@ public class ThriftServerReportWrap {
         this.host = host;
         this.currentTime = currentTime;
         this.content = content;
+    }
+
+    public String getExecutionCost() {
+        return executionCost;
+    }
+
+    public void setExecutionCost(String executionCost) {
+        this.executionCost = executionCost;
     }
 
     public String getAppId() {

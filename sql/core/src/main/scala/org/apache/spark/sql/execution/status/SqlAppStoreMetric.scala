@@ -34,37 +34,10 @@ class ApplicationSQLExecutionData(var appId: String = "",
     var status: String = "",
     var user: String = "",
     var role: String = "SSL",
-    var sqlExecutionData: Option[ExecutionData] = None)
-
-/*
-*
-*
-* class SQLExecutionUIData(
-    @KVIndexParam val executionId: Long,
-    val description: String,
-    val details: String,
-    val physicalPlanDescription: String,
-    val metrics: Seq[SQLPlanMetric],
-    val submissionTime: Long,
-    val completionTime: Option[Date],
-    @JsonDeserialize(keyAs = classOf[Integer])
-    val jobs: Map[Int, JobExecutionStatus],
-    @JsonDeserialize(contentAs = classOf[Integer])
-    val stages: Set[Int],
-    /**
-     * This field is only populated after the execution is finished; it will be null while the
-     * execution is still running. During execution, aggregate metrics need to be retrieved
-     * from the SQL listener instance.
-     */
-    @JsonDeserialize(keyAs = classOf[JLong])
-    val metricValues: Map[Long, String]) {
-    @volatile var finishAndReport: Boolean = false
-
-  @JsonIgnore @KVIndex("completionTime")
-  private def completionTimeIndex: Long = completionTime.map(_.getTime).getOrElse(-1L)
-}
-*
-* */
+    var sqlExecutionData: Option[ExecutionData] = Some(new ExecutionData()),
+    var sqlExecutionDatas: Option[ListBuffer[ExecutionData]] = Some(ListBuffer.empty[ExecutionData]),
+    var sparkVersion: String = "spark3.1",
+    var tarceId: String = "")
 
 class ExecutionData(var statement: String = "",
     var startTimestamp: Long = 0L,
@@ -144,7 +117,9 @@ class SQLStageData(
     var taskAnyRate: Double = 0,
     val taskAvgMetrics: Option[SQLTaskAvgMetrics] = None,
     val taskMaxMetrics: Option[SQLTaskMaxMetrics] = None,
-    val skewKeys: Seq[String] = Seq.empty)
+    val skewKeys: Seq[String] = Seq.empty,
+    var inComing: Int = -1,
+    var outGoing: Int = -1)
 
 class SQLTaskAvgMetrics(
     val executorDeserializeTime: Double,

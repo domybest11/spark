@@ -431,6 +431,15 @@ class SQLAppStatusListener(
     }
   }
 
+  override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd): Unit = {
+    val enableThriftServer = conf.getBoolean("spark.thriftserver.model.enabled", false)
+    if (!enableThriftServer) {
+      val END_FLAG = new SQLExecutionUIData(AppClientStatus.APP_CLIENT_END, "", "", "",
+        Seq.empty, 0L, None, Map.empty, Set.empty, Map.empty)
+      executionQueue.get.offer(END_FLAG)
+    }
+  }
+
   private def removeStaleMetricsData(exec: LiveExecutionData): Unit = {
     // Remove stale LiveStageMetrics objects for stages that are not active anymore.
     val activeStages = liveExecutions.values().asScala.flatMap { other =>
@@ -694,4 +703,8 @@ private class LiveStageMetrics(
 
 private object SQLAppStatusListener {
   val UNKNOWN_INDEX = -1
+}
+
+object AppClientStatus {
+  val APP_CLIENT_END = -2
 }

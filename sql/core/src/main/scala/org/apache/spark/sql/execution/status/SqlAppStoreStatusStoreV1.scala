@@ -19,14 +19,24 @@ package org.apache.spark.sql.execution.status
 
 import java.util.{List => JList}
 
-import scala.collection.mutable.ListBuffer
+import org.apache.hadoop.ipc.RPC
+import org.apache.hadoop.yarn.api.ApplicationClientProtocol
+import org.apache.hadoop.yarn.api.protocolrecords.{GetApplicationReportRequest}
+import org.apache.hadoop.yarn.api.records.ApplicationId
+import org.apache.hadoop.yarn.client.ClientRMProxy
+import org.apache.hadoop.yarn.conf.YarnConfiguration
+import org.apache.hadoop.yarn.util.Records
+import org.apache.spark.deploy.SparkHadoopUtil
 
+import scala.collection.mutable.ListBuffer
 import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.execution.ui.{SQLAppStatusStore, SQLExecutionUIData}
+import org.apache.spark.sql.execution.ui.{AppClientStatus, SQLAppStatusStore, SQLExecutionUIData}
 import org.apache.spark.status.AppStatusStore
 import org.apache.spark.status.api.v1.{JobData, StageData, _}
+import org.apache.spark.ui.scope.RDDOperationGraph
+import org.apache.spark.util.Utils
 
 /**
  * A wrapper around a KVStore that provides methods for accessing the API data stored within.
@@ -35,6 +45,46 @@ class SqlAppStoreStatusStoreV1(
     val sqlAppStatusStore: Option[SQLAppStatusStore] = None,
     val appStatusStore: Option[AppStatusStore] = None,
     val conf: SparkConf) extends Logging {
+
+  private val hadoopConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(conf))
+
+  def printResourceCost(applicationSQLExecutionData: ApplicationSQLExecutionData): Unit = {
+    var rmClient: ApplicationClientProtocol = null
+    try {
+    rmClient = ClientRMProxy.createRMProxy(hadoopConf, classOf[ApplicationClientProtocol])
+    val request = Records.newRecord(classOf[GetApplicationReportRequest])
+    val applicationId = ApplicationId.fromString(conf.get("spark.app.id"))
+    request.setApplicationId(applicationId)
+    val resourceUsage = rmClient.getApplicationReport(request).getApplicationReport
+      .getApplicationResourceUsageReport
+    val memorySeconds = resourceUsage.getMemorySeconds
+    val vcoreSeconds = resourceUsage.getVcoreSeconds
+    var inputBytes: Long = 0
+    var outputBytes: Long = 0
+      applicationSQLExecutionData.sqlExecutionDatas.get.foreach(sqlExecutionData => {
+      sqlExecutionData.jobs.foreach(job => {
+        inputBytes += job.stages.filter(_.inComing == 0).map(_.inputBytes).toList.sum
+        outputBytes += job.stages.filter(_.outGoing == 0).map(_.outputBytes).toList.sum
+      })
+    })
+    val inputUnit = if (inputBytes > 0) Utils.bytesToString(inputBytes) else "0B"
+    val outputUnit = if (outputBytes > 0) Utils.bytesToString(outputBytes) else "0B"
+    var traceId = conf.get("spark.trace.id","")
+    if (traceId.isEmpty) {
+      traceId = ""
+      }
+    logInfo(s"traceId:$traceId,当前任务使用的资源消耗情况:内存:$memorySeconds(m*s), " +
+      s"CPU: $vcoreSeconds(c*s), 读数据量:$inputUnit, 写数据量:$outputUnit.")
+    } catch {
+       case e: Exception =>
+       logError("Get application resource usage failed", e)
+    } finally {
+    if (rmClient != null) {
+      RPC.stopProxy(rmClient)
+    }
+      rmClient = null
+    }
+  }
 
   def assembleExecutionInfo(
       executionInfo: SQLExecutionUIData): Option[ApplicationSQLExecutionData] = {
@@ -51,51 +101,65 @@ class SqlAppStoreStatusStoreV1(
       0,
       0,
       sparkPropertyMap("spark.driver.host"))
-    val listSQLJobData = new ListBuffer[SQLJobData]
-    executionInfo.jobs.keys.foreach(jobid => {
-      val jobData = job(jobid)
-      if (jobData.isDefined) {
-        val listSQLStageData = new ListBuffer[SQLStageData]
-        jobData.get.stageIds.foreach(stageId => {
-          val stageInfo = stageData(stageId, true)
-          stageInfo.seq.foreach(stageData => {
-            listSQLStageData.append(buildSQLStageData(stageData).get)
+    var executionsLists: List[SQLExecutionUIData] = List.empty
+    if (executionInfo.executionId == AppClientStatus.APP_CLIENT_END) {
+      executionsLists = executionsList()
+    } else {
+      executionsLists  =  executionsLists :+ executionInfo
+    }
+    val listExecutionData = new ListBuffer[ExecutionData]
+    executionsLists.foreach(executionInfo => {
+      val listSQLJobData = new ListBuffer[SQLJobData]
+      executionInfo.jobs.keys.foreach(jobid => {
+        val jobData = job(jobid)
+        if (jobData.isDefined) {
+          val listSQLStageData = new ListBuffer[SQLStageData]
+          jobData.get.stageIds.foreach(stageId => {
+            val stageInfo = stageData(stageId, true)
+            stageInfo.seq.foreach(stageData => {
+              listSQLStageData.append(buildSQLStageData(stageData).get)
+            })
           })
-        })
-        listSQLJobData.append(buildSQLJobData(listSQLStageData, jobData.get).get)
+          listSQLJobData.append(buildSQLJobData(listSQLStageData, jobData.get).get)
+        }
+      })
+      val user = if (sys.props("user.name").nonEmpty) sys.props("user.name") else ""
+      val statement = if (listSQLJobData.nonEmpty && listSQLJobData.head.stages.nonEmpty) {
+        listSQLJobData.head.stages.head.description.getOrElse("")
+      } else {
+        ""
       }
+      val executionData = new ExecutionData(statement, executionInfo.submissionTime, user)
+      executionData.finishTimestamp = executionInfo.completionTime.map(_.getTime).getOrElse(0L)
+      executionData.executePlan = executionInfo.physicalPlanDescription
+      executionData.detail = executionInfo.details
+      executionData.executionId = executionInfo.executionId
+      val isRunning = executionInfo.completionTime.isEmpty ||
+        executionInfo.jobs.exists { case (_, status) => status == JobExecutionStatus.RUNNING }
+      val isFailed =
+        executionInfo.jobs.exists { case (_, status) => status == JobExecutionStatus.FAILED }
+      val state = if (isRunning) {
+        "RUNNING"
+      } else if (isFailed) {
+        "FAILED"
+      } else {
+        "FINISHED"
+      }
+      executionData.state = state
+      executionData.jobId = ListBuffer.empty ++ executionInfo.jobs.keys.map(_.toString).toList
+      executionData.groupId = if (listSQLJobData.nonEmpty) listSQLJobData(0).jobGroup else ""
+      executionData.executionId = executionInfo.executionId
+      executionData.finishAndReport = executionInfo.finishAndReport
+      executionData.duration = executionData.totalTime
+      executionData.jobs = listSQLJobData
+      applicationSQLExecutionData.user = user
+      listExecutionData.append(executionData)
     })
-    val user = if (sys.props("user.name").nonEmpty) sys.props("user.name") else ""
-    val statement = if (listSQLJobData.nonEmpty && listSQLJobData.head.stages.nonEmpty) {
-      listSQLJobData.head.stages.head.description.getOrElse("")
+    if (executionInfo.executionId == AppClientStatus.APP_CLIENT_END) {
+      applicationSQLExecutionData.sqlExecutionDatas = Some(listExecutionData)
     } else {
-      ""
+      applicationSQLExecutionData.sqlExecutionData = Some(listExecutionData(0))
     }
-    val executionData = new ExecutionData(statement, executionInfo.submissionTime, user)
-    executionData.finishTimestamp = executionInfo.completionTime.map(_.getTime).getOrElse(0L)
-    executionData.executePlan = executionInfo.physicalPlanDescription
-    executionData.detail = executionInfo.details
-    executionData.executionId = executionInfo.executionId
-    val isRunning = executionInfo.completionTime.isEmpty ||
-      executionInfo.jobs.exists { case (_, status) => status == JobExecutionStatus.RUNNING }
-    val isFailed =
-      executionInfo.jobs.exists { case (_, status) => status == JobExecutionStatus.FAILED }
-    val state = if (isRunning) {
-      "RUNNING"
-    } else if (isFailed) {
-      "FAILED"
-    } else {
-      "FINISHED"
-    }
-    executionData.state = state
-    executionData.jobId = ListBuffer.empty ++ executionInfo.jobs.keys.map(_.toString).toList
-    executionData.groupId = if (listSQLJobData.nonEmpty) listSQLJobData(0).jobGroup else ""
-    executionData.executionId = executionInfo.executionId
-    executionData.finishAndReport = executionInfo.finishAndReport
-    executionData.duration = executionData.totalTime
-    executionData.jobs = listSQLJobData
-    applicationSQLExecutionData.user = user
-    applicationSQLExecutionData.sqlExecutionData = Some(executionData)
     applicationSQLExecutionData.currentTime = System.currentTimeMillis()
     applicationSQLExecutionData.endTime =
       Some(applicationInfo().get.attempts.last.endTime).get.getTime
@@ -103,6 +167,14 @@ class SqlAppStoreStatusStoreV1(
       MetricEventTypeEnums.APPLICATIONEND.toString
     } else {
       MetricEventTypeEnums.APPLICATIONSRUNNING.toString
+    }
+    applicationSQLExecutionData.tarceId =if (sparkPropertyMap.contains("spark.trace.id")) {
+      sparkPropertyMap("spark.trace.id")
+    } else {
+      ""
+    }
+    if (executionInfo.executionId == AppClientStatus.APP_CLIENT_END) {
+     printResourceCost(applicationSQLExecutionData)
     }
     Some(applicationSQLExecutionData)
   }
@@ -137,7 +209,7 @@ class SqlAppStoreStatusStoreV1(
   }
 
   def buildSQLStageData(stageData: StageData): Option[SQLStageData] = {
-    var metrics: Option[TaskMetricDistributions] = taskSummary(
+    val metrics: Option[TaskMetricDistributions] = taskSummary(
       stageData.stageId, stageData.attemptId, Array(0, 0.25, 0.5, 0.75, 1.0))
     var sqlStageData: SQLStageData = null
     if (!metrics.isDefined) {
@@ -245,7 +317,9 @@ class SqlAppStoreStatusStoreV1(
         tasksLocalitySeq.apply(3),
         Some(sqlTaskAvgMetrics),
         Some(sqlTaskMaxMetrics),
-        skewKeys)
+        skewKeys,
+        operationGraphForStage(stageData.stageId).incomingEdges.size,
+        operationGraphForStage(stageData.stageId).outgoingEdges.size)
       Some(sqlStageData)
     }
   }
@@ -328,6 +402,10 @@ class SqlAppStoreStatusStoreV1(
         logWarning("can not find the sql stageData status")
         Seq.empty
     }
+  }
+
+  def operationGraphForStage(stageId: Int): RDDOperationGraph = {
+    appStatusStore.get.operationGraphForStage(stageId)
   }
 
   def lastStageAttempt(stageId: Int): StageData = {
@@ -486,9 +564,5 @@ class SqlAppStoreStatusStoreV1(
     val RACK_LOCAL = "RACK_LOCAL"
     val ANY = "ANY"
   }
-
 }
-
-
-
 

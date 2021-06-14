@@ -48,7 +48,11 @@ object HiveThriftServer2 extends Logging {
   var uiTab: Option[ThriftServerTab] = None
   var listener: HiveThriftServer2Listener = _
   var eventManager: HiveThriftServer2EventManager = _
+  var thriftServerAppStatusScheduler: ThriftServerAppStatusScheduler = _
 
+  def setThriftServerAppStatusScheduler(AppStatusScheduler: ThriftServerAppStatusScheduler) = {
+    thriftServerAppStatusScheduler = AppStatusScheduler
+  }
   /**
    * :: DeveloperApi ::
    * Starts a new thrift server with the given context.
@@ -74,10 +78,6 @@ object HiveThriftServer2 extends Logging {
                                   sqlContext: SQLContext): Unit = {
     val kvStore = sc.statusStore.store.asInstanceOf[ElementTrackingStore]
     eventManager = new HiveThriftServer2EventManager(sc)
-    val thriftServerSqlStatusStore = new ThriftServerSqlAppStatusStore(
-      Some(SparkSQLEnv.sqlContext.sharedState.statusStore),
-      Some(SparkSQLEnv.sparkContext.statusStore), SparkSQLEnv.sparkContext.conf)
-    server.appStatusScheduler.start(thriftServerSqlStatusStore)
     var failureJobCollector: FailureJobCollector[LogErrorWrapEvent] = null
     if (SparkSQLEnv.sparkContext.conf.get(FAILURE_JOB_COLLECTOR)) {
       failureJobCollector =
@@ -91,7 +91,10 @@ object HiveThriftServer2 extends Logging {
       listener = new HiveThriftServer2Listener(kvStore, sc.conf, Some(server), true,
         server.appStatusScheduler._executionInfoQueue, None)
     }
-
+    val thriftServerSqlStatusStore = new ThriftServerSqlAppStatusStore(
+      Some(SparkSQLEnv.sqlContext.sharedState.statusStore),
+      Some(SparkSQLEnv.sparkContext.statusStore), listener, sqlContext, SparkSQLEnv.sparkContext.conf)
+    server.appStatusScheduler.start(thriftServerSqlStatusStore)
     sc.listenerBus.addToStatusQueue(listener)
     server.appStatusScheduler.setThriftServerListener(listener)
     uiTab = if (sc.getConf.get(UI_ENABLED)) {
@@ -150,6 +153,7 @@ private[hive] class HiveThriftServer2(sqlContext: SQLContext)
   // started, and then once only.
   private val started = new AtomicBoolean(false)
   val appStatusScheduler = new ThriftServerAppStatusScheduler()
+  HiveThriftServer2.setThriftServerAppStatusScheduler(appStatusScheduler)
   override def init(hiveConf: HiveConf): Unit = {
     val sparkSqlCliService = new SparkSQLCLIService(this, sqlContext)
     setSuperField(this, "cliService", sparkSqlCliService)

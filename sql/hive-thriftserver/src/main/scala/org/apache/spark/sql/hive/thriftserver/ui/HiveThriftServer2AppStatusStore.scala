@@ -107,6 +107,7 @@ private[thriftserver] class ExecutionInfo(
     val closeTimestamp: Long,
     val executePlan: String,
     val detail: String,
+    val statementType: String,
     val state: ExecutionState.Value,
     val jobId: ArrayBuffer[String],
     val groupId: String,
