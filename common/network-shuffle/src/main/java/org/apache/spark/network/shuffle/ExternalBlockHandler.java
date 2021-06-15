@@ -539,12 +539,20 @@ public class ExternalBlockHandler extends RpcHandler {
   public void channelActive(TransportClient client) {
     metrics.activeConnections.inc();
     super.channelActive(client);
+    logger.info("active connections is {} when client {} from host {} connected.",
+            metrics.activeConnections.getCount(),
+            client.getClientId(),
+            getRemoteAddress(client.getChannel()));
   }
 
   @Override
   public void channelInactive(TransportClient client) {
     metrics.activeConnections.dec();
     super.channelInactive(client);
+    logger.info("active connections is {} when client {} from host {} unconnected.",
+            metrics.activeConnections.getCount(),
+            client.getClientId(),
+            getRemoteAddress(client.getChannel()));
   }
 
   private boolean shouldRegisterStream(String appId, String execId, TransportClient client) {
