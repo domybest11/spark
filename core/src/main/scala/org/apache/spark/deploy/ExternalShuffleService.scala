@@ -87,6 +87,7 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
       if (filePath != null) {
         file = new File(filePath)
       }
+      logInfo("the shuffle service recovery path is " + filePath)
       new ExternalBlockHandler(conf, file)
     }
   }

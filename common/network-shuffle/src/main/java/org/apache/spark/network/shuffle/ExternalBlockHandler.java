@@ -156,6 +156,12 @@ public class ExternalBlockHandler extends RpcHandler {
             callback.onFailure(e);
             return;
           }
+          logger.info( "Registered streamId {} with blockInfo {} with {} buffers with for client {} from host {}",
+              streamId,
+              msg,
+              numBlockIds,
+              client.getClientId(),
+              getRemoteAddress(client.getChannel()));
         } else {
           // For the compatibility with the old version, still keep the support for OpenBlocks.
           OpenBlocks msg = (OpenBlocks) msgObj;
@@ -164,20 +170,18 @@ public class ExternalBlockHandler extends RpcHandler {
           if (shouldRegisterStream(msg.appId, msg.execId, client)) {
             streamId = streamManager.registerStream(msg.appId,
                 new ManagedBufferIterator(msg), client.getChannel());
+            logger.info( "Registered streamId {} with blockInfo {} with {} buffers with for client {} from host {}",
+                streamId,
+                msg,
+                numBlockIds,
+                client.getClientId(),
+                getRemoteAddress(client.getChannel()));
           } else {
             Exception e = new RuntimeException("can not register stream since the app: " +
                 msg.appId + " has already terminated");
             callback.onFailure(e);
             return;
           }
-        }
-        if (logger.isTraceEnabled()) {
-          logger.trace(
-            "Registered streamId {} with {} buffers for client {} from host {}",
-            streamId,
-            numBlockIds,
-            client.getClientId(),
-            getRemoteAddress(client.getChannel()));
         }
         callback.onSuccess(new StreamHandle(streamId, numBlockIds).toByteBuffer());
       } finally {
@@ -193,22 +197,35 @@ public class ExternalBlockHandler extends RpcHandler {
         blockManager.registerExecutor(msg.appId, msg.execId, msg.executorInfo);
         mergeManager.registerExecutor(msg.appId, msg.executorInfo);
         callback.onSuccess(ByteBuffer.wrap(new byte[0]));
+        logger.info( "Registered executor {} of appId {} with executorInfo {} for client {} from host {}",
+            msg.execId,
+            msg.appId,
+            msg.executorInfo.toString(),
+            client.getClientId(),
+            getRemoteAddress(client.getChannel()));
       } finally {
         responseDelayContext.stop();
       }
-
     } else if (msgObj instanceof RemoveBlocks) {
       RemoveBlocks msg = (RemoveBlocks) msgObj;
       checkAuth(client, msg.appId);
       int numRemovedBlocks = blockManager.removeBlocks(msg.appId, msg.execId, msg.blockIds);
       callback.onSuccess(new BlocksRemoved(numRemovedBlocks).toByteBuffer());
-
+      logger.info( "Remove blocks of appId {} with blockInfo {} for client {} from host {}",
+          msg.appId,
+          msg,
+          client.getClientId(),
+          getRemoteAddress(client.getChannel()));
     } else if (msgObj instanceof GetLocalDirsForExecutors) {
       GetLocalDirsForExecutors msg = (GetLocalDirsForExecutors) msgObj;
       checkAuth(client, msg.appId);
       Map<String, String[]> localDirs = blockManager.getLocalDirs(msg.appId, msg.execIds);
       callback.onSuccess(new LocalDirsForExecutors(localDirs).toByteBuffer());
-
+      logger.info( "Get local dirs for executors {} of app {} for client {} from host {}",
+          msg.execIds,
+          msg.appId,
+          client.getClientId(),
+          getRemoteAddress(client.getChannel()));
     } else if (msgObj instanceof FinalizeShuffleMerge) {
       final Timer.Context responseDelayContext =
           metrics.finalizeShuffleMergeLatencyMillis.time();
@@ -217,6 +234,11 @@ public class ExternalBlockHandler extends RpcHandler {
         checkAuth(client, msg.appId);
         MergeStatuses statuses = mergeManager.finalizeShuffleMerge(msg);
         callback.onSuccess(statuses.toByteBuffer());
+        logger.info( "Finalize shuffleId {} merge of app {} for client {} from host {}",
+            msg.shuffleId,
+            msg.appId,
+            client.getClientId(),
+            getRemoteAddress(client.getChannel()));
       } catch(IOException e) {
         throw new RuntimeException(String.format("Error while finalizing shuffle merge "
           + "for application %s shuffle %d", msg.appId, msg.shuffleId), e);
@@ -230,6 +252,10 @@ public class ExternalBlockHandler extends RpcHandler {
 
   @Override
   public void exceptionCaught(Throwable cause, TransportClient client) {
+    logger.info( "Caught exception {} for client {} from host {}",
+        cause.getCause().getMessage(),
+        client.getClientId(),
+        getRemoteAddress(client.getChannel()));
     metrics.caughtExceptions.inc();
   }
 
