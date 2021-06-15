@@ -70,9 +70,8 @@ case class ScalarSubquery(
   override def toString: String = plan.simpleString(SQLConf.get.maxToStringFields)
   override def withNewPlan(query: BaseSubqueryExec): ScalarSubquery = copy(plan = query)
 
-  override def semanticEquals(other: Expression): Boolean = other match {
-    case s: ScalarSubquery => plan.sameResult(s.plan)
-    case _ => false
+  override lazy val canonicalized: Expression = {
+    ScalarSubquery(plan.canonicalized.asInstanceOf[BaseSubqueryExec], ExprId(0))
   }
 
   // the first column in first row from `query`.
@@ -124,11 +123,6 @@ case class InSubqueryExec(
   override def nullable: Boolean = child.nullable
   override def toString: String = s"$child IN ${plan.name}"
   override def withNewPlan(plan: BaseSubqueryExec): InSubqueryExec = copy(plan = plan)
-
-  override def semanticEquals(other: Expression): Boolean = other match {
-    case in: InSubqueryExec => child.semanticEquals(in.child) && plan.sameResult(in.plan)
-    case _ => false
-  }
 
   def updateResult(): Unit = {
     val rows = plan.executeCollect()

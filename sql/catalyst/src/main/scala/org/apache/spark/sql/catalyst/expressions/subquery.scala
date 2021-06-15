@@ -51,13 +51,6 @@ abstract class SubqueryExpression(
   override lazy val references: AttributeSet =
     if (plan.resolved) super.references -- plan.outputSet else super.references
   override def withNewPlan(plan: LogicalPlan): SubqueryExpression
-  override def semanticEquals(o: Expression): Boolean = o match {
-    case p: SubqueryExpression =>
-      this.getClass.getName.equals(p.getClass.getName) && plan.sameResult(p.plan) &&
-        children.length == p.children.length &&
-        children.zip(p.children).forall(p => p._1.semanticEquals(p._2))
-    case _ => false
-  }
 }
 
 object SubqueryExpression {
