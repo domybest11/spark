@@ -14,8 +14,6 @@ import java.net.HttpURLConnection;
 public class thriftProbeRestGetHandler implements HttpHandler {
   private static final Logger LOG = LoggerFactory.getLogger(thriftProbeRestGetHandler.class);
 
-  ThriftServerProbeManager thriftServerProbeManager = new ThriftServerProbeManager();
-
   @Override
   public void handle(HttpExchange he) throws IOException {
     String requestMethod = he.getRequestMethod();
@@ -28,7 +26,7 @@ public class thriftProbeRestGetHandler implements HttpHandler {
       // send response
       String response;
 
-      if (thriftServerProbeManager.getThriftServerHealthy()) {
+      if (ThriftServerProbeManager.thriftServerHealthy) {
         response = "This is spark thrift server probe and server is ok.";
         he.sendResponseHeaders(HttpURLConnection.HTTP_OK, 0);
       } else {
