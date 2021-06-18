@@ -22,7 +22,7 @@ public class ThriftServerProbeManager {
   private final static Integer CONNECTION_RETRY_TIMES = 5;
   private String host;
   private int port;
-  private volatile boolean thriftServerHealthy = true;
+  public static volatile boolean thriftServerHealthy = true;
 
   // STS is already running and can submit the probe directly
   public void init(int port, String appId, String queue) {
