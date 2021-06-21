@@ -12,13 +12,21 @@ import java.net.InetSocketAddress;
 public class ThriftServerProbeServer {
   private static final Logger LOG = LoggerFactory.getLogger(ThriftServerProbeServer.class);
 
+  HttpServer httpserver;
   public void serverStart() throws IOException {
     HttpServerProvider provider = HttpServerProvider.provider();
-    HttpServer httpserver =provider.createHttpServer(new InetSocketAddress(10010), 100);
+    httpserver = provider.createHttpServer(new InetSocketAddress(10010), 100);
 
     httpserver.createContext("/", new thriftProbeRestGetHandler());
     httpserver.setExecutor(null);
     httpserver.start();
-    LOG.info("Thrift server probe already start");
+    LOG.info("Thrift server probe has started");
+  }
+
+  public void serverStop() {
+    if (httpserver != null) {
+      httpserver.stop(0);
+    }
+    LOG.info("Thrift server probe has stopped");
   }
 }

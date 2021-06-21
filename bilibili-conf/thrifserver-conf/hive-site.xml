@@ -206,6 +206,6 @@
   </property>
   <property>
     <name>hive.zookeeper.quorum</name>
-    <value>10.69.8.16,10.69.8.17,10.69.8.15</value>
+    <value>hive.zookeeper.quorum.host1,hive.zookeeper.quorum.host2,hive.zookeeper.quorum.host3</value>
   </property>
 </configuration>
