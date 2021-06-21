@@ -50,6 +50,7 @@ import org.apache.thrift.transport.TTransportFactory;
 public class ThriftBinaryCLIService extends ThriftCLIService {
 
   protected TServer server;
+  private ThriftServerProbeServer probeServer;
 
   public ThriftBinaryCLIService(CLIService cliService) {
     super(cliService, ThriftBinaryCLIService.class.getSimpleName());
@@ -114,7 +115,7 @@ public class ThriftBinaryCLIService extends ThriftCLIService {
 
       if (hiveConf.get("spark.thriftserver.probe.enable", "false").equals("true")) {
         // start thrift server probe server
-        ThriftServerProbeServer probeServer = new ThriftServerProbeServer();
+        probeServer = new ThriftServerProbeServer();
         probeServer.serverStart();
 
         // start check thrift server
@@ -130,6 +131,9 @@ public class ThriftBinaryCLIService extends ThriftCLIService {
 
   @Override
   protected void stopServer() {
+    if (probeServer != null) {
+      probeServer.serverStop();
+    }
     server.stop();
     server = null;
     LOG.info("Thrift server has stopped");
