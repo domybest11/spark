@@ -864,8 +864,32 @@ private[spark] class SparkSubmit extends Logging {
       resolvedPyFiles
     }
     sparkConf.set(SUBMIT_PYTHON_FILES, formattedPyFiles.split(",").toSeq)
+    evolveSparkConf(sparkConf)
 
     (childArgs.toSeq, childClasspath.toSeq, sparkConf, childMainClass)
+  }
+
+  private def evolveSparkConf(sparkConf: SparkConf): Unit = {
+    try {
+      val grayLevel = sparkConf.getInt("spark.deploy.grayLevel", -1)
+      var autoSet = false
+
+      val appName = sparkConf.getOption("spark.app.name")
+      if (grayLevel > 0 && appName.getOrElse("").startsWith("a_h")) {
+        val jobId = appName.get.split("_")(3)
+        if (jobId.toLong % 100 < grayLevel) {
+          autoSet = true
+        }
+      }
+      if (autoSet || sparkConf.getBoolean("spark.sql.test.mirrorExecute", false)) {
+        sparkConf.set("spark.sql.hive.convertMetastoreParquet", "true")
+        sparkConf.set("spark.sql.hive.convertMetastoreOrc", "true")
+        sparkConf.set("spark.sql.legacy.createHiveTableByDefault", "false")
+        sparkConf.set("spark.sql.sources.default", "orc")
+      }
+    } catch {
+      case e : Exception => logWarning(s"Evolve sparkConf failed ${e.getMessage}")
+    }
   }
 
   // [SPARK-20328]. HadoopRDD calls into a Hadoop library that fetches delegation tokens with
