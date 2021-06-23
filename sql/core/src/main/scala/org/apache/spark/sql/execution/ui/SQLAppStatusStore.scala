@@ -100,6 +100,7 @@ class SQLExecutionUIData(
     val metricValues: Map[Long, String]) {
   @volatile var finishAndReport: Boolean = false
   @volatile var sessionId: String = ""
+  @volatile var statement: String = ""
   @JsonIgnore @KVIndex("completionTime")
   private def completionTimeIndex: Long = completionTime.map(_.getTime).getOrElse(-1L)
 }

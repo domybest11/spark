@@ -16,10 +16,12 @@
  */
 package org.apache.spark.sql.hive.thriftserver.status
 
+import scala.collection.mutable.ListBuffer
+
 import org.apache.spark.sql.hive.thriftserver.ui.LiveExecutionData
 import org.apache.spark.status.api.v1.StageStatus
 
-import scala.collection.mutable.ListBuffer
+
 
 class ApplicationSQLExecutionData(
     var appId: String = "",
@@ -37,7 +39,8 @@ class ApplicationSQLExecutionData(
     var user: String = "hive",
     var role: String = "STS",
     var sqlExecutionData: Option[LiveExecutionData] = Some(new LiveExecutionData()),
-    var sqlExecutionDatas: Option[ListBuffer[LiveExecutionData]] = Some(ListBuffer.empty[LiveExecutionData]),
+    var sqlExecutionDatas: Option[ListBuffer[LiveExecutionData]] =
+    Some(ListBuffer.empty[LiveExecutionData]),
     var sparkVersion: String = "spark3.1",
     var tarceId: String = "") {
     var executionCost = ""

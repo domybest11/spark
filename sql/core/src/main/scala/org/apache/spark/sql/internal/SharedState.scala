@@ -52,6 +52,8 @@ private[sql] class SharedState(
     initialConfigs: scala.collection.Map[String, String])
   extends Logging {
 
+  var sqlAppStatusScheduler: SqlAppStatusScheduler = null
+
   SharedState.setFsUrlStreamHandlerFactory(sparkContext.conf, sparkContext.hadoopConfiguration)
 
   private[sql] val (conf, hadoopConf) = {
@@ -105,7 +107,7 @@ private[sql] class SharedState(
       statusStore = new SQLAppStatusStore(kvStore, Some(listener))
       sparkContext.ui.foreach(new SQLTab(statusStore, _))
     } else {
-      val sqlAppStatusScheduler = new SqlAppStatusScheduler(sparkContext)
+      sqlAppStatusScheduler = new SqlAppStatusScheduler(sparkContext)
       val kvStore = sparkContext.statusStore.store.asInstanceOf[ElementTrackingStore]
       val listener = new SQLAppStatusListener(sparkContext.conf, kvStore, live = true,
         Some(sqlAppStatusScheduler._executionInfoQueue))

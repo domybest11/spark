@@ -111,7 +111,9 @@ private[thriftserver] class ExecutionInfo(
     val state: ExecutionState.Value,
     val jobId: ArrayBuffer[String],
     val groupId: String,
-    var finishOrErroAndReport: Boolean) {
+    var finishOrErroAndReport: Boolean,
+    var traceId: String = "",
+    var appName: String = "") {
   @JsonIgnore @KVIndex("finishTime")
   private def finishTimeIndex: Long = if (finishTimestamp > 0L && !isExecutionActive) {
     finishTimestamp

@@ -54,8 +54,11 @@ private[hive] class SparkGetTypeInfoOperation(
     if (isAuthV2Enabled) {
       authorizeMetaGets(HiveOperationType.GET_TYPEINFO, null)
     }
-
+    val traceId = sqlContext.sparkContext.conf.getOption("spark.tarce.id").getOrElse("")
+    val appName = sqlContext.sparkContext.conf.getOption("spark.app.name").getOrElse("")
     HiveThriftServer2.eventManager.onStatementStart(
+      traceId,
+      appName,
       statementId,
       parentSession.getSessionHandle.getSessionId.toString,
       logMsg,
@@ -89,7 +92,7 @@ private[hive] class SparkGetTypeInfoOperation(
       setState(OperationState.FINISHED)
     } catch onError()
 
-    HiveThriftServer2.eventManager.onStatementFinish(statementId)
+    HiveThriftServer2.eventManager.onStatementFinish(statementId, traceId, appName)
   }
 }
 

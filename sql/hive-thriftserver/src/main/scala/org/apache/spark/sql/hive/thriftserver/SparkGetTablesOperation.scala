@@ -73,8 +73,11 @@ private[hive] class SparkGetTablesOperation(
         HivePrivilegeObjectUtils.getHivePrivDbObjects(seqAsJavaListConverter(matchingDbs).asJava)
       authorizeMetaGets(HiveOperationType.GET_TABLES, privObjs, cmdStr)
     }
-
+    val traceId = sqlContext.sparkContext.conf.getOption("spark.tarce.id").getOrElse("")
+    val appName = sqlContext.sparkContext.conf.getOption("spark.app.name").getOrElse("")
     HiveThriftServer2.eventManager.onStatementStart(
+      traceId,
+      appName,
       statementId,
       parentSession.getSessionHandle.getSessionId.toString,
       logMsg,
@@ -109,7 +112,7 @@ private[hive] class SparkGetTablesOperation(
       setState(OperationState.FINISHED)
     } catch onError()
 
-    HiveThriftServer2.eventManager.onStatementFinish(statementId)
+    HiveThriftServer2.eventManager.onStatementFinish(statementId, traceId, appName)
   }
 
   private def addToRowSet(

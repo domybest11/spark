@@ -35,9 +35,12 @@ class ApplicationSQLExecutionData(var appId: String = "",
     var user: String = "",
     var role: String = "SSL",
     var sqlExecutionData: Option[ExecutionData] = Some(new ExecutionData()),
-    var sqlExecutionDatas: Option[ListBuffer[ExecutionData]] = Some(ListBuffer.empty[ExecutionData]),
+    var sqlExecutionDatas: Option[ListBuffer[ExecutionData]] =
+                                  Some(ListBuffer.empty[ExecutionData]),
     var sparkVersion: String = "spark3.1",
-    var tarceId: String = "")
+    var tarceId: String = "") {
+    var executionCost = ""
+   }
 
 class ExecutionData(var statement: String = "",
     var startTimestamp: Long = 0L,

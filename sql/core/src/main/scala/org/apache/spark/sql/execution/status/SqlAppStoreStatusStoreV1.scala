@@ -21,15 +21,17 @@ import java.util.{List => JList}
 
 import org.apache.hadoop.ipc.RPC
 import org.apache.hadoop.yarn.api.ApplicationClientProtocol
-import org.apache.hadoop.yarn.api.protocolrecords.{GetApplicationReportRequest}
+import org.apache.hadoop.yarn.api.protocolrecords.GetApplicationReportRequest
 import org.apache.hadoop.yarn.api.records.ApplicationId
 import org.apache.hadoop.yarn.client.ClientRMProxy
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.util.Records
-import org.apache.spark.deploy.SparkHadoopUtil
 
 import scala.collection.mutable.ListBuffer
-import org.apache.spark.{JobExecutionStatus, SparkConf}
+
+import org.apache.spark.JobExecutionStatus
+import org.apache.spark.SparkConf
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.ui.{AppClientStatus, SQLAppStatusStore, SQLExecutionUIData}
@@ -48,7 +50,7 @@ class SqlAppStoreStatusStoreV1(
 
   private val hadoopConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(conf))
 
-  def printResourceCost(applicationSQLExecutionData: ApplicationSQLExecutionData): Unit = {
+  def countResourceCost(applicationSQLExecutionData: ApplicationSQLExecutionData): String = {
     var rmClient: ApplicationClientProtocol = null
     try {
     rmClient = ClientRMProxy.createRMProxy(hadoopConf, classOf[ApplicationClientProtocol])
@@ -61,23 +63,29 @@ class SqlAppStoreStatusStoreV1(
     val vcoreSeconds = resourceUsage.getVcoreSeconds
     var inputBytes: Long = 0
     var outputBytes: Long = 0
-      applicationSQLExecutionData.sqlExecutionDatas.get.foreach(sqlExecutionData => {
-      sqlExecutionData.jobs.foreach(job => {
-        inputBytes += job.stages.filter(_.inComing == 0).map(_.inputBytes).toList.sum
-        outputBytes += job.stages.filter(_.outGoing == 0).map(_.outputBytes).toList.sum
-      })
-    })
-    val inputUnit = if (inputBytes > 0) Utils.bytesToString(inputBytes) else "0B"
-    val outputUnit = if (outputBytes > 0) Utils.bytesToString(outputBytes) else "0B"
-    var traceId = conf.get("spark.trace.id","")
-    if (traceId.isEmpty) {
-      traceId = ""
+    val jobs: ListBuffer[SQLJobData] = applicationSQLExecutionData.sqlExecutionData.get.jobs
+    var costMessage = ""
+    if (jobs.nonEmpty) {
+        jobs.foreach(job => {
+          inputBytes += job.stages.filter(_.inComing == 0).map(_.inputBytes).toList.sum
+          outputBytes += job.stages.filter(_.outGoing == 0).map(_.outputBytes).toList.sum
+        })
+        val inputUnit = if (inputBytes > 0) Utils.bytesToString(inputBytes) else "0B"
+        val outputUnit = if (outputBytes > 0) Utils.bytesToString(outputBytes) else "0B"
+        var traceId = conf.get("spark.trace.id", "")
+        if (traceId.isEmpty) {
+          traceId = ""
+        }
+        // scalastyle:off
+         costMessage = s"traceId:${traceId},当前任务使用的资源消耗情况: 内存:${memorySeconds}(m*s)," +
+          s"CPU: ${vcoreSeconds}(c*s), 读数据量:${inputUnit}, 写数据量:${outputUnit}."
+        logInfo(costMessage)
       }
-    logInfo(s"traceId:$traceId,当前任务使用的资源消耗情况:内存:$memorySeconds(m*s), " +
-      s"CPU: $vcoreSeconds(c*s), 读数据量:$inputUnit, 写数据量:$outputUnit.")
+      costMessage
     } catch {
        case e: Exception =>
-       logError("Get application resource usage failed", e)
+       logWarning("Get application resource usage failed", e)
+        ""
     } finally {
     if (rmClient != null) {
       RPC.stopProxy(rmClient)
@@ -87,7 +95,7 @@ class SqlAppStoreStatusStoreV1(
   }
 
   def assembleExecutionInfo(
-      executionInfo: SQLExecutionUIData): Option[ApplicationSQLExecutionData] = {
+      executionInfo: SQLExecutionUIData, method: String): Option[ApplicationSQLExecutionData] = {
     val applicationInfoV1 = applicationInfo().get
     val sparkPropertyMap = environmentInfo().get.sparkProperties.toMap
     val applicationSQLExecutionData = new ApplicationSQLExecutionData(
@@ -105,7 +113,7 @@ class SqlAppStoreStatusStoreV1(
     if (executionInfo.executionId == AppClientStatus.APP_CLIENT_END) {
       executionsLists = executionsList()
     } else {
-      executionsLists  =  executionsLists :+ executionInfo
+      executionsLists = executionsLists :+ executionInfo
     }
     val listExecutionData = new ListBuffer[ExecutionData]
     executionsLists.foreach(executionInfo => {
@@ -152,6 +160,7 @@ class SqlAppStoreStatusStoreV1(
       executionData.finishAndReport = executionInfo.finishAndReport
       executionData.duration = executionData.totalTime
       executionData.jobs = listSQLJobData
+      executionData.statement = executionInfo.statement
       applicationSQLExecutionData.user = user
       listExecutionData.append(executionData)
     })
@@ -168,13 +177,14 @@ class SqlAppStoreStatusStoreV1(
     } else {
       MetricEventTypeEnums.APPLICATIONSRUNNING.toString
     }
-    applicationSQLExecutionData.tarceId =if (sparkPropertyMap.contains("spark.trace.id")) {
+    applicationSQLExecutionData.tarceId = if (sparkPropertyMap.contains("spark.trace.id")) {
       sparkPropertyMap("spark.trace.id")
     } else {
       ""
     }
-    if (executionInfo.executionId == AppClientStatus.APP_CLIENT_END) {
-     printResourceCost(applicationSQLExecutionData)
+    if (executionInfo.executionId !=  AppClientStatus.APP_CLIENT_END
+      && executionInfo.completionTime.nonEmpty && method.equals("once")) {
+      applicationSQLExecutionData.executionCost = countResourceCost(applicationSQLExecutionData)
     }
     Some(applicationSQLExecutionData)
   }
@@ -341,6 +351,8 @@ class SqlAppStoreStatusStoreV1(
   def executionsList(): List[SQLExecutionUIData] = {
     try {
       sqlAppStatusStore.get.executionsList().toList
+        .filterNot(sqlExecution => sqlExecution.statement == null ||
+        sqlExecution.statement.equals(""))
     } catch {
       case _: NoSuchElementException =>
         logWarning("can not find the sql executions status")

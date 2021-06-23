@@ -50,8 +50,9 @@ object HiveThriftServer2 extends Logging {
   var eventManager: HiveThriftServer2EventManager = _
   var thriftServerAppStatusScheduler: ThriftServerAppStatusScheduler = _
 
-  def setThriftServerAppStatusScheduler(AppStatusScheduler: ThriftServerAppStatusScheduler) = {
-    thriftServerAppStatusScheduler = AppStatusScheduler
+  def setThriftServerAppStatusScheduler(appStatusScheduler:
+                                        ThriftServerAppStatusScheduler): Unit = {
+    thriftServerAppStatusScheduler = appStatusScheduler
   }
   /**
    * :: DeveloperApi ::
@@ -93,7 +94,8 @@ object HiveThriftServer2 extends Logging {
     }
     val thriftServerSqlStatusStore = new ThriftServerSqlAppStatusStore(
       Some(SparkSQLEnv.sqlContext.sharedState.statusStore),
-      Some(SparkSQLEnv.sparkContext.statusStore), listener, sqlContext, SparkSQLEnv.sparkContext.conf)
+      Some(SparkSQLEnv.sparkContext.statusStore),
+      listener, sqlContext, SparkSQLEnv.sparkContext.conf)
     server.appStatusScheduler.start(thriftServerSqlStatusStore)
     sc.listenerBus.addToStatusQueue(listener)
     server.appStatusScheduler.setThriftServerListener(listener)

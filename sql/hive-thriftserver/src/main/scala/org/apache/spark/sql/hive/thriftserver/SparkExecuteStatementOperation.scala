@@ -24,6 +24,7 @@ import java.util.concurrent.{Executors, RejectedExecutionException, TimeUnit}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.control.NonFatal
+
 import org.apache.hadoop.fs.FileSystem
 import org.apache.hadoop.hive.metastore.api.FieldSchema
 import org.apache.hadoop.hive.shims.Utils
@@ -31,9 +32,10 @@ import org.apache.hadoop.security.UserGroupInformation._
 import org.apache.hive.service.cli._
 import org.apache.hive.service.cli.operation.ExecuteStatementOperation
 import org.apache.hive.service.cli.session.HiveSession
+
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.{DataFrame, SQLContext, Row => SparkRow}
-import org.apache.spark.sql.execution.HiveResult.{TimeFormatters, getTimeFormatters, toHiveString}
+import org.apache.spark.sql.{DataFrame, Row => SparkRow, SQLContext}
+import org.apache.spark.sql.execution.HiveResult.{getTimeFormatters, toHiveString, TimeFormatters}
 import org.apache.spark.sql.execution.command.SetCommand
 import org.apache.spark.sql.hive.thriftserver.ui.{LiveExecutionData, SessionStatus}
 import org.apache.spark.sql.internal.SQLConf
@@ -225,7 +227,14 @@ private[hive] class SparkExecuteStatementOperation(
     logInfo(s"Submitting query '$statement' with $statementId")
     val traceId = sqlContext.sparkSession.conf.getOption("archer.trace.id")
       .orElse(Option(parentSession.getHiveConf.get("archer.trace.id")))
+    var appName = sqlContext.sparkSession.conf.getOption("spark.app.name")
+      .orElse(Option(parentSession.getHiveConf.get("spark.app.name")))
+    if (appName.isDefined && appName.get.contains("Thrift JDBC")) {
+      appName = None
+    }
     HiveThriftServer2.eventManager.onStatementStart(
+      traceId.getOrElse(""),
+      appName.getOrElse(""),
       statementId,
       parentSession.getSessionHandle.getSessionId.toString,
       statement,
@@ -251,7 +260,7 @@ private[hive] class SparkExecuteStatementOperation(
     }
 
     if (!runInBackground) {
-      execute(traceId)
+      execute(traceId, appName)
     } else {
       val sparkServiceUGI =
         if (sqlContext.sparkContext.conf.getBoolean("spark.proxyuser.enabled", false)) {
@@ -273,7 +282,7 @@ private[hive] class SparkExecuteStatementOperation(
               registerCurrentOperationLog()
               try {
                 withLocalProperties {
-                  execute(traceId)
+                  execute(traceId, appName)
                 }
               } catch {
                 case e: HiveSQLException => setOperationException(e)
@@ -308,24 +317,32 @@ private[hive] class SparkExecuteStatementOperation(
           logError("Error submitting query in background, query rejected", rejected)
           setState(OperationState.ERROR)
           HiveThriftServer2.eventManager.onStatementError(
-            statementId, traceId.getOrElse(""), rejected.getMessage, SparkUtils.exceptionString(rejected))
+            appName.getOrElse(""),
+            statementId, traceId.getOrElse(""),
+            rejected.getMessage, SparkUtils.exceptionString(rejected))
           throw new HiveSQLException("The background threadpool cannot accept" +
             " new task for execution, please retry the operation", rejected)
         case NonFatal(e) =>
           logError(s"Error executing query in background", e)
           setState(OperationState.ERROR)
           HiveThriftServer2.eventManager.onStatementError(
+            appName.getOrElse(""),
             statementId, traceId.getOrElse(""), e.getMessage, SparkUtils.exceptionString(e))
           throw new HiveSQLException(e)
       }
     }
   }
 
-  private def execute(traceId: Option[String]): Unit = {
+  private def execute(traceId: Option[String], appName: Option[String]): Unit = {
     if (traceId.isDefined) {
-      logInfo(s"Query with trace id $traceId")
+      logInfo(s"Query with trace id ${traceId.getOrElse("")}")
       sqlContext.sparkContext.setLocalProperty("spark.trace.id", traceId.get)
     }
+    if (appName.isDefined) {
+      logInfo(s"Query with appName is ${appName.getOrElse("")}")
+      sqlContext.sparkContext.setLocalProperty("spark.app.name", appName.get)
+    }
+    // scalastyle:off
     sqlContext.sparkContext.setLocalProperty("spark.trace.ignored",
       if (statement.toUpperCase.startsWith("SET")) "true" else "false")
     sqlContext.sparkContext.setJobGroup(statementId, substitutorStatement)
@@ -359,7 +376,7 @@ private[hive] class SparkExecuteStatementOperation(
           logInfo(s"Setting spark.scheduler.pool=$value for future statements in this session.")
         case _ =>
       }
-      HiveThriftServer2.eventManager.onStatementParsed(statementId,
+      HiveThriftServer2.eventManager.onStatementParsed(statementId, traceId.getOrElse(""), appName.getOrElse(""),
         result.queryExecution.toString())
       iter = {
         if (sqlContext.getConf(SQLConf.THRIFTSERVER_INCREMENTAL_COLLECT.key).toBoolean) {
@@ -391,29 +408,29 @@ private[hive] class SparkExecuteStatementOperation(
             e.getCause.isInstanceOf[OutOfMemoryError] &&
             e.getCause.getMessage.contains(
               "Not enough memory to build and broadcast the table to all worker nodes")) {
-            broadcastOOMFallToSMJ(statementId, traceId.getOrElse(""))
+            broadcastOOMFallToSMJ(statementId, traceId.getOrElse(""), appName.getOrElse(""))
           } else {
             logError(s"Error executing query, currentState $currentState, ", e)
             setState(OperationState.ERROR)
             HiveThriftServer2.eventManager.onStatementError(
-              statementId, traceId.getOrElse("") ,e.getMessage, SparkUtils.exceptionString(e))
+              appName.getOrElse(""), statementId, traceId.getOrElse("") ,e.getMessage, SparkUtils.exceptionString(e))
             throw new HiveSQLException(e.toString)
           }
         }
     } finally {
         val sessionId = getParentSession.getSessionHandle.getSessionId.toString
         val thriftServerSqlStatusStore = HiveThriftServer2.thriftServerAppStatusScheduler
-        val sessionEnd = new LiveExecutionData(SessionStatus.SESSION_END, "",
+        val executionEnd = new LiveExecutionData(statementId, SessionStatus.SESSION_RUNNING,
           sessionId, System.currentTimeMillis, "")
-        val thriftServerReportWrap = thriftServerSqlStatusStore.sendOnceKafka(sessionEnd)
-        if (thriftServerReportWrap != null && thriftServerReportWrap.getContent.executionCost.length > 0)
-        {
+        val thriftServerReportWrap = thriftServerSqlStatusStore.sendOnceKafka(executionEnd)
+        if (thriftServerReportWrap != null
+          && thriftServerReportWrap.getContent.executionCost.length > 0) {
           operationLog.writeOperationLog(s"${thriftServerReportWrap.getContent.executionCost}\n")
         }
       synchronized {
         if (!getStatus.getState.isTerminal) {
           setState(OperationState.FINISHED)
-          HiveThriftServer2.eventManager.onStatementFinish(statementId)
+          HiveThriftServer2.eventManager.onStatementFinish(statementId, traceId.getOrElse(""), appName.getOrElse(""))
         }
       }
       sqlContext.sparkContext.clearJobGroup()
@@ -421,23 +438,32 @@ private[hive] class SparkExecuteStatementOperation(
   }
 
   def timeoutCancel(): Unit = {
+    val traceId = sqlContext.sparkSession.conf.getOption("archer.trace.id")
+      .orElse(Option(parentSession.getHiveConf.get("archer.trace.id")))
+    val appName = sqlContext.sparkSession.conf.getOption("spark.app.name")
+      .orElse(Option(parentSession.getHiveConf.get("spark.app.name")))
     synchronized {
       if (!getStatus.getState.isTerminal) {
         logInfo(s"Query with $statementId timed out after $timeout seconds")
         setState(OperationState.TIMEDOUT)
         cleanup()
-        HiveThriftServer2.eventManager.onStatementTimeout(statementId)
+        HiveThriftServer2.eventManager.onStatementTimeout(statementId,
+          traceId.getOrElse(""), appName.getOrElse(""))
       }
     }
   }
 
   override def cancel(): Unit = {
+    val traceId = sqlContext.sparkSession.conf.getOption("archer.trace.id")
+      .orElse(Option(parentSession.getHiveConf.get("archer.trace.id")))
+    val appName = sqlContext.sparkSession.conf.getOption("spark.app.name")
+      .orElse(Option(parentSession.getHiveConf.get("spark.app.name")))
     synchronized {
       if (!getStatus.getState.isTerminal) {
         logInfo(s"Cancel query with $statementId")
         setState(OperationState.CANCELED)
         cleanup()
-        HiveThriftServer2.eventManager.onStatementCanceled(statementId)
+        HiveThriftServer2.eventManager.onStatementCanceled(statementId, traceId.getOrElse(""), appName.getOrElse(""))
       }
     }
   }
@@ -455,7 +481,7 @@ private[hive] class SparkExecuteStatementOperation(
     }
   }
 
-  private def broadcastOOMFallToSMJ(statementId: String, traceId: String): Unit = {
+  private def broadcastOOMFallToSMJ(statementId: String, traceId: String, appName: String): Unit = {
     logInfo(s"When the broadcast memory overflows, " +
       s"it is being converted to SMJ query '$statement' with $statementId")
     try {
@@ -468,7 +494,8 @@ private[hive] class SparkExecuteStatementOperation(
           logInfo(s"Setting spark.scheduler.pool=$value for future statements in this session.")
         case _ =>
       }
-      HiveThriftServer2.eventManager.onStatementParsed(statementId, result.queryExecution.toString())
+      HiveThriftServer2.eventManager.onStatementParsed(statementId, traceId, appName,
+        result.queryExecution.toString())
       iter = {
         if (sqlContext.getConf(SQLConf.THRIFTSERVER_INCREMENTAL_COLLECT.key).toBoolean) {
           resultList = None
@@ -486,7 +513,7 @@ private[hive] class SparkExecuteStatementOperation(
         } else {
           setState(OperationState.ERROR)
           HiveThriftServer2.eventManager.onStatementError(
-            statementId, traceId, e.getMessage, SparkUtils.exceptionString(e))
+            appName, statementId, traceId, e.getMessage, SparkUtils.exceptionString(e))
           throw e
         }
       // Actually do need to catch Throwable as some failures don't inherit from Exception and
@@ -496,11 +523,11 @@ private[hive] class SparkExecuteStatementOperation(
         logError(s"Error executing query, currentState $currentState, ", e)
         setState(OperationState.ERROR)
         HiveThriftServer2.eventManager.onStatementError(
-          statementId, traceId, e.getMessage, SparkUtils.exceptionString(e))
+          appName, statementId, traceId, e.getMessage, SparkUtils.exceptionString(e))
         throw new HiveSQLException(e.toString)
     }
     setState(OperationState.FINISHED)
-    HiveThriftServer2.eventManager.onStatementFinish(statementId)
+    HiveThriftServer2.eventManager.onStatementFinish(statementId, traceId, appName)
   }
 
 

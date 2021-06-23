@@ -21,7 +21,9 @@ import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+
 import org.apache.hive.service.server.HiveServer2
+
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.Status.LIVE_ENTITY_UPDATE_PERIOD
@@ -170,6 +172,8 @@ private[thriftserver] class HiveThriftServer2Listener(
     executionData.state = ExecutionState.STARTED
     executionList.put(e.id, executionData)
     executionData.groupId = e.groupId
+    executionData.traceId = e.traceId
+    executionData.appName = e.appName
     updateLiveStore(executionData)
     executionQueue.offer(executionData)
     Option(sessionList.get(e.sessionId)) match {
@@ -186,6 +190,8 @@ private[thriftserver] class HiveThriftServer2Listener(
       case Some(executionData) =>
         executionData.executePlan = e.executionPlan
         executionData.state = ExecutionState.COMPILED
+        executionData.traceId = e.traceId
+        executionData.appName = e.appName
         updateLiveStore(executionData)
         executionQueue.offer(executionList.get(e.id))
       case None => logWarning(s"onOperationParsed called with unknown operation id: ${e.id}")
@@ -196,6 +202,8 @@ private[thriftserver] class HiveThriftServer2Listener(
       case Some(executionData) =>
         executionData.finishTimestamp = e.finishTime
         executionData.state = ExecutionState.CANCELED
+        executionData.traceId = e.traceId
+        executionData.appName = e.appName
         updateLiveStore(executionData)
         executionList.get(e.id).finishOrErroAndReport = true
         executionQueue.offer(executionList.get(e.id))
@@ -207,6 +215,8 @@ private[thriftserver] class HiveThriftServer2Listener(
       case Some(executionData) =>
         executionData.finishTimestamp = e.finishTime
         executionData.state = ExecutionState.TIMEDOUT
+        executionData.traceId = e.traceId
+        executionData.appName = e.appName
         updateLiveStore(executionData)
         executionList.get(e.id).finishOrErroAndReport = true
         executionQueue.offer(executionList.get(e.id))
@@ -219,6 +229,8 @@ private[thriftserver] class HiveThriftServer2Listener(
         executionData.finishTimestamp = e.finishTime
         executionData.detail = e.errorMsg
         executionData.state = ExecutionState.FAILED
+        executionData.traceId = e.traceId
+        executionData.appName = e.appName
         updateLiveStore(executionData)
         executionList.get(e.id).finishOrErroAndReport = true
         executionQueue.offer(executionList.get(e.id))
@@ -236,6 +248,8 @@ private[thriftserver] class HiveThriftServer2Listener(
       case Some(executionData) =>
         executionData.finishTimestamp = e.finishTime
         executionData.state = ExecutionState.FINISHED
+        executionData.traceId = e.traceId
+        executionData.appName = e.appName
         updateLiveStore(executionData)
         executionList.get(e.id).finishOrErroAndReport = true
         executionQueue.offer(executionList.get(e.id))
@@ -329,6 +343,7 @@ private[thriftserver] class HiveThriftServer2Listener(
 }
 
 object SessionStatus {
+  val SESSION_RUNNING = "session_running"
   val SESSION_END = "session_end"
 }
 
@@ -338,7 +353,8 @@ private[thriftserver] class LiveExecutionData(
     val sessionId: String = "",
     val startTimestamp: Long = 0,
     val userName: String = "") extends LiveEntity {
-
+    var traceId = ""
+    var appName = ""
     var finishTimestamp: Long = 0L
     var closeTimestamp: Long = 0L
     var executePlan: String = ""
@@ -366,7 +382,9 @@ private[thriftserver] class LiveExecutionData(
       state,
       jobId,
       groupId,
-      finishOrErroAndReport)
+      finishOrErroAndReport,
+      traceId,
+      appName)
   }
 }
 

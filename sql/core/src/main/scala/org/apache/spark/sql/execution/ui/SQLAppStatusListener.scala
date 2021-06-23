@@ -105,6 +105,7 @@ class SQLAppStatusListener(
           executionData.stages = sqlStoreData.stages
           executionData.metricsValues = sqlStoreData.metricValues
           executionData.endEvents.set(sqlStoreData.jobs.size + 1)
+          executionData.statement = sqlStoreData.statement
           liveExecutions.put(executionId, executionData)
           Some(executionData)
         } catch {
@@ -340,6 +341,7 @@ class SQLAppStatusListener(
     exec.traceId = traceId
     exec.ignored = ignored
     exec.sqlIdentifier = sqlIdentifier
+    exec.statement = sqlText
     if (executionQueue.isDefined) {
       val executionUIData = new SQLExecutionUIData(
         exec.executionId,
@@ -353,6 +355,7 @@ class SQLAppStatusListener(
         exec.stages,
         exec.metricsValues
       )
+      executionUIData.statement = sqlText
       executionQueue.get.offer(executionUIData)
     }
     update(exec)
@@ -415,6 +418,7 @@ class SQLAppStatusListener(
           )
           exec.finishAndReport = true
           executionUIData.finishAndReport = true
+          executionUIData.statement = exec.statement
           executionQueue.get.offer(executionUIData)
         }
         update(exec, force = true)
@@ -428,15 +432,6 @@ class SQLAppStatusListener(
             status, s"${Msg.EXECUTE.toString}(${exec.sqlIdentifier.get})", event.time)
         }
       }
-    }
-  }
-
-  override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd): Unit = {
-    val enableThriftServer = conf.getBoolean("spark.thriftserver.model.enabled", false)
-    if (!enableThriftServer) {
-      val END_FLAG = new SQLExecutionUIData(AppClientStatus.APP_CLIENT_END, "", "", "",
-        Seq.empty, 0L, None, Map.empty, Set.empty, Map.empty)
-      executionQueue.get.offer(END_FLAG)
     }
   }
 
@@ -569,7 +564,7 @@ class SQLAppStatusListener(
 
 }
 
-private class LiveExecutionData(val executionId: Long) extends LiveEntity {
+ class LiveExecutionData(val executionId: Long) extends LiveEntity {
 
   var description: String = null
   var details: String = null
@@ -588,7 +583,7 @@ private class LiveExecutionData(val executionId: Long) extends LiveEntity {
   // end events arrived so that the listener can stop tracking the execution.
   val endEvents = new AtomicInteger()
   @volatile var finishAndReport = false
-
+  var statement: String = ""
   var traceId: Option[String] = None
   var ignored: Boolean = false
   var sqlIdentifier: Option[String] = None
@@ -605,6 +600,7 @@ private class LiveExecutionData(val executionId: Long) extends LiveEntity {
       jobs,
       stages,
       metricsValues)
+    sqlExecutionUIData.statement = statement
     sqlExecutionUIData.finishAndReport = finishAndReport
     sqlExecutionUIData
   }
