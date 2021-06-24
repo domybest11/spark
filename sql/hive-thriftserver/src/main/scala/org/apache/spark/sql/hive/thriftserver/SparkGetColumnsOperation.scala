@@ -66,8 +66,11 @@ private[hive] class SparkGetColumnsOperation(
     // Always use the latest class loader provided by executionHive's state.
     val executionHiveClassLoader = sqlContext.sharedState.jarClassLoader
     Thread.currentThread().setContextClassLoader(executionHiveClassLoader)
-
+    val traceId = sqlContext.sparkContext.conf.getOption("spark.tarce.id").getOrElse("")
+    val appName = sqlContext.sparkContext.conf.getOption("spark.app.name").getOrElse("")
     HiveThriftServer2.eventManager.onStatementStart(
+      traceId,
+      appName,
       statementId,
       parentSession.getSessionHandle.getSessionId.toString,
       logMsg,
@@ -120,7 +123,7 @@ private[hive] class SparkGetColumnsOperation(
       setState(OperationState.FINISHED)
     } catch onError()
 
-    HiveThriftServer2.eventManager.onStatementFinish(statementId)
+    HiveThriftServer2.eventManager.onStatementFinish(statementId, traceId, appName)
   }
 
   /**

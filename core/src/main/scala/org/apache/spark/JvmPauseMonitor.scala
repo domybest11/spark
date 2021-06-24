@@ -60,6 +60,8 @@ private[spark] class JvmPauseMonitor(sparkConf: SparkConf, appId: String,
         var gcTimesBeforeSleep: mutable.HashMap[String, GcTimes] = getGcTimes
         logInfo("Starting JVM pause monitor")
         while (shouldRun) {
+          monitorThread.setName("JvmPauseMonitor")
+          monitorThread.setDaemon(true)
           sw.reset().start()
           try {
             Thread.sleep(SLEEP_INTERVAL_MS)

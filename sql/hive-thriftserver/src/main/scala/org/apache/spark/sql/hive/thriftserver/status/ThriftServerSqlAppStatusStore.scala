@@ -20,14 +20,16 @@ package org.apache.spark.sql.hive.thriftserver.status
 import java.util.{List => JList}
 
 import scala.collection.mutable.ListBuffer
-
 import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.apache.spark.internal.Logging
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.execution.ui.{SQLAppStatusStore, SQLExecutionUIData}
 import org.apache.spark.sql.hive.thriftserver.HiveThriftServer2.ExecutionState
-import org.apache.spark.sql.hive.thriftserver.ui.LiveExecutionData
+import org.apache.spark.sql.hive.thriftserver.ui.{HiveThriftServer2Listener, LiveExecutionData, SessionStatus}
 import org.apache.spark.status.AppStatusStore
 import org.apache.spark.status.api.v1.{JobData, StageData, _}
+import org.apache.spark.ui.scope.RDDOperationGraph
+import org.apache.spark.util.Utils
 
 
 
@@ -37,10 +39,86 @@ import org.apache.spark.status.api.v1.{JobData, StageData, _}
 class ThriftServerSqlAppStatusStore(
                            val sqlAppStatusStore: Option[SQLAppStatusStore] = None,
                            val appStatusStore: Option[AppStatusStore] = None,
+                           val listener: HiveThriftServer2Listener,
+                           sqlContext: SQLContext,
                            val conf: SparkConf) extends Logging {
 
-  def assembleExecutionInfo(
-      liveExecutionData: LiveExecutionData): Option[ApplicationSQLExecutionData] = {
+  def getExecutionBySession(sessionId : String): List[LiveExecutionData] = {
+    listener.getExecutionListFromStore.map(exc => {
+      val liveExecutionData = new LiveExecutionData(exc.execId,
+        exc.statement,
+        exc.sessionId,
+        exc.startTimestamp,
+        exc.userName)
+      liveExecutionData.traceId = exc.traceId
+      liveExecutionData.appName = exc.appName
+      liveExecutionData.finishTimestamp = exc.finishTimestamp
+      liveExecutionData.closeTimestamp = exc.closeTimestamp
+      liveExecutionData.executePlan = exc.executePlan
+      liveExecutionData.detail = exc.detail
+      liveExecutionData.statementType = exc.statementType
+      liveExecutionData.state = exc.state
+      liveExecutionData.jobId = exc.jobId
+      liveExecutionData.groupId = exc.groupId
+      liveExecutionData.finishOrErroAndReport = exc.finishOrErroAndReport
+      liveExecutionData
+    }).toList.filter(_.sessionId.equals(sessionId))
+  }
+
+  def countResourceCost(applicationSQLExecutionData: ApplicationSQLExecutionData): String = {
+    try {
+      val cores = conf.getInt("spark.executor.cores", 1)
+      val memory = conf.get("spark.executor.memory", "6g")
+      val pattern = "^([1-9]\\d*)[g|G]$".r
+      val memoryInt: Int = memory match {
+        case pattern(str) => str.toInt
+        case _ => 4
+      }
+      val memoryPerTask: Double = 1.0 * memoryInt / cores * 1024 * 1024
+      var memorySeconds: Double = 0
+      var vcoreSeconds: Long = 0
+      var inputBytes: Long = 0
+      var outputBytes: Long = 0
+      val jobs: ListBuffer[SQLJobData] = applicationSQLExecutionData.sqlExecutionData.get.jobs
+      var executionMsg = ""
+      if (jobs.nonEmpty) {
+        jobs.foreach(job => {
+          var jobRuntime = scala.math.ceil(1.0 * (job.endTime - job.startTime) / 1000).toInt
+          if (jobRuntime <= 0) {
+            jobRuntime = 1
+          }
+          val jobTaskNum = job.stages.map(_.numTasks).toList.sum
+          memorySeconds += jobRuntime * jobTaskNum * memoryPerTask
+          vcoreSeconds += jobTaskNum * jobRuntime
+          inputBytes += job.stages.filter(_.inComing == 0).map(_.inputBytes).toList.sum
+          outputBytes += job.stages.filter(_.outGoing == 0).map(_.outputBytes).toList.sum
+        })
+        val inputUnit = if (inputBytes > 0) Utils.bytesToString(inputBytes) else "0B"
+        val outputUnit = if (outputBytes > 0) Utils.bytesToString(outputBytes) else "0B"
+        var traceId = applicationSQLExecutionData.sqlExecutionData.get.traceId
+        if (traceId.isEmpty) {
+          traceId = ""
+        }
+        // scalastyle:off
+        executionMsg = s"traceId:$traceId,当前任务使用的资源消耗情况:内存:${memorySeconds.toLong}(m*s)," +
+          s" CPU:$vcoreSeconds(c*s), 读数据量:$inputUnit, 写数据量:$outputUnit."
+      }
+      executionMsg
+    } catch {
+      case e: Exception =>
+        logWarning("Get application resource usage failed", e)
+        ""
+    }
+  }
+
+  def assembleExecutionInfo(liveExecutionData: LiveExecutionData):
+  Option[ApplicationSQLExecutionData] = {
+   val liveExecutionDataNew = if (liveExecutionData.statement.equals(SessionStatus.SESSION_RUNNING)) {
+       getExecutionBySession(liveExecutionData.sessionId)
+         .filter(_.execId == liveExecutionData.execId).head
+    } else {
+     liveExecutionData
+   }
     val applicationInfoV1 = applicationInfo().get
     val sparkPropertyMap = environmentInfo().get.sparkProperties.toMap
     val applicationSQLExecutionData = new ApplicationSQLExecutionData(
@@ -54,38 +132,53 @@ class ThriftServerSqlAppStatusStore(
       0,
       0,
       sparkPropertyMap("spark.driver.host"))
-    val listSQLJobData = new ListBuffer[SQLJobData]
-    liveExecutionData.jobId.foreach(jobid => {
-      val jobData = job(jobid.toInt)
-      if (jobData.isDefined) {
-        if (liveExecutionData.state == ExecutionState.FINISHED
-          && jobData.get.status == JobExecutionStatus.RUNNING) {
-          jobData.get.status = JobExecutionStatus.SUCCEEDED
-        }
-        val listSQLStageData = new ListBuffer[SQLStageData]
-        jobData.get.stageIds.foreach(stageId => {
-          val stageInfo = stageData(stageId, true)
-          stageInfo.seq.foreach(stageData => {
-            if (liveExecutionData.state == ExecutionState.FINISHED &&
-              stageData.status == StageStatus.ACTIVE) {
-              stageData.status = StageStatus.COMPLETE
-            }
-            listSQLStageData.append(buildSQLStageData(stageData).get)
-          })
-        })
-        listSQLJobData.append(buildSQLJobData(listSQLStageData, jobData.get).get)
-      }
-    })
-    liveExecutionData.jobs = listSQLJobData
-    liveExecutionData.executionId = if (executionsList.nonEmpty) {
-     val executionIds = executionsList.filter(execution =>
-        execution.jobs.keySet.intersect(liveExecutionData.jobId.map(_.toInt).toSet).nonEmpty)
-        .map(_.executionId)
-      if (executionIds.nonEmpty) executionIds.head else -1
+    var listLiveExecutionData: List[LiveExecutionData] = List.empty[LiveExecutionData]
+    if (liveExecutionDataNew.statement.equals(SessionStatus.SESSION_END)) {
+      listLiveExecutionData = getExecutionBySession(liveExecutionDataNew.sessionId)
     } else {
-      -1
+      listLiveExecutionData = listLiveExecutionData :+ liveExecutionDataNew
     }
-    applicationSQLExecutionData.sqlExecutionData = Some(liveExecutionData)
+    val liveExecutionDatas = new ListBuffer[LiveExecutionData]
+    listLiveExecutionData.foreach(liveExecutionData => {
+      val listSQLJobData = new ListBuffer[SQLJobData]
+      liveExecutionData.jobId.foreach(jobid => {
+        val jobData = job(jobid.toInt)
+        if (jobData.isDefined) {
+          if (liveExecutionData.state == ExecutionState.FINISHED
+            && jobData.get.status == JobExecutionStatus.RUNNING) {
+            jobData.get.status = JobExecutionStatus.SUCCEEDED
+          }
+          val listSQLStageData = new ListBuffer[SQLStageData]
+          jobData.get.stageIds.foreach(stageId => {
+            val stageInfo = stageData(stageId, true)
+            stageInfo.seq.foreach(stageData => {
+              if (liveExecutionData.state == ExecutionState.FINISHED &&
+                stageData.status == StageStatus.ACTIVE) {
+                stageData.status = StageStatus.COMPLETE
+              }
+              listSQLStageData.append(buildSQLStageData(stageData).get)
+            })
+          })
+          listSQLJobData.append(buildSQLJobData(listSQLStageData, jobData.get).get)
+        }
+      })
+      liveExecutionData.jobs = listSQLJobData
+      liveExecutionData.statementType = liveExecutionData.appName
+      liveExecutionData.executionId = if (executionsList.nonEmpty) {
+        val executionIds = executionsList.filter(execution =>
+          execution.jobs.keySet.intersect(liveExecutionData.jobId.map(_.toInt).toSet).nonEmpty)
+          .map(_.executionId)
+        if (executionIds.nonEmpty) executionIds.head else -1
+      } else {
+        -1
+      }
+      liveExecutionDatas.append(liveExecutionData)
+    })
+    if (liveExecutionDataNew.statement.equals(SessionStatus.SESSION_END)) {
+      applicationSQLExecutionData.sqlExecutionDatas = Some(liveExecutionDatas)
+    } else {
+      applicationSQLExecutionData.sqlExecutionData = Some(liveExecutionDataNew)
+    }
     applicationSQLExecutionData.currentTime = System.currentTimeMillis()
     applicationSQLExecutionData.endTime =
       Some(applicationInfo().get.attempts.last.endTime).get.getTime
@@ -93,6 +186,10 @@ class ThriftServerSqlAppStatusStore(
       MetricEventTypeEnums.APPLICATIONEND.toString
     } else {
       MetricEventTypeEnums.APPLICATIONSRUNNING.toString
+    }
+    applicationSQLExecutionData.tarceId = liveExecutionDataNew.traceId
+    if (liveExecutionData.statement.equals(SessionStatus.SESSION_RUNNING)) {
+      applicationSQLExecutionData.executionCost = countResourceCost(applicationSQLExecutionData)
     }
     Some(applicationSQLExecutionData)
   }
@@ -240,9 +337,15 @@ class ThriftServerSqlAppStatusStore(
         tasksLocalitySeq.apply(2),
         tasksLocalitySeq.apply(3),
         Some(sqlTaskAvgMetrics),
-        Some(sqlTaskMaxMetrics))
+        Some(sqlTaskMaxMetrics),
+        operationGraphForStage(stageData.stageId).incomingEdges.size,
+        operationGraphForStage(stageData.stageId).outgoingEdges.size)
       Some(sqlStageData)
     }
+  }
+
+  def operationGraphForStage(stageId: Int): RDDOperationGraph = {
+    appStatusStore.get.operationGraphForStage(stageId)
   }
 
   def applicationInfo(): Option[ApplicationInfo] = {

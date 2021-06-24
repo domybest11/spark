@@ -22,10 +22,8 @@ import java.util.Date
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
-
 import org.apache.spark.JobExecutionStatus
 import org.apache.spark.status.KVUtils.KVIndexParam
 import org.apache.spark.util.kvstore.{KVIndex, KVStore}
@@ -101,7 +99,8 @@ class SQLExecutionUIData(
     @JsonDeserialize(keyAs = classOf[JLong])
     val metricValues: Map[Long, String]) {
   @volatile var finishAndReport: Boolean = false
-
+  @volatile var sessionId: String = ""
+  @volatile var statement: String = ""
   @JsonIgnore @KVIndex("completionTime")
   private def completionTimeIndex: Long = completionTime.map(_.getTime).getOrElse(-1L)
 }

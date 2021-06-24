@@ -79,6 +79,7 @@ public class SqlAppStoreKafkaProducer {
                         exception);
             }
         });
+        kafkaProducer.flush();
     }
 
     public void close() {

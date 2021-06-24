@@ -19,6 +19,7 @@ package org.apache.spark.sql.execution.status
 import java.util.concurrent.{Executors, LinkedBlockingQueue, ScheduledExecutorService, TimeUnit}
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
+
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.ui.SQLExecutionUIData
@@ -89,7 +90,9 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
 
   def sendPeriodlyKafka(): Unit = {
     logDebug("starting to send sql metrics to Kafka periodically")
-    var sqlExecutionList: Seq[SQLExecutionUIData] = appStatusStore.executionsList
+    val sqlExecutionList: Seq[SQLExecutionUIData] = appStatusStore.executionsList
+      .filterNot(sqlExecution => sqlExecution.statement == null ||
+        sqlExecution.statement.equals(""))
     if (null == sqlExecutionList && sqlExecutionList.isEmpty) {
       return
     }
@@ -97,7 +100,8 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
       logDebug("starting to assemble executionInfo from sqlAppStatusStore")
       var applicationSQLExecutionData: ApplicationSQLExecutionData = null
       try {
-        applicationSQLExecutionData = appStatusStore.assembleExecutionInfo(executionInfo).get
+        applicationSQLExecutionData = appStatusStore
+          .assembleExecutionInfo(executionInfo, "periodly").get
       } catch {
         case e: Exception =>
           logWarning(s"assemble the sqlAppStatusStore occurred errors: ${e.getMessage}")
@@ -126,13 +130,17 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
 
   def sendOnceKafka(executionInfo: SQLExecutionUIData): Unit = {
     logDebug("starting to send an sql metrics to Kafka")
-    if (null == executionInfo ) {
+    if (executionInfo.statement == null || executionInfo.statement.equals("")) {
+      return
+    }
+    if (null == executionInfo) {
       return
     }
     logDebug("starting to assemble an executionInfo from sqlAppStatusStore")
     var applicationSQLExecutionData: ApplicationSQLExecutionData = null
     try {
-      applicationSQLExecutionData = appStatusStore.assembleExecutionInfo(executionInfo).get
+      applicationSQLExecutionData = appStatusStore
+        .assembleExecutionInfo(executionInfo, "once").get
     } catch {
       case e: Exception =>
         logWarning(s"assemble the sql executionInfo occurred errors: ${e.getMessage}")
@@ -149,7 +157,7 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
           applicationSQLExecutionData.host,
           applicationSQLExecutionData.currentTime,
           applicationSQLExecutionData)
-      kafkaSink.report(reportWrap)
+        kafkaSink.report(reportWrap)
     } catch {
       case e: Exception =>
         logWarning(s"send an sql metrics to Kafka occurred errors: ${e.getMessage}")

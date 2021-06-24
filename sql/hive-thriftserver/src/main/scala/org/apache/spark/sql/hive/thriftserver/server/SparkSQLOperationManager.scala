@@ -49,6 +49,7 @@ private[thriftserver] class SparkSQLOperationManager()
       if (handleToOperation.size() == 0) {
         return
       }
+
       val jobInfos = handleToOperation.values().asScala
         .map(op => sessionToContexts.get(op.getParentSession.getSessionHandle).sparkContext)
         .flatMap(context =>

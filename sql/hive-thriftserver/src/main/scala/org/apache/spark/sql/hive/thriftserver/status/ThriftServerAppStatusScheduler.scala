@@ -20,12 +20,10 @@ package org.apache.spark.sql.hive.thriftserver.status
 import java.util.concurrent.{Executors, LinkedBlockingQueue, ScheduledExecutorService, TimeUnit}
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
-
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.hive.thriftserver.HiveThriftServer2
-import org.apache.spark.sql.hive.thriftserver.ui.HiveThriftServer2Listener
-import org.apache.spark.sql.hive.thriftserver.ui.LiveExecutionData
+import org.apache.spark.sql.hive.thriftserver.ui.{HiveThriftServer2Listener, LiveExecutionData, SessionStatus}
 
 
 
@@ -89,16 +87,7 @@ class ThriftServerAppStatusScheduler extends Logging{
       logDebug("starting to assemble executionInfo from appStatusStore")
       var applicationSQLExecutionData: ApplicationSQLExecutionData = null
       try {
-         val sessionInfos = listener.getSessionList.filter(sessionInfo => {
-          sessionInfo.sessionId == executionInfo.sessionId &&
-            (sessionInfo.statementType.startsWith("a_h_q_") ||
-            sessionInfo.statementType.startsWith("a_h_"))
-        })
-        executionInfo.statementType = if (sessionInfos.nonEmpty) {
-          sessionInfos.head.statementType
-        } else {
-          ""
-        }
+        executionInfo.statementType = executionInfo.appName
         applicationSQLExecutionData = appStatusStore.assembleExecutionInfo(executionInfo).get
       } catch {
         case e: Exception =>
@@ -124,32 +113,23 @@ class ThriftServerAppStatusScheduler extends Logging{
     })
   }
 
-   def sendOnceKafka(liveExecutionData: LiveExecutionData): Unit = {
+   def sendOnceKafka(liveExecutionData: LiveExecutionData): ThriftServerReportWrap = {
    logDebug("starting to send an metrics to Kafka")
+     var reportWrap: ThriftServerReportWrap = null
     if (null == liveExecutionData ) {
-      return
+      return reportWrap
     }
      logDebug("starting to assemble an executionInfo from appStatusStore")
       var applicationSQLExecutionData: ApplicationSQLExecutionData = null
       try {
-        val sessionInfos = listener.getSessionList.filter(sessionInfo => {
-          sessionInfo.sessionId == liveExecutionData.sessionId &&
-            (sessionInfo.statementType.startsWith("a_h_q_") ||
-              sessionInfo.statementType.startsWith("a_h_"))
-        })
-        liveExecutionData.statementType = if (sessionInfos.nonEmpty) {
-          sessionInfos.head.statementType
-        } else {
-          ""
-        }
         applicationSQLExecutionData = appStatusStore.assembleExecutionInfo(liveExecutionData).get
       } catch {
         case e: Exception =>
           logWarning(s"assemble the executionInfo occurred errors: ${e.getMessage}")
-          return
+          return reportWrap
       }
       try {
-        val reportWrap: ThriftServerReportWrap =
+          reportWrap =
           new ThriftServerReportWrap(applicationSQLExecutionData.appId,
           applicationSQLExecutionData.attemptId, applicationSQLExecutionData.role,
           applicationSQLExecutionData.service, applicationSQLExecutionData.user,
@@ -157,13 +137,16 @@ class ThriftServerAppStatusScheduler extends Logging{
           applicationSQLExecutionData.host,
           applicationSQLExecutionData.currentTime,
           applicationSQLExecutionData)
-        kafkaSink.report(reportWrap)
+        if (!liveExecutionData.statement.equals(SessionStatus.SESSION_RUNNING)) {
+          kafkaSink.report(reportWrap)
+        }
       } catch {
         case e: Exception =>
           logWarning(s"send an metrics to Kafka occurred errors: ${e.getMessage}")
-          return
+          return reportWrap
       }
      logDebug("ended to send an metrics to Kafka")
+     reportWrap
   }
 }
 

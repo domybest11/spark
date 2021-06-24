@@ -254,7 +254,6 @@ public class OperationManager extends AbstractService {
     if (operationLog == null) {
       throw new HiveSQLException("Couldn't find log associated with operation handle: " + opHandle);
     }
-
     // read logs
     List<String> logs;
     try {

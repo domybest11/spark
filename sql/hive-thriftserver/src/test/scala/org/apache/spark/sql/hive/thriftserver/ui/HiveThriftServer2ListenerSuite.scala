@@ -49,15 +49,15 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
 
       listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId",
         "user", System.currentTimeMillis(), "sessionType"))
-      listener.onOtherEvent(SparkListenerThriftServerOperationStart("id", "sessionId",
-        "dummy query", "groupId", System.currentTimeMillis(), "user"))
-      listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "dummy plan"))
+      listener.onOtherEvent(SparkListenerThriftServerOperationStart("traceId", "appName",
+        "id", "sessionId", "dummy query", "groupId", System.currentTimeMillis(), "user"))
+      listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "", "", "dummy plan"))
       listener.onJobStart(SparkListenerJobStart(
         0,
         System.currentTimeMillis(),
         Nil,
         createProperties))
-      listener.onOtherEvent(SparkListenerThriftServerOperationFinish("id",
+      listener.onOtherEvent(SparkListenerThriftServerOperationFinish("id", "", "",
         System.currentTimeMillis()))
       listener.onOtherEvent(SparkListenerThriftServerOperationClosed("id",
         System.currentTimeMillis()))
@@ -121,10 +121,10 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
 
     listener.onOtherEvent(SparkListenerThriftServerSessionCreated("localhost", "sessionId", "user",
       System.currentTimeMillis(), "sessionType"))
-    listener.onOtherEvent(SparkListenerThriftServerOperationStart("id", "sessionId", "dummy query",
-      "groupId", System.currentTimeMillis(), "user"))
-    listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "dummy plan"))
-    listener.onOtherEvent(SparkListenerThriftServerOperationFinish("id",
+    listener.onOtherEvent(SparkListenerThriftServerOperationStart("traceId", "appName",
+      "id", "sessionId", "dummy query", "groupId", System.currentTimeMillis(), "user"))
+    listener.onOtherEvent(SparkListenerThriftServerOperationParsed("id", "", "", "dummy plan"))
+    listener.onOtherEvent(SparkListenerThriftServerOperationFinish("id", "", "",
       System.currentTimeMillis()))
     listener.onOtherEvent(SparkListenerThriftServerOperationClosed("id",
       System.currentTimeMillis()))
@@ -148,14 +148,15 @@ class HiveThriftServer2ListenerSuite extends SparkFunSuite with BeforeAndAfter {
     val unknownSession = "unknown_session"
     val unknownOperation = "unknown_operation"
     listener.onOtherEvent(SparkListenerThriftServerSessionClosed(unknownSession, 0))
-    listener.onOtherEvent(SparkListenerThriftServerOperationStart("id", unknownSession,
-      "stmt", "groupId", 0))
-    listener.onOtherEvent(SparkListenerThriftServerOperationParsed(unknownOperation, "query"))
-    listener.onOtherEvent(SparkListenerThriftServerOperationCanceled(unknownOperation, 0))
-    listener.onOtherEvent(SparkListenerThriftServerOperationTimeout(unknownOperation, 0))
-    listener.onOtherEvent(SparkListenerThriftServerOperationError(unknownOperation, "",
+    listener.onOtherEvent(SparkListenerThriftServerOperationStart("traceId", "appName", "id",
+      unknownSession, "stmt", "groupId", 0))
+    listener.onOtherEvent(
+      SparkListenerThriftServerOperationParsed(unknownOperation, "", "", "query"))
+    listener.onOtherEvent(SparkListenerThriftServerOperationCanceled(unknownOperation, "", "", 0))
+    listener.onOtherEvent(SparkListenerThriftServerOperationTimeout(unknownOperation, "", "", 0))
+    listener.onOtherEvent(SparkListenerThriftServerOperationError("", unknownOperation, "",
       "msg", "trace", 0))
-    listener.onOtherEvent(SparkListenerThriftServerOperationFinish(unknownOperation, 0))
+    listener.onOtherEvent(SparkListenerThriftServerOperationFinish(unknownOperation, "", "", 0))
     listener.onOtherEvent(SparkListenerThriftServerOperationClosed(unknownOperation, 0))
   }
 

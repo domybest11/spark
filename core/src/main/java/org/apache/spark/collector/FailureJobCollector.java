@@ -130,6 +130,7 @@ public class FailureJobCollector<T extends WrapEvent>{
   };
 
   public void start() {
+    sendLogErrorKafkaThread.setDaemon(true);
     sendLogErrorKafkaThread.start();
     Runtime.getRuntime().addShutdownHook(new Thread() {
       @Override

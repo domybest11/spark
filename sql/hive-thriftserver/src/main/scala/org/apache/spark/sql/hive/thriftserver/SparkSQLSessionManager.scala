@@ -18,9 +18,9 @@
 package org.apache.spark.sql.hive.thriftserver
 
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.hive.conf.HiveConf
-import org.apache.hive.service.cli.{HiveSQLException, SessionHandle}
+import org.apache.hive.service.cli.HiveSQLException
+import org.apache.hive.service.cli.SessionHandle
 import org.apache.hive.service.cli.session.SessionManager
 import org.apache.hive.service.rpc.thrift.TProtocolVersion
 import org.apache.hive.service.server.HiveServer2
@@ -30,8 +30,8 @@ import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.hive.thriftserver.ReflectionUtils._
 import org.apache.spark.sql.hive.thriftserver.server.SparkSQLOperationManager
+import org.apache.spark.sql.hive.thriftserver.ui.{LiveExecutionData, SessionStatus}
 import org.apache.spark.sql.internal.SQLConf
-
 
 private[hive] class SparkSQLSessionManager(hiveServer: HiveServer2, sqlContext: SQLContext)
   extends SessionManager(hiveServer)
@@ -92,7 +92,12 @@ private[hive] class SparkSQLSessionManager(hiveServer: HiveServer2, sqlContext: 
   }
 
   override def closeSession(sessionHandle: SessionHandle): Unit = {
-    HiveThriftServer2.eventManager.onSessionClosed(sessionHandle.getSessionId.toString)
+    val sessionId = sessionHandle.getSessionId.toString
+    val thriftServerSqlStatusStore = HiveThriftServer2.thriftServerAppStatusScheduler
+    val executionEnd = new LiveExecutionData("", SessionStatus.SESSION_END,
+      sessionId, System.currentTimeMillis, "")
+    thriftServerSqlStatusStore.sendOnceKafka(executionEnd)
+    HiveThriftServer2.eventManager.onSessionClosed(sessionHandle.toString)
     val ctx = sparkSqlOperationManager.sessionToContexts.getOrDefault(sessionHandle, sqlContext)
     ctx.sparkSession.sessionState.catalog.getTempViewNames().foreach(ctx.uncacheTable)
     super.closeSession(sessionHandle)

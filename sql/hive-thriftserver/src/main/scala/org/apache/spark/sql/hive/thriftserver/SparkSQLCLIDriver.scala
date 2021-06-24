@@ -19,11 +19,10 @@ package org.apache.spark.sql.hive.thriftserver
 
 import java.io._
 import java.nio.charset.StandardCharsets.UTF_8
-import java.util.{ArrayList => JArrayList, List => JList, Locale}
+import java.util.{Locale, ArrayList => JArrayList, List => JList}
 import java.util.concurrent.TimeUnit
 
 import scala.collection.JavaConverters._
-
 import jline.console.ConsoleReader
 import jline.console.history.FileHistory
 import org.apache.commons.lang3.StringUtils
@@ -39,11 +38,11 @@ import org.apache.log4j.Level
 import org.apache.thrift.transport.TSocket
 import org.slf4j.LoggerFactory
 import sun.misc.{Signal, SignalHandler}
-
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql.execution.ui.{AppClientStatus, SQLExecutionUIData}
 import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.hive.client.HiveClientImpl
 import org.apache.spark.sql.hive.security.HiveDelegationTokenProvider
@@ -393,7 +392,7 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
                 // For analysis exceptions in silent mode or simple ones that only related to the
                 // query itself, such as `NoSuchDatabaseException`, only the error is printed out
                 // to the console.
-                case _ =>  logError(s"""Error in query: ${e.getMessage}""")
+                case _ => logError(s"""Error in query: ${e.getMessage}""")
               }
               case _ => logError(s"""Error in query: ${rc.getErrorMessage()}""")
             }
@@ -510,6 +509,18 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
       CommandProcessorFactory.clean(conf.asInstanceOf[HiveConf])
       lastRet
     } finally {
+      try {
+        val END_FLAG = new SQLExecutionUIData(AppClientStatus.APP_CLIENT_END, "",
+          "", "", Seq.empty, 0L, None, Map.empty,
+          Set.empty, Map.empty)
+        END_FLAG.statement = "APP_CLIENT_END"
+        SparkSQLEnv.sqlContext.sparkSession.sharedState.sqlAppStatusScheduler
+          .sendOnceKafka(END_FLAG)
+      } catch {
+        case e: Exception =>
+          LOG.warn("an error occurred when the application finished preparing to send the state:"
+            + e.getMessage)
+      }
       // Once we are done processing the line, restore the old handler
       if (oldSignal != null && interruptSignal != null) {
         Signal.handle(interruptSignal, oldSignal)
