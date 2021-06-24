@@ -173,7 +173,8 @@ object ResolveHints {
    */
   object ResolveCoalesceHints extends Rule[LogicalPlan] {
 
-    val COALESCE_HINT_NAMES: Set[String] = Set("COALESCE", "REPARTITION", "REPARTITION_BY_RANGE")
+    val COALESCE_HINT_NAMES: Set[String] =
+      Set("COALESCE", "REPARTITION", "REPARTITION_BY_RANGE", "REBALANCE")
 
     /**
      * This function handles hints for "COALESCE" and "REPARTITION".
@@ -249,6 +250,19 @@ object ResolveHints {
       }
     }
 
+    private def createRebalance(hint: UnresolvedHint): LogicalPlan = {
+      hint.parameters match {
+        case partitionExprs @ Seq(_*) =>
+          val invalidParams = partitionExprs.filter(!_.isInstanceOf[UnresolvedAttribute])
+          if (invalidParams.nonEmpty) {
+            val hintName = hint.name.toUpperCase(Locale.ROOT)
+            throw new AnalysisException(s"$hintName Hint parameter should include columns, but " +
+              s"${invalidParams.mkString(", ")} found")
+          }
+          RebalancePartitions(partitionExprs.map(_.asInstanceOf[Expression]), hint.child)
+      }
+    }
+
     def apply(plan: LogicalPlan): LogicalPlan = plan.resolveOperators {
       case hint @ UnresolvedHint(hintName, _, _) => hintName.toUpperCase(Locale.ROOT) match {
           case "REPARTITION" =>
@@ -257,6 +271,8 @@ object ResolveHints {
             createRepartition(shuffle = false, hint)
           case "REPARTITION_BY_RANGE" =>
             createRepartitionByRange(hint)
+          case "REBALANCE" if conf.adaptiveExecutionEnabled =>
+            createRebalance(hint)
           case _ => hint
         }
     }
