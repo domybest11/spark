@@ -254,7 +254,7 @@ private[ui] class AllJobsPage(parent: JobsTab, store: AppStatusStore) extends We
                   action={timeLineUrl}
                   class="form-inline justify-content-end"
                   style="width: 50%; margin-left: auto; margin-bottom: 0px;">
-              <label>Jobs:
+              <label>items:
                 {totalJobs}
                 .
                 {totalPages}
@@ -416,7 +416,7 @@ private[ui] class AllJobsPage(parent: JobsTab, store: AppStatusStore) extends We
       var eventTimelineJobsPage = Option(eventTimelineParameterJobsPage).map(_.toInt).getOrElse(1)
       var eventTimelineJobsPageSize =
         Option(eventTimelineParameterJobsPageSize).map(_.toInt).getOrElse(50)
-     val totalJobs = completedJobs.size + failedJobs.size + activeJobs.size
+      val totalJobs = completedJobs.size + failedJobs.size + activeJobs.size
       if (eventTimelineJobsPageSize < 1 || eventTimelineJobsPageSize > totalJobs) {
         eventTimelineJobsPageSize = totalJobs
       }
@@ -428,15 +428,46 @@ private[ui] class AllJobsPage(parent: JobsTab, store: AppStatusStore) extends We
       if (eventTimelineJobsPage < 1 || eventTimelineJobsPage > eventTimelineTotalPages) {
         eventTimelineJobsPage = 1
       }
-      val from = (eventTimelineJobsPage - 1) * eventTimelineJobsPageSize
-      val to = from + eventTimelineJobsPageSize
+      var from = (eventTimelineJobsPage - 1) * eventTimelineJobsPageSize
+      var to = from + eventTimelineJobsPageSize
+      if (from > totalJobs) {
+        from = 0
+        to = totalJobs-1
+      }
+
+      val eventTimelineParameterExecutorsPage = request.getParameter("jobs.eventTimelinePageNumber")
+      val eventTimelineParameterExecutorsPageSize = request
+        .getParameter("jobs.eventTimelinePageSize")
+      var eventTimelineExecutorsPage = Option(eventTimelineParameterExecutorsPage)
+        .map(_.toInt).getOrElse(1)
+      var eventTimelineExecutorsPageSize =
+        Option(eventTimelineParameterExecutorsPageSize).map(_.toInt).getOrElse(50)
+      val executors = store.executorList(false)
+      val totalExecutors = executors.size
+      if (eventTimelineExecutorsPageSize < 1 || eventTimelineExecutorsPageSize > totalExecutors) {
+        eventTimelineExecutorsPageSize = totalExecutors
+      }
+      val eventTimelineExecutorsTotalPages = if (eventTimelineExecutorsPageSize > 0) {
+        (totalExecutors + eventTimelineExecutorsPageSize - 1) / eventTimelineExecutorsPageSize
+      } else {
+        0
+      }
+      if (eventTimelineExecutorsPage < 1 || eventTimelineExecutorsPage > eventTimelineTotalPages) {
+        eventTimelineExecutorsPage = 1
+      }
+      var fromExecutors = (eventTimelineExecutorsPage - 1) * eventTimelineExecutorsPageSize
+      var toExecutors = fromExecutors + eventTimelineExecutorsPageSize
+      if (fromExecutors >= totalExecutors) {
+        fromExecutors = 0
+        toExecutors = totalExecutors-1
+      }
       content ++= makeTimelineByPagination(
         (activeJobs ++ completedJobs ++ failedJobs).sortBy(_.submissionTime).slice(from, to),
-        store.executorList(false),
-        startTime, eventTimelineJobsPage,
-        eventTimelineJobsPageSize,
-        eventTimelineTotalPages,
-        totalJobs,
+        executors.sortBy(_.addTime).slice(fromExecutors, toExecutors),
+        startTime, scala.math.max(eventTimelineJobsPage, eventTimelineExecutorsPage),
+        scala.math.max(eventTimelineJobsPageSize, eventTimelineExecutorsPageSize),
+        scala.math.max(eventTimelineTotalPages, eventTimelineExecutorsTotalPages),
+        scala.math.max(totalJobs, totalExecutors),
         request)
     } else {
       content ++= makeTimeline((activeJobs ++ completedJobs ++ failedJobs).toSeq,
