@@ -21,7 +21,7 @@ import org.apache.spark._
 import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.serializer.SerializerManager
-import org.apache.spark.storage.{BlockManager, ShuffleBlockFetcherIterator}
+import org.apache.spark.storage.{BlockId, BlockManager, BlockManagerId, ShuffleBlockFetcherIterator}
 import org.apache.spark.util.CompletionIterator
 import org.apache.spark.util.collection.ExternalSorter
 
@@ -30,10 +30,7 @@ import org.apache.spark.util.collection.ExternalSorter
  */
 private[spark] class BlockStoreShuffleReader[K, C](
     handle: BaseShuffleHandle[K, _, C],
-    startMapIndex: Int,
-    endMapIndex: Int,
-    startPartition: Int,
-    endPartition: Int,
+    blocksByAddress: Iterator[(BlockManagerId, Seq[(BlockId, Long, Int)])],
     context: TaskContext,
     readMetrics: ShuffleReadMetricsReporter,
     serializerManager: SerializerManager = SparkEnv.get.serializerManager,
@@ -54,15 +51,17 @@ private[spark] class BlockStoreShuffleReader[K, C](
       true
     }
     val useOldFetchProtocol = conf.get(config.SHUFFLE_USE_OLD_FETCH_PROTOCOL)
+    // SPARK-34790: Fetching continuous blocks in batch is incompatible with io encryption.
+    val ioEncryption = conf.get(config.IO_ENCRYPTION_ENABLED)
 
     val doBatchFetch = shouldBatchFetch && serializerRelocatable &&
-      (!compressed || codecConcatenation) && !useOldFetchProtocol
+      (!compressed || codecConcatenation) && !useOldFetchProtocol && !ioEncryption
     if (shouldBatchFetch && !doBatchFetch) {
       logDebug("The feature tag of continuous shuffle block fetching is set to true, but " +
         "we can not enable the feature because other conditions are not satisfied. " +
         s"Shuffle compress: $compressed, serializer relocatable: $serializerRelocatable, " +
         s"codec concatenation: $codecConcatenation, use old shuffle fetch protocol: " +
-        s"$useOldFetchProtocol.")
+        s"$useOldFetchProtocol, io encryption: $ioEncryption.")
     }
     doBatchFetch
   }
@@ -73,8 +72,8 @@ private[spark] class BlockStoreShuffleReader[K, C](
       context,
       blockManager.blockStoreClient,
       blockManager,
-      mapOutputTracker.getMapSizesByExecutorId(handle.shuffleId, startMapIndex, endMapIndex,
-        startPartition, endPartition),
+      mapOutputTracker,
+      blocksByAddress,
       serializerManager.wrapStream,
       // Note: we use getSizeAsMb when no suffix is provided for backwards compatibility
       SparkEnv.get.conf.get(config.REDUCER_MAX_SIZE_IN_FLIGHT) * 1024 * 1024,
@@ -97,14 +96,14 @@ private[spark] class BlockStoreShuffleReader[K, C](
       serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
     }
 
-    var foundDataSkew: Boolean = false
-    if (dep.partitioner != null) {
-      foundDataSkew = mapOutputTracker.checkDataSkewTask(handle.shuffleId,
-        dep.partitioner.numPartitions, startPartition, endPartition)
-    }
-    if (foundDataSkew) {
-      context.getLocalProperties.setProperty("spark.sql.autoDetectDataSkew", "true")
-    }
+//    var foundDataSkew: Boolean = false
+//    if (dep.partitioner != null) {
+//      foundDataSkew = mapOutputTracker.checkDataSkewTask(handle.shuffleId,
+//        dep.partitioner.numPartitions, startPartition, endPartition)
+//    }
+//    if (foundDataSkew) {
+//      context.getLocalProperties.setProperty("spark.sql.autoDetectDataSkew", "true")
+//    }
 
     // Update the context task metrics for each record read.
     val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
@@ -134,7 +133,7 @@ private[spark] class BlockStoreShuffleReader[K, C](
     }
 
     // Sort the output if there is a sort ordering defined.
-    val resultIter = dep.keyOrdering match {
+    val resultIter: Iterator[Product2[K, C]] = dep.keyOrdering match {
       case Some(keyOrd: Ordering[K]) =>
         // Create an ExternalSorter to sort the data.
         val sorter =
