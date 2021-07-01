@@ -38,7 +38,7 @@ import org.apache.spark.sql.execution.ui.{AppClientStatus, SQLAppStatusStore, SQ
 import org.apache.spark.status.AppStatusStore
 import org.apache.spark.status.api.v1.{JobData, StageData, _}
 import org.apache.spark.ui.scope.RDDOperationGraph
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{AppCostReporter, Utils}
 
 /**
  * A wrapper around a KVStore that provides methods for accessing the API data stored within.
@@ -65,6 +65,8 @@ class SqlAppStoreStatusStoreV1(
     var outputBytes: Long = 0
     val jobs: ListBuffer[SQLJobData] = applicationSQLExecutionData.sqlExecutionData.get.jobs
     var costMessage = ""
+      val reporter = AppCostReporter.createAppCostReporter(conf)
+      val action = "resourceCost"
     if (jobs.nonEmpty) {
         jobs.foreach(job => {
           inputBytes += job.stages.filter(_.inComing == 0).map(_.inputBytes).toList.sum
@@ -79,6 +81,15 @@ class SqlAppStoreStatusStoreV1(
         // scalastyle:off
          costMessage = s"traceId:${traceId},当前任务使用的资源消耗情况: 内存:${memorySeconds}(m*s)," +
           s"CPU: ${vcoreSeconds}(c*s), 读数据量:${inputUnit}, 写数据量:${outputUnit}."
+
+        if (traceId.equals("")) {
+          var message = s"当前任务使用的资源消耗情况: 内存:${memorySeconds}(m*s)," +
+          s"CPU: ${vcoreSeconds}(c*s), 读数据量:${inputUnit}, 写数据量:${outputUnit}."
+          reporter.postEvent(Some(""), action, "",  message, System.currentTimeMillis())
+        } else {
+          reporter.postEvent(Some(traceId), action, "",  costMessage, System.currentTimeMillis())
+        }
+
         logInfo(costMessage)
       }
       costMessage
