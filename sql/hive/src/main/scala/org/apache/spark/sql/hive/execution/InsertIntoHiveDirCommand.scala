@@ -84,7 +84,6 @@ case class InsertIntoHiveDirCommand(
     )
 
     val hadoopConf = sparkSession.sessionState.newHadoopConf()
-    hadoopConf.set("mapreduce.task.attempt.id", sparkSession.sparkContext.getConf.getAppId)
 
     val targetPath = new Path(storage.locationUri.get)
     val qualifiedPath = FileUtils.makeQualified(targetPath, hadoopConf)

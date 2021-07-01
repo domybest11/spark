@@ -1037,7 +1037,7 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])
       hadoopConf.set("mapreduce.output.fileoutputformat.compress.type",
         CompressionType.BLOCK.toString)
     }
-    hadoopConf.set("mapreduce.task.attempt.id", self.conf.getAppId)
+
     // Use configured output committer if already set
     if (conf.getOutputCommitter == null) {
       hadoopConf.setOutputCommitter(classOf[FileOutputCommitter])

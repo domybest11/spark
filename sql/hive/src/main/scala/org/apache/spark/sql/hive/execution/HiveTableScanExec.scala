@@ -97,7 +97,6 @@ case class HiveTableScanExec(
   // other queries
   @transient private lazy val hadoopConf = {
     val c = sparkSession.sessionState.newHadoopConf()
-    c.set("mapreduce.task.attempt.id", sparkContext.getConf.getAppId)
     // append columns ids and names before broadcast
     addColumnMetadataToConf(c)
     c
