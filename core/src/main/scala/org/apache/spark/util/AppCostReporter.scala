@@ -18,7 +18,7 @@
 package org.apache.spark.util
 
 import org.apache.spark.SparkConf
-import org.apache.spark.internal.config.Status.TRACE_REPORTER_LANCER_URL
+import org.apache.spark.internal.config.Status.{TRACE_REPORTER_LANCER_URL, TRACE_REPORTER_LOG_ID}
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Serialization
 
@@ -29,6 +29,8 @@ import org.json4s.jackson.Serialization
 private[spark] class AppCostReporter(conf: SparkConf) {
 
   private val lancerUrl = conf.get(TRACE_REPORTER_LANCER_URL)
+
+  private val logId = conf.get(TRACE_REPORTER_LOG_ID)
 
   implicit val formats = DefaultFormats
 
@@ -50,7 +52,7 @@ private[spark] class AppCostReporter(conf: SparkConf) {
       val triggerTime = System.currentTimeMillis()
       val commonParams = Map("traceId" -> finalTraceId.get)
       val paramJson = Serialization.write(commonParams ++ params)
-      HttpClientUtils.getInstance().doCostPost(s"$triggerTime$paramJson", lancerUrl)
+      HttpClientUtils.getInstance().doCostPost(s"$logId$triggerTime$paramJson", lancerUrl)
     }
   }
 }

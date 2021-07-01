@@ -42,6 +42,8 @@ class ThriftServerSqlAppStatusStore(
                            sqlContext: SQLContext,
                            val conf: SparkConf) extends Logging {
 
+  private val reporter = AppCostReporter.createAppCostReporter(conf)
+
   def getExecutionBySession(sessionId : String): List[LiveExecutionData] = {
     listener.getExecutionListFromStore.map(exc => {
       val liveExecutionData = new LiveExecutionData(exc.execId,
@@ -80,7 +82,6 @@ class ThriftServerSqlAppStatusStore(
       var outputBytes: Long = 0
       val jobs: ListBuffer[SQLJobData] = applicationSQLExecutionData.sqlExecutionData.get.jobs
       var executionMsg = ""
-      val reporter = AppCostReporter.createAppCostReporter(conf)
       val action = "resourceCost"
       if (jobs.nonEmpty) {
         jobs.foreach(job => {
@@ -104,13 +105,7 @@ class ThriftServerSqlAppStatusStore(
         executionMsg = s"traceId:$traceId,当前任务使用的资源消耗情况:内存:${memorySeconds.toLong}(m*s)," +
           s" CPU:$vcoreSeconds(c*s), 读数据量:$inputUnit, 写数据量:$outputUnit."
 
-        if (traceId.equals("")) {
-          var message = s"当前任务使用的资源消耗情况:内存:${memorySeconds.toLong}(m*s)," +
-            s" CPU:$vcoreSeconds(c*s), 读数据量:$inputUnit, 写数据量:$outputUnit."
-          reporter.postEvent(Some(""), action, "", message, System.currentTimeMillis())
-        } else{
-          reporter.postEvent(Some(traceId), action, "", executionMsg, System.currentTimeMillis())
-        }
+        reporter.postEvent(Some(traceId), action, "", executionMsg, System.currentTimeMillis())
       }
       executionMsg
     } catch {

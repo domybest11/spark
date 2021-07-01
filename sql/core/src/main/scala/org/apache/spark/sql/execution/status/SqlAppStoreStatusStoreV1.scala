@@ -49,6 +49,7 @@ class SqlAppStoreStatusStoreV1(
     val conf: SparkConf) extends Logging {
 
   private val hadoopConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(conf))
+  private val reporter = AppCostReporter.createAppCostReporter(conf)
 
   def countResourceCost(applicationSQLExecutionData: ApplicationSQLExecutionData): String = {
     var rmClient: ApplicationClientProtocol = null
@@ -65,7 +66,6 @@ class SqlAppStoreStatusStoreV1(
     var outputBytes: Long = 0
     val jobs: ListBuffer[SQLJobData] = applicationSQLExecutionData.sqlExecutionData.get.jobs
     var costMessage = ""
-      val reporter = AppCostReporter.createAppCostReporter(conf)
       val action = "resourceCost"
     if (jobs.nonEmpty) {
         jobs.foreach(job => {
@@ -82,13 +82,7 @@ class SqlAppStoreStatusStoreV1(
          costMessage = s"traceId:${traceId},当前任务使用的资源消耗情况: 内存:${memorySeconds}(m*s)," +
           s"CPU: ${vcoreSeconds}(c*s), 读数据量:${inputUnit}, 写数据量:${outputUnit}."
 
-        if (traceId.equals("")) {
-          var message = s"当前任务使用的资源消耗情况: 内存:${memorySeconds}(m*s)," +
-          s"CPU: ${vcoreSeconds}(c*s), 读数据量:${inputUnit}, 写数据量:${outputUnit}."
-          reporter.postEvent(Some(""), action, "",  message, System.currentTimeMillis())
-        } else {
-          reporter.postEvent(Some(traceId), action, "",  costMessage, System.currentTimeMillis())
-        }
+        reporter.postEvent(Some(traceId), action, "",  costMessage, System.currentTimeMillis())
 
         logInfo(costMessage)
       }

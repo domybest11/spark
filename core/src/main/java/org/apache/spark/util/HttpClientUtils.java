@@ -64,12 +64,12 @@ public class HttpClientUtils {
         okHttpClient.newCall(builder.build()).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                logger.error("SQLAppCostReporter report to lancer failed {} {}", body, e.getMessage());
+                logger.error("AppCostReporter report to lancer failed {} {}", body, e.getMessage());
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                logger.info("SQLAppCostReporter report to lancer succeeded");
+                logger.info("AppCostReporter report to lancer succeeded");
                 response.close();
             }
         });
