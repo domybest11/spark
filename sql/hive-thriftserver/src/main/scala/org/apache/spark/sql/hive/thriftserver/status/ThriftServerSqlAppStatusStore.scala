@@ -107,9 +107,9 @@ class ThriftServerSqlAppStatusStore(
         if (traceId.equals("")) {
           var message = s"当前任务使用的资源消耗情况:内存:${memorySeconds.toLong}(m*s)," +
             s" CPU:$vcoreSeconds(c*s), 读数据量:$inputUnit, 写数据量:$outputUnit."
-          reporter.postEvent("", action, "", message, System.currentTimeMillis())
+          reporter.postEvent(Some(""), action, "", message, System.currentTimeMillis())
         } else{
-          reporter.postEvent(traceId, action, "", executionMsg, System.currentTimeMillis())
+          reporter.postEvent(Some(traceId), action, "", executionMsg, System.currentTimeMillis())
         }
       }
       executionMsg
