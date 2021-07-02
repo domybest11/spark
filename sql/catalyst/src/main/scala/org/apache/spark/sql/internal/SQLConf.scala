@@ -511,10 +511,35 @@ object SQLConf {
       .booleanConf
       .createWithDefault(true)
 
+  private val MIN_PARTITION_SIZE_KEY = "spark.sql.adaptive.coalescePartitions.minPartitionSize"
+
+  val COALESCE_PARTITIONS_PARALLELISM_FIRST =
+    buildConf("spark.sql.adaptive.coalescePartitions.parallelismFirst")
+      .doc("When true, Spark ignores the target size specified by " +
+        s"'${ADVISORY_PARTITION_SIZE_IN_BYTES.key}' (default 64MB) when coalescing contiguous " +
+        "shuffle partitions, and only respect the minimum partition size specified by " +
+        s"'$MIN_PARTITION_SIZE_KEY' (default 1MB), to maximize the parallelism. " +
+        "This is to avoid performance regression when enabling adaptive query execution. " +
+        "It's recommended to set this config to false and respect the target size specified by " +
+        s"'${ADVISORY_PARTITION_SIZE_IN_BYTES.key}'.")
+      .version("3.2.0")
+      .booleanConf
+      .createWithDefault(true)
+
+  val COALESCE_PARTITIONS_MIN_PARTITION_SIZE =
+    buildConf("spark.sql.adaptive.coalescePartitions.minPartitionSize")
+      .doc("The minimum size of shuffle partitions after coalescing. Its value can be at most " +
+        s"20% of '${ADVISORY_PARTITION_SIZE_IN_BYTES.key}'. This is useful when the target size " +
+        "is ignored during partition coalescing, which is the default case.")
+      .version("3.2.0")
+      .bytesConf(ByteUnit.BYTE)
+      .createWithDefaultString("1MB")
+
   val COALESCE_PARTITIONS_MIN_PARTITION_NUM =
     buildConf("spark.sql.adaptive.coalescePartitions.minPartitionNum")
-      .doc("The suggested (not guaranteed) minimum number of shuffle partitions after " +
-        "coalescing. If not set, the default value is the default parallelism of the " +
+      .internal()
+      .doc("(deprecated) The suggested (not guaranteed) minimum number of shuffle partitions " +
+        "after coalescing. If not set, the default value is the default parallelism of the " +
         "Spark cluster. This configuration only has an effect when " +
         s"'${ADAPTIVE_EXECUTION_ENABLED.key}' and " +
         s"'${COALESCE_PARTITIONS_ENABLED.key}' are both true.")
@@ -3211,7 +3236,9 @@ object SQLConf {
         "Avoid to depend on this optimization to prevent a potential correctness issue. " +
           "If you must use, use 'SparkSessionExtensions' instead to inject it as a custom rule."),
       DeprecatedConfig(CONVERT_CTAS.key, "3.1",
-        s"Set '${LEGACY_CREATE_HIVE_TABLE_BY_DEFAULT.key}' to false instead.")
+        s"Set '${LEGACY_CREATE_HIVE_TABLE_BY_DEFAULT.key}' to false instead."),
+      DeprecatedConfig(COALESCE_PARTITIONS_MIN_PARTITION_NUM.key, "3.2",
+        s"Use '${COALESCE_PARTITIONS_MIN_PARTITION_SIZE.key}' instead.")
     )
 
     Map(configs.map { cfg => cfg.key -> cfg } : _*)

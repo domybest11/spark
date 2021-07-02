@@ -903,10 +903,10 @@ class DataFrame(PandasMapOpsMixin, PandasConversionMixin):
         +---+-----+
         |age| name|
         +---+-----+
-        |  5|  Bob|
+        |  2|Alice|
         |  5|  Bob|
         |  2|Alice|
-        |  2|Alice|
+        |  5|  Bob|
         +---+-----+
         >>> data = data.repartition(7, "age")
         >>> data.show()
@@ -920,7 +920,7 @@ class DataFrame(PandasMapOpsMixin, PandasConversionMixin):
         +---+-----+
         >>> data.rdd.getNumPartitions()
         7
-        >>> data = data.repartition("name", "age")
+        >>> data = data.repartition(3, "name", "age")
         >>> data.show()
         +---+-----+
         |age| name|
