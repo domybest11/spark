@@ -70,8 +70,8 @@ public class HttpClientUtils {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 logger.info("AppCostReporter report to lancer succeeded");
-                response.code();
-                response.message();
+                logger.info(String.valueOf(response.code()));
+                logger.info(response.message());
                 response.close();
             }
         });
