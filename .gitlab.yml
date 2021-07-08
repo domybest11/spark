@@ -1,0 +1,51 @@
+stages:
+  - lint
+  - test
+  - build
+  - package
+
+variables:
+  # 需要发送的安全依赖文件，java语言则对应为pom.xml，python语言则为requirements.txt，nodejs语言则为package.json,go语言则为go.sum，php语言则为composer.lock
+  # 注意java项目管理如使用gradle，发送依赖文件为父节点下包含依赖版本的thirdparty.gradle文件
+  # 依赖文件在项目根目录则填写依赖文件名称即可，若项目不在根目录，则需要加上相对路径
+  DEPEND_FILE: pom.xml
+  # 该仓库开发语言类型。 选项： java,python,nodejs,go,php,gradle
+  LANGUAGE: java
+
+include:
+  - project: 'xuneng/datacenter-ci-script'
+    ref: master
+    file: 'security/lint_depend_scan.yml'
+
+lint:vet:
+  stage: lint
+  only:
+    - merge_requests
+  script:
+    - echo "todo"
+
+# test 用于做单测, 集成测试等
+test:
+  stage: test
+  only:
+    - merge_requests
+  script:
+    - echo "test"
+
+build:all:
+  stage: build
+  only:
+    - merge_requests
+  script:
+    - ./dev/make-distribution.sh --name -hadoop-2.8 --tgz  -Dhadoop.version=2.8.4.1-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -DskipTests -T4
+
+
+
+
+
+
+
+
+
+
+
