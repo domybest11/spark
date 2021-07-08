@@ -1483,4 +1483,11 @@ class AdaptiveQueryExecSuite
     assert(materializeLogs(0).startsWith("Materialize query stage BroadcastQueryStageExec"))
     assert(materializeLogs(1).startsWith("Materialize query stage ShuffleQueryStageExec"))
   }
+
+  test("SPARK-35874: AQE Shuffle should wait for its subqueries to finish before materializing") {
+    withSQLConf(SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true") {
+      val query = "SELECT b FROM testData2 DISTRIBUTE BY (b, (SELECT max(key) FROM testData))"
+      runAdaptiveAndVerifyResult(query)
+    }
+  }
 }
