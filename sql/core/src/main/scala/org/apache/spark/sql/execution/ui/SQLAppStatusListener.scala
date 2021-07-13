@@ -28,8 +28,10 @@ import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.Status._
 import org.apache.spark.scheduler._
+import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.sql.execution.SQLExecution
 import org.apache.spark.sql.execution.metric._
+import org.apache.spark.sql.execution.ui.AppClientStatus.SHUFFLE_FAIL
 import org.apache.spark.sql.internal.StaticSQLConf._
 import org.apache.spark.status.{ElementTrackingStore, KVUtils, LiveEntity}
 import org.apache.spark.util.SQLAppStatusReporter
@@ -161,6 +163,33 @@ class SQLAppStatusListener(
     event.accumUpdates.foreach { case (taskId, stageId, attemptId, accumUpdates) =>
       updateStageMetrics(stageId, attemptId, taskId, SQLAppStatusListener.UNKNOWN_INDEX,
         accumUpdates, false)
+    }
+  }
+
+
+  override def onExecutorInfoUpdate(event: SparkListenerExecutorReportInfo): Unit = {
+    event.executorReportInfo.exception.foreach {
+      case fetchFailedException: FetchFailedException =>
+        val blockManagerId = fetchFailedException.bmAddress
+        blockManagerId.executorId
+        blockManagerId.hostPort
+        if (executionQueue.isDefined) {
+          val executionUIData = new SQLExecutionUIData(
+            SHUFFLE_FAIL,
+            s"${blockManagerId.host}:${blockManagerId.port}",
+            "",
+            "",
+            Seq.empty,
+            0L,
+            Some(new Date()),
+            Map.empty,
+            Set.empty,
+            Map.empty
+          )
+          executionUIData.statement = "SHUFFLE_FAIL"
+          executionQueue.get.offer(executionUIData)
+        }
+      case _ =>
     }
   }
 
@@ -703,4 +732,5 @@ private object SQLAppStatusListener {
 
 object AppClientStatus {
   val APP_CLIENT_END = -2
+  val SHUFFLE_FAIL = -772283L
 }

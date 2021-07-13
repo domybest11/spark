@@ -46,7 +46,7 @@ private[spark] case class Heartbeat(
     blockManagerId: BlockManagerId,
     // (stageId, stageAttemptId) -> executor metric peaks
     executorUpdates: Map[(Int, Int), ExecutorMetrics],
-    executorResources: Array[Long])
+    executorResources: Array[Long], executorInfo: ExecutorReportInfo = null)
 
 /**
  * An event that SparkContext uses to notify HeartbeatReceiver that SparkContext.taskScheduler is
@@ -59,6 +59,8 @@ private[spark] case object ExpireDeadHosts
 private case class ExecutorRegistered(executorId: String)
 
 private case class ExecutorRemoved(executorId: String)
+
+case class ExecutorReportInfo(exception: Seq[Exception])
 
 private[spark] case class HeartbeatResponse(reregisterBlockManager: Boolean)
 
@@ -129,7 +131,7 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
 
     // Messages received from executors
     case heartbeat @ Heartbeat(executorId, accumUpdates, blockManagerId, executorUpdates,
-    executorResources) =>
+    executorResources, executorInfo) =>
       var reregisterBlockManager = !sc.isStopped
       if (scheduler != null) {
         if (executorLastSeen.contains(executorId)) {
@@ -137,7 +139,12 @@ private[spark] class HeartbeatReceiver(sc: SparkContext, clock: Clock)
           eventLoopThread.submit(new Runnable {
             override def run(): Unit = Utils.tryLogNonFatalError {
               val unknownExecutor = !scheduler.executorHeartbeatReceived(
-                executorId, accumUpdates, blockManagerId, executorUpdates, executorResources)
+                executorId,
+                accumUpdates,
+                blockManagerId,
+                executorUpdates,
+                executorResources,
+                executorInfo)
               reregisterBlockManager &= unknownExecutor
               val response = HeartbeatResponse(reregisterBlockManager)
               context.reply(response)

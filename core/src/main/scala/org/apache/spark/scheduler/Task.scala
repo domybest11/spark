@@ -19,6 +19,7 @@ package org.apache.spark.scheduler
 
 import java.nio.ByteBuffer
 import java.util.Properties
+import java.util.concurrent.LinkedBlockingQueue
 
 import org.apache.spark._
 import org.apache.spark.executor.TaskMetrics
@@ -29,6 +30,7 @@ import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.rdd.InputFileBlockHolder
 import org.apache.spark.resource.ResourceInformation
 import org.apache.spark.util._
+
 
 /**
  * A unit of execution. We have two kinds of Task's in Spark:
@@ -85,7 +87,8 @@ private[spark] abstract class Task[T](
       attemptNumber: Int,
       metricsSystem: MetricsSystem,
       resources: Map[String, ResourceInformation],
-      plugins: Option[PluginContainer]): T = {
+      plugins: Option[PluginContainer],
+      taskExceptions: LinkedBlockingQueue[Exception]): T = {
     SparkEnv.get.blockManager.registerTask(taskAttemptId)
     // TODO SPARK-24874 Allow create BarrierTaskContext based on partitions, instead of whether
     // the stage is barrier.
@@ -99,7 +102,9 @@ private[spark] abstract class Task[T](
       localProperties,
       metricsSystem,
       metrics,
-      resources)
+      resources,
+      taskExceptions
+    )
 
     context = if (isBarrier) {
       new BarrierTaskContext(taskContext)

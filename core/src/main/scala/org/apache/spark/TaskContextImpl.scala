@@ -18,6 +18,7 @@
 package org.apache.spark
 
 import java.util.Properties
+import java.util.concurrent.LinkedBlockingQueue
 import javax.annotation.concurrent.GuardedBy
 
 import scala.collection.JavaConverters._
@@ -31,6 +32,7 @@ import org.apache.spark.metrics.source.Source
 import org.apache.spark.resource.ResourceInformation
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.util._
+
 
 
 /**
@@ -54,7 +56,8 @@ private[spark] class TaskContextImpl(
     @transient private val metricsSystem: MetricsSystem,
     // The default value is only used in tests.
     override val taskMetrics: TaskMetrics = TaskMetrics.empty,
-    override val resources: Map[String, ResourceInformation] = Map.empty)
+    override val resources: Map[String, ResourceInformation] = Map.empty,
+    val taskExceptions: LinkedBlockingQueue[Exception] = null)
   extends TaskContext
   with Logging {
 
@@ -176,6 +179,9 @@ private[spark] class TaskContextImpl(
   }
 
   private[spark] override def setFetchFailed(fetchFailed: FetchFailedException): Unit = {
+    if (taskExceptions!= null) {
+      taskExceptions.put(fetchFailed)
+    }
     this._fetchFailedException = Option(fetchFailed)
   }
 

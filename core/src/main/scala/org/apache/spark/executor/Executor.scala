@@ -29,8 +29,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import javax.annotation.concurrent.GuardedBy
 import javax.ws.rs.core.UriBuilder
 
+import scala.collection.{immutable, mutable}
 import scala.collection.JavaConverters._
-import scala.collection.immutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, Map, WrappedArray}
 import scala.concurrent.duration._
 import scala.util.control.NonFatal
@@ -186,6 +186,8 @@ private[spark] class Executor(
 
   // Maintains the list of running tasks.
   private val runningTasks = new ConcurrentHashMap[Long, TaskRunner]
+
+  private val taskExceptions = new LinkedBlockingQueue[Exception]
 
   private val appAttemptId = conf.get("spark.yarn.app.attempt.id", "1")
   if (!conf.get("spark.master").contains("local")
@@ -547,7 +549,8 @@ private[spark] class Executor(
                     attemptNumber = taskDescription.attemptNumber,
                     metricsSystem = env.metricsSystem,
                     resources = taskDescription.resources,
-                    plugins = plugins)
+                    plugins = plugins,
+                    taskExceptions = taskExceptions)
                 }
               })
             } finally {
@@ -564,7 +567,8 @@ private[spark] class Executor(
               attemptNumber = taskDescription.attemptNumber,
               metricsSystem = env.metricsSystem,
               resources = taskDescription.resources,
-              plugins = plugins)
+              plugins = plugins,
+              taskExceptions = taskExceptions)
           }
 
           threwException = false
@@ -1073,8 +1077,14 @@ private[spark] class Executor(
       }
     }
 
+    val exceptions = mutable.Buffer.empty[Exception]
+    while (!taskExceptions.isEmpty) {
+      val exception = taskExceptions.poll()
+      exceptions += exception
+    }
+
     val message = Heartbeat(executorId, accumUpdates.toArray, env.blockManager.blockManagerId,
-      executorUpdates, executorResources)
+      executorUpdates, executorResources, ExecutorReportInfo(exceptions))
     try {
       val response = heartbeatReceiverRef.askSync[HeartbeatResponse](
         message, new RpcTimeout(HEARTBEAT_INTERVAL_MS.millis, EXECUTOR_HEARTBEAT_INTERVAL.key))

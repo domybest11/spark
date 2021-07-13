@@ -19,7 +19,7 @@ package org.apache.spark.scheduler
 
 import scala.collection.mutable.Map
 
-import org.apache.spark.{LocalSparkContext, SparkConf, SparkContext, SparkFunSuite}
+import org.apache.spark.{ExecutorReportInfo, LocalSparkContext, SparkConf, SparkContext, SparkFunSuite}
 import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
@@ -98,7 +98,8 @@ private class DummyTaskScheduler extends TaskScheduler {
       accumUpdates: Array[(Long, Seq[AccumulatorV2[_, _]])],
       blockManagerId: BlockManagerId,
       executorMetrics: Map[(Int, Int), ExecutorMetrics],
-      executorResources: Array[Long]): Boolean = true
+      executorResources: Array[Long],
+      executorInfo: ExecutorReportInfo): Boolean = true
   override def executorDecommission(
     executorId: String,
     decommissionInfo: ExecutorDecommissionInfo): Unit = {}

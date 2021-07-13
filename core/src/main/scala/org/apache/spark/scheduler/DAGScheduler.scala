@@ -302,9 +302,12 @@ private[spark] class DAGScheduler(
       blockManagerId: BlockManagerId,
       // (stageId, stageAttemptId) -> metrics
       executorUpdates: mutable.Map[(Int, Int), ExecutorMetrics],
-      executorResources: Array[Long]): Boolean = {
+      executorResources: Array[Long], executorInfo: ExecutorReportInfo): Boolean = {
     listenerBus.post(SparkListenerExecutorMetricsUpdate(execId, accumUpdates,
       executorUpdates))
+    if (executorInfo.exception.nonEmpty) {
+      listenerBus.post(SparkListenerExecutorReportInfo(execId, executorInfo))
+    }
     if (executorResources.length == 3) {
       val curExecutorUsedCpuPercent =
         executorResources(2).toFloat / (executorResources(1) * NS_TO_MS)

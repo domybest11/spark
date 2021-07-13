@@ -81,7 +81,8 @@ class HeartbeatReceiverSuite
     heartbeatReceiverClock = new ManualClock
     heartbeatReceiver = new HeartbeatReceiver(sc, heartbeatReceiverClock)
     heartbeatReceiverRef = sc.env.rpcEnv.setupEndpoint("heartbeat", heartbeatReceiver)
-    when(scheduler.executorHeartbeatReceived(any(), any(), any(), any(), any())).thenReturn(true)
+    when(scheduler.executorHeartbeatReceived(any(), any(), any(), any(), any(),
+      null)).thenReturn(true)
   }
 
   /**
@@ -260,7 +261,9 @@ class HeartbeatReceiverSuite
         meq(Array(1L -> metrics.accumulators())),
         meq(blockManagerId),
         meq(executorUpdates),
-        meq(executorResources))
+        meq(executorResources),
+        null
+      )
     }
   }
 
