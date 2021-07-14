@@ -133,6 +133,7 @@ case class InsertIntoHadoopFsRelationCommand(
     val mergeDir = ".merge-temp-" + java.util.UUID.randomUUID().toString
     if (canMerge) {
       qualifiedOutputPath = new Path(qualifiedOutputPath, mergeDir)
+      fs.deleteOnExit(qualifiedOutputPath)
     }
     logInfo("merge job tmp output path " + qualifiedOutputPath)
 
