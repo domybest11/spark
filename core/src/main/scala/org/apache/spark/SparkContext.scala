@@ -22,7 +22,6 @@ import java.net.URI
 import java.util.{Arrays, Locale, Properties, ServiceLoader, UUID}
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
-
 import javax.ws.rs.core.UriBuilder
 
 import scala.collection.JavaConverters._
@@ -30,8 +29,9 @@ import scala.collection.Map
 import scala.collection.immutable
 import scala.collection.mutable.HashMap
 import scala.language.implicitConversions
-import scala.reflect.{ClassTag, classTag}
+import scala.reflect.{classTag, ClassTag}
 import scala.util.control.NonFatal
+
 import com.google.common.collect.MapMaker
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -39,6 +39,7 @@ import org.apache.hadoop.io.{ArrayWritable, BooleanWritable, BytesWritable, Doub
 import org.apache.hadoop.mapred.{FileInputFormat, InputFormat, JobConf, SequenceFileInputFormat, TextInputFormat}
 import org.apache.hadoop.mapreduce.{InputFormat => NewInputFormat, Job => NewHadoopJob}
 import org.apache.hadoop.mapreduce.lib.input.{FileInputFormat => NewFileInputFormat}
+
 import org.apache.spark.annotation.{DeveloperApi, Experimental}
 import org.apache.spark.broadcast.{Broadcast, BroadcastMode}
 import org.apache.spark.deploy.{LocalSparkCluster, SparkHadoopUtil}
@@ -46,13 +47,13 @@ import org.apache.spark.executor.{Executor, ExecutorMetrics, ExecutorMetricsSour
 import org.apache.spark.input.{FixedLengthBinaryInputFormat, PortableDataStream, StreamInputFormat, WholeTextFileInputFormat}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
+import org.apache.spark.internal.config.Status._
 import org.apache.spark.internal.config.Tests._
 import org.apache.spark.internal.config.UI._
 import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.metrics.sink.KafkaHttpSink
 import org.apache.spark.metrics.source.JVMCPUSource
-import org.apache.spark.mysql.{AsyncExecution, CallChain}
 import org.apache.spark.partial.{ApproximateEvaluator, PartialResult}
 import org.apache.spark.rdd._
 import org.apache.spark.resource._
@@ -71,7 +72,6 @@ import org.apache.spark.ui.{ConsoleProgressBar, SparkUI}
 import org.apache.spark.ui.jobs.JobProgressListener
 import org.apache.spark.util._
 import org.apache.spark.util.logging.DriverLogger
-import org.apache.spark.internal.config.Status._
 /**
  * Main entry point for Spark functionality. A SparkContext represents the connection to a Spark
  * cluster, and can be used to create RDDs, accumulators and broadcast variables on that cluster.
@@ -481,7 +481,6 @@ class SparkContext(config: SparkConf) extends Logging {
       }
     }
 
-    ConfigurationUtil.initConfiguration()
     _listenerBus = new LiveListenerBus(_conf)
     _jobProgressListener = new JobProgressListener(_conf)
     _listenerBus.addToSharedQueue(_jobProgressListener)
@@ -982,8 +981,6 @@ class SparkContext(config: SparkConf) extends Logging {
       path: String,
       minPartitions: Int = defaultMinPartitions): RDD[String] = withScope {
     assertNotStopped()
-    AsyncExecution.AsycnHandle(new CallChain.Event(path, AsyncExecution.getSparkAppName(conf),
-      "path"))
     hadoopFile(path, classOf[TextInputFormat], classOf[LongWritable], classOf[Text],
       minPartitions).map(pair => pair._2.toString).setName(path)
   }
@@ -2260,7 +2257,6 @@ class SparkContext(config: SparkConf) extends Logging {
     ResourceProfile.clearDefaultProfile()
     // Unset YARN mode system env variable, to allow switching between cluster types.
     SparkContext.clearActiveContext()
-    ConfigurationUtil.stop()
     logInfo("Successfully stopped SparkContext")
   }
 

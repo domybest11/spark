@@ -112,7 +112,7 @@ class HiveSessionStateBuilder(
     new SparkOptimizer(catalogManager, catalog, experimentalMethods) {
       override def extendedOperatorOptimizationRules: Seq[Rule[LogicalPlan]] =
         super.extendedOperatorOptimizationRules ++ customOperatorOptimizationRules ++
-          Seq(DeterminePartitionedTableStats(session), DependencyCollect(session))
+          Seq(DeterminePartitionedTableStats(session))
 
     }
   }

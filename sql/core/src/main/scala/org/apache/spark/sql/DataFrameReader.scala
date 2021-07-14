@@ -27,7 +27,6 @@ import org.apache.spark.Partition
 import org.apache.spark.annotation.Stable
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.internal.Logging
-import org.apache.spark.mysql.{AsyncExecution, CallChain}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.csv.{CSVHeaderChecker, CSVOptions, UnivocityParser}
@@ -804,8 +803,6 @@ class DataFrameReader private[sql](sparkSession: SparkSession) extends Logging {
    */
   def parquet(path: String): DataFrame = {
     // This method ensures that calls that explicit need single argument works, see SPARK-16009
-    AsyncExecution.AsycnHandle(new CallChain.Event(path, AsyncExecution.getSparkAppName(
-      sparkSession.sparkContext.conf), "path"))
     parquet(Seq(path): _*)
   }
 

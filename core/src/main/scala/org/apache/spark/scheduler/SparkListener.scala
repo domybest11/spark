@@ -21,7 +21,6 @@ import java.util.Properties
 import javax.annotation.Nullable
 
 import scala.collection.Map
-import scala.collection.mutable.HashSet
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 
@@ -294,12 +293,6 @@ case class SparkListenerLogStart(sparkVersion: String) extends SparkListenerEven
 @Since("3.1.0")
 case class SparkListenerResourceProfileAdded(resourceProfile: ResourceProfile)
   extends SparkListenerEvent
-
-@DeveloperApi
-case class DependencyEvent(readTables: HashSet[String], writeTables: HashSet[String])
-  extends SparkListenerEvent {
-  override protected[spark] def logEvent: Boolean = false
-}
 
 /**
  * Interface for listening to events from the Spark scheduler. Most applications should probably

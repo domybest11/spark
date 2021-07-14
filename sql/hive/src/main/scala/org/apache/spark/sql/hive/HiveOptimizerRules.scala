@@ -19,23 +19,17 @@ package org.apache.spark.sql.hive
 
 import java.io.IOException
 
-import scala.collection.mutable
 import scala.util.control.Breaks.{break, breakable}
 
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hive.common.StatsSetupConst
 
-import org.apache.spark.mysql.{AsyncExecution, CallChain}
-import org.apache.spark.scheduler.DependencyEvent
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, CatalogTable, HiveTableRelation}
+import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{AttributeSet, PredicateHelper}
-import org.apache.spark.sql.catalyst.planning.PhysicalOperation
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.execution.command.{CreateTableCommand, DDLUtils}
-import org.apache.spark.sql.execution.datasources.CreateTable
-import org.apache.spark.sql.hive.execution.InsertIntoHiveTable
+import org.apache.spark.sql.execution.command.DDLUtils
 
 case class DeterminePartitionedTableStats(sparkSession: SparkSession)
   extends Rule[LogicalPlan] with PredicateHelper {
@@ -108,50 +102,5 @@ case class DeterminePartitionedTableStats(sparkSession: SparkSession)
       } else {
         filter
       }
-  }
-}
-
-case class DependencyCollect(sparkSession: SparkSession) extends Rule[LogicalPlan] {
-  def apply(plan: LogicalPlan): LogicalPlan = {
-    if (sparkSession.sparkContext.conf.getBoolean("spark.collectDependencies", true)) {
-      val readTables = mutable.HashSet[String]()
-      val writeTables = mutable.HashSet[String]()
-      plan transformDown {
-        case a@InsertIntoHiveTable(table: CatalogTable, _, _, _, _, _) =>
-          writeTables += s"${fillBlankDatabase(table)}.${table.identifier.table}"
-          a
-        case i@InsertIntoStatement(table: HiveTableRelation, _, _, _, _, _) =>
-          writeTables += s"${table.tableMeta.database}.${table.tableMeta.identifier.table}"
-          i
-        case c@CreateTable(table: CatalogTable, _, _) =>
-          writeTables += s"${fillBlankDatabase(table)}.${table.identifier.table}"
-          c
-        case d@CreateTableCommand(table: CatalogTable, _) =>
-          writeTables += s"${fillBlankDatabase(table)}.${table.identifier.table}"
-          d
-        case p@PhysicalOperation(_, _, table: HiveTableRelation) =>
-          readTables += s"${table.tableMeta.database}.${table.tableMeta.identifier.table}"
-          p
-      }
-      if (readTables.size > 0 || writeTables.size > 0) {
-        logInfo(String.format("src table -> %s target table -> %s",
-          readTables.mkString(","), writeTables.mkString(",")))
-        AsyncExecution.AsycnHandle(new CallChain.Event(
-          s"${readTables.mkString(",")}#${writeTables.mkString(",")}",
-          AsyncExecution.getSparkAppName(sparkSession.sparkContext.conf), "bloodlineage"))
-        sparkSession.sparkContext.listenerBus.post(DependencyEvent(readTables, writeTables))
-      }
-    }
-    plan
-  }
-
-  private def fillBlankDatabase(table: CatalogTable): String = {
-    var database = ""
-    if (table.database.isEmpty) {
-      database = sparkSession.sessionState.catalog.getCurrentDatabase
-    } else {
-      database = table.database
-    }
-    database
   }
 }
