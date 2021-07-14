@@ -19,6 +19,8 @@ package org.apache.spark.sql.execution.status
 
 import java.util.{List => JList}
 
+import scala.collection.mutable.ListBuffer
+
 import org.apache.hadoop.ipc.RPC
 import org.apache.hadoop.yarn.api.ApplicationClientProtocol
 import org.apache.hadoop.yarn.api.protocolrecords.GetApplicationReportRequest
@@ -26,8 +28,6 @@ import org.apache.hadoop.yarn.api.records.ApplicationId
 import org.apache.hadoop.yarn.client.ClientRMProxy
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.util.Records
-
-import scala.collection.mutable.ListBuffer
 
 import org.apache.spark.JobExecutionStatus
 import org.apache.spark.SparkConf
@@ -185,6 +185,9 @@ class SqlAppStoreStatusStoreV1(
     if (executionInfo.executionId !=  AppClientStatus.APP_CLIENT_END
       && executionInfo.completionTime.nonEmpty && method.equals("once")) {
       applicationSQLExecutionData.executionCost = countResourceCost(applicationSQLExecutionData)
+      if (executionInfo.executionId == AppClientStatus.SHUFFLE_FAIL) {
+        applicationSQLExecutionData.shuffleFailed = executionInfo.description
+      }
     }
     Some(applicationSQLExecutionData)
   }

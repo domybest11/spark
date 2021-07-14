@@ -19,16 +19,18 @@ package org.apache.spark.sql.internal
 
 import java.net.URL
 import java.util.UUID
-import javax.annotation.concurrent.GuardedBy
 import java.util.concurrent.{ConcurrentHashMap, CopyOnWriteArrayList}
 import java.util.function.BiFunction
+import javax.annotation.concurrent.GuardedBy
 
 import scala.reflect.ClassTag
-import scala.util.control.NonFatal
 import scala.util.Random
+import scala.util.control.NonFatal
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FsUrlStreamHandlerFactory
 import org.apache.hadoop.security.UserGroupInformation
+
 import org.apache.spark.{SparkConf, SparkContext, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog._

@@ -19,6 +19,7 @@ package org.apache.spark.scheduler
 
 import scala.collection.mutable.Map
 
+import org.apache.spark.ExecutorReportInfo
 import org.apache.spark.executor.ExecutorMetrics
 import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
 import org.apache.spark.storage.BlockManagerId
@@ -90,7 +91,7 @@ private[spark] trait TaskScheduler {
       accumUpdates: Array[(Long, Seq[AccumulatorV2[_, _]])],
       blockManagerId: BlockManagerId,
       executorUpdates: Map[(Int, Int), ExecutorMetrics],
-      executorResources: Array[Long]): Boolean
+      executorResources: Array[Long], executorInfo: ExecutorReportInfo): Boolean
 
   /**
    * Get an application ID associated with the job.

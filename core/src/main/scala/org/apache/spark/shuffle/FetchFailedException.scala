@@ -33,7 +33,7 @@ import org.apache.spark.util.Utils
  * (or risk triggering any other exceptions).  See SPARK-19276.
  */
 private[spark] class FetchFailedException(
-    bmAddress: BlockManagerId,
+    val bmAddress: BlockManagerId,
     shuffleId: Int,
     mapId: Long,
     mapIndex: Int,

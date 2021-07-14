@@ -25,6 +25,7 @@ import scala.collection.mutable.HashSet
 
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 
+import org.apache.spark.ExecutorReportInfo
 import org.apache.spark.TaskEndReason
 import org.apache.spark.annotation.{DeveloperApi, Since}
 import org.apache.spark.executor.{ExecutorMetrics, TaskMetrics}
@@ -244,6 +245,17 @@ case class SparkListenerExecutorMetricsUpdate(
   extends SparkListenerEvent
 
 /**
+ * Periodic updates from executors.
+ * @param execId executor id
+ * @param executorReportInfo customized definition
+ */
+@DeveloperApi
+case class SparkListenerExecutorReportInfo(
+    execId: String,
+    executorReportInfo: ExecutorReportInfo)
+  extends SparkListenerEvent
+
+/**
  * Peak metric values for the executor for the stage, written to the history log at stage
  * completion.
  * @param execId executor id
@@ -367,6 +379,11 @@ private[spark] trait SparkListenerInterface {
    * Called when the driver receives task metrics from an executor in a heartbeat.
    */
   def onExecutorMetricsUpdate(executorMetricsUpdate: SparkListenerExecutorMetricsUpdate): Unit
+
+  /**
+   * Called when the driver receives executorInfo from an executor in a heartbeat.
+   */
+  def onExecutorInfoUpdate(ex: SparkListenerExecutorReportInfo): Unit
 
   /**
    * Called with the peak memory metrics for a given (executor, stage) combination. Note that this
@@ -527,6 +544,8 @@ abstract class SparkListener extends SparkListenerInterface {
 
   override def onExecutorMetricsUpdate(
       executorMetricsUpdate: SparkListenerExecutorMetricsUpdate): Unit = { }
+
+  override def onExecutorInfoUpdate(ex: SparkListenerExecutorReportInfo): Unit = { }
 
   override def onStageExecutorMetrics(
       executorMetrics: SparkListenerStageExecutorMetrics): Unit = { }

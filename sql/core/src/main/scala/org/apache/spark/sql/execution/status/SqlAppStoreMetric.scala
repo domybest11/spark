@@ -38,8 +38,10 @@ class ApplicationSQLExecutionData(var appId: String = "",
     var sqlExecutionDatas: Option[ListBuffer[ExecutionData]] =
                                   Some(ListBuffer.empty[ExecutionData]),
     var sparkVersion: String = "spark3.1",
-    var tarceId: String = "") {
+    var tarceId: String = "",
+    var shuffleFailed: String = "") {
     var executionCost = ""
+
    }
 
 class ExecutionData(var statement: String = "",

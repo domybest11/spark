@@ -174,6 +174,9 @@ wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sd
 # Download lineage jar
 wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/spark-3.1/SparkLineageCollector-1.0-SNAPSHOT.jar
 
+# Download hive contrib jar to support MultiDelimitSerDe
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/spark-3.1/hive-contrib-2.3.4.jar
+
 # Copy jar
 cp "$SPARK_HOME"/assembly/target/scala*/jars/* "$DISTDIR/jars/"
 

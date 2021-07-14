@@ -22,8 +22,10 @@ import java.util.Date
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
+
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+
 import org.apache.spark.JobExecutionStatus
 import org.apache.spark.status.KVUtils.KVIndexParam
 import org.apache.spark.util.kvstore.{KVIndex, KVStore}
