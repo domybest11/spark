@@ -34,7 +34,6 @@ public class FailureJobCollector<T extends WrapEvent>{
   public FailureJobCollector(SparkConf conf, String threadName) {
     this.conf = conf;
     this.threadName = threadName;
-    this.kafkaSink = new KafkaSink(conf);
   }
 
   public FailureJobCollector(Properties setting, String threadName) {
@@ -44,7 +43,6 @@ public class FailureJobCollector<T extends WrapEvent>{
     });
     this.setting = setting;
     this.threadName = threadName;
-    this.kafkaSink = new KafkaSink(conf);
   }
 
   public String getAppName() {
@@ -119,6 +117,9 @@ public class FailureJobCollector<T extends WrapEvent>{
     public void run() {
       try {
         T next = logErrorQueue.take();
+        if (kafkaSink == null && next!= POISON_PILL) {
+          kafkaSink = new KafkaSink(conf);
+        }
         while (next != POISON_PILL) {
           kafkaSink.report(KafkaSink.METRIC_TOPIC, next);
           next = logErrorQueue.take();
@@ -149,7 +150,7 @@ public class FailureJobCollector<T extends WrapEvent>{
         LogLog.warn(threadName + " stop occurred errors: " + e.getMessage());
       }
     }
-    LogLog.warn(threadName + " is stoping ......");
+    LogLog.debug(threadName + " is stoping ......");
   }
 
 }
