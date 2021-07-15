@@ -89,10 +89,6 @@ private[spark] object Status {
     .stringConf
     .createWithDefault(null)
 
-  val RESOURCE_TRACE_REPORTER_LOG_ID = ConfigBuilder("spark.resourceTraceReporter.logId")
-    .stringConf
-    .createWithDefault(null)
-
   val TRACE_REPORTER_LANCER_URL = ConfigBuilder("spark.lancer.url")
     .stringConf
     .createWithDefault(null)
