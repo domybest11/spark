@@ -126,7 +126,7 @@ if [ ! "$(command -v "$MVN")" ] ; then
     exit -1;
 fi
 
-VERSION=3.1.1
+VERSION=3.1.1-bili-SNAPSHOT
 SCALA_VERSION=2.12
 SPARK_HADOOP_VERSION=2.8.4.1-bili-SNAPSHOT
 SPARK_HIVE=1
