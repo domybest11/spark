@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hive.thriftserver.status
 
 import java.util.{List => JList}
-
 import scala.collection.mutable.ListBuffer
 import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.apache.spark.internal.Logging
@@ -29,7 +28,7 @@ import org.apache.spark.sql.hive.thriftserver.ui.{HiveThriftServer2Listener, Liv
 import org.apache.spark.status.AppStatusStore
 import org.apache.spark.status.api.v1.{JobData, StageData, _}
 import org.apache.spark.ui.scope.RDDOperationGraph
-import org.apache.spark.util.Utils
+import org.apache.spark.util.{AppCostReporter, Utils}
 
 
 
@@ -42,6 +41,8 @@ class ThriftServerSqlAppStatusStore(
                            val listener: HiveThriftServer2Listener,
                            sqlContext: SQLContext,
                            val conf: SparkConf) extends Logging {
+
+  private val reporter = AppCostReporter.createAppCostReporter(conf)
 
   def getExecutionBySession(sessionId : String): List[LiveExecutionData] = {
     listener.getExecutionListFromStore.map(exc => {
@@ -81,6 +82,7 @@ class ThriftServerSqlAppStatusStore(
       var outputBytes: Long = 0
       val jobs: ListBuffer[SQLJobData] = applicationSQLExecutionData.sqlExecutionData.get.jobs
       var executionMsg = ""
+      val action = "resourceCost"
       if (jobs.nonEmpty) {
         jobs.foreach(job => {
           var jobRuntime = scala.math.ceil(1.0 * (job.endTime - job.startTime) / 1000).toInt
@@ -102,6 +104,8 @@ class ThriftServerSqlAppStatusStore(
         // scalastyle:off
         executionMsg = s"traceId:$traceId,当前任务使用的资源消耗情况:内存:${memorySeconds.toLong}(m*s)," +
           s" CPU:$vcoreSeconds(c*s), 读数据量:$inputUnit, 写数据量:$outputUnit."
+
+        reporter.postEvent(Some(traceId), action, "", executionMsg, System.currentTimeMillis())
       }
       executionMsg
     } catch {
