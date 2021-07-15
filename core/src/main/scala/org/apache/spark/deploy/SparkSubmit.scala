@@ -882,6 +882,7 @@ private[spark] class SparkSubmit extends Logging {
         }
       }
       if (autoSet || sparkConf.getBoolean("spark.sql.test.mirrorExecute", false)) {
+        logInfo("SparkConf auto-set takes effect")
         sparkConf.set("spark.sql.hive.convertMetastoreParquet", "true")
         sparkConf.set("spark.sql.hive.convertMetastoreOrc", "true")
         sparkConf.set("spark.sql.legacy.createHiveTableByDefault", "false")
