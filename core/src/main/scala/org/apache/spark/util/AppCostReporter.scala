@@ -18,7 +18,7 @@
 package org.apache.spark.util
 
 import org.apache.spark.SparkConf
-import org.apache.spark.internal.config.Status.{RESOURCE_TRACE_REPORTER_LOG_ID, TRACE_REPORTER_LANCER_URL}
+import org.apache.spark.internal.config.Status.{TRACE_REPORTER_LANCER_URL, TRACE_REPORTER_LOG_ID}
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Serialization
 
@@ -30,7 +30,7 @@ private[spark] class AppCostReporter(conf: SparkConf) {
 
   private val lancerUrl = conf.get(TRACE_REPORTER_LANCER_URL)
 
-  private val logId = conf.get(RESOURCE_TRACE_REPORTER_LOG_ID)
+  private val logId = conf.get(TRACE_REPORTER_LOG_ID)
 
   implicit val formats = DefaultFormats
 
