@@ -34,7 +34,7 @@ import org.apache.hadoop.security.UserGroupInformation
 import org.apache.spark.{SparkConf, SparkContext, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.catalyst.catalog._
-import org.apache.spark.sql.execution.{CacheManager, SparkEventKafkaReporter}
+import org.apache.spark.sql.execution.CacheManager
 import org.apache.spark.sql.execution.status.{SqlAppStatusScheduler, SqlAppStoreStatusStoreV1}
 import org.apache.spark.sql.execution.streaming.StreamExecution
 import org.apache.spark.sql.execution.ui.{SQLAppStatusListener, SQLAppStatusStore, SQLTab, StreamingQueryStatusStore}
@@ -136,15 +136,6 @@ private[sql] class SharedState(
       } else {
         None
       }
-    }
-  }
-
-  val eventReporter: SparkEventKafkaReporter = {
-    val needReport = sparkContext.conf.getBoolean("spark.report.logicalplan", false)
-    if (needReport) {
-      new SparkEventKafkaReporter(sparkContext.conf)
-    } else {
-      null
     }
   }
 
