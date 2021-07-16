@@ -20,6 +20,7 @@ package org.apache.spark.sql.execution
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 
 /**
  * Similar to [[SubqueryBroadcastExec]], this node is used to store the
@@ -32,6 +33,8 @@ import org.apache.spark.sql.catalyst.expressions._
 case class SubqueryAdaptiveBroadcastExec(
     name: String,
     index: Int,
+    onlyInBroadcast: Boolean,
+    @transient buildPlan: LogicalPlan,
     buildKeys: Seq[Expression],
     child: SparkPlan) extends BaseSubqueryExec with UnaryExecNode {
 
