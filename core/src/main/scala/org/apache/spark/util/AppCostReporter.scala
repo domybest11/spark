@@ -17,10 +17,11 @@
 
 package org.apache.spark.util
 
-import org.apache.spark.SparkConf
-import org.apache.spark.internal.config.Status.{TRACE_REPORTER_LANCER_URL, TRACE_REPORTER_LOG_ID}
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Serialization
+
+import org.apache.spark.SparkConf
+import org.apache.spark.internal.config.Status.{TRACE_REPORTER_LANCER_URL, TRACE_REPORTER_LOG_ID}
 
 /**
  * Created by guxiangrong on 2021/6/29.
