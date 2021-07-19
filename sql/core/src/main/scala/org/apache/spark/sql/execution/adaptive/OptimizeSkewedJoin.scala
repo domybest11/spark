@@ -24,7 +24,7 @@ import org.apache.commons.io.FileUtils
 import org.apache.spark.{MapOutputTrackerMaster, SparkEnv}
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.execution._
-import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, EnsureRequirements, ShuffleExchangeExec, ShuffleOrigin}
+import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, ShuffleOrigin}
 import org.apache.spark.sql.execution.joins.{ShuffledHashJoinExec, SortMergeJoinExec}
 import org.apache.spark.sql.internal.SQLConf
 
@@ -53,7 +53,7 @@ object OptimizeSkewedJoin extends CustomShuffleReaderRule {
 
   override val supportedShuffleOrigins: Seq[ShuffleOrigin] = Seq(ENSURE_REQUIREMENTS)
 
-  private val ensureRequirements = EnsureRequirements
+  override def mayAddExtraShuffles: Boolean = true
 
   /**
    * A partition is considered as a skewed partition if its size is larger than the median
@@ -284,22 +284,11 @@ object OptimizeSkewedJoin extends CustomShuffleReaderRule {
       //     Shuffle
       //   Sort
       //     Shuffle
-      val optimizePlan = optimizeSkewJoin(plan)
-      val numShuffles = ensureRequirements.apply(optimizePlan).collect {
-        case e: ShuffleExchangeExec => e
-      }.length
-
-      if (numShuffles > 0) {
-        if (conf.getConf(SQLConf.SKEW_JOIN_OPTIMIZE_FORCE)) {
-          optimizePlan
-        } else {
-          logInfo("OptimizeSkewedJoin rule is not applied due" +
-            " to additional shuffles will be introduced.")
-          plan
-        }
-      } else {
-        optimizePlan
-      }
+      // Or
+      // SHJ
+      //   Shuffle
+      //   Shuffle
+      optimizeSkewJoin(plan)
     } else {
       plan
     }
