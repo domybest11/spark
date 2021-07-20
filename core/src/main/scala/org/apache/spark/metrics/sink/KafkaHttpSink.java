@@ -14,7 +14,7 @@ public class KafkaHttpSink {
 
   private static final AppMaxUsedResourceWrap POISON_PILL = new AppMaxUsedResourceWrap("", "", "",
       0, 0, 0, 0, 0.0f,
-      0, 0, 0, 0.0f, 0);
+      0, 0, 0,0, 0.0f, 0);
 
   private ObjectMapper objectMapper = new ObjectMapper();
   private final BlockingQueue<Object> metricQueue = new LinkedBlockingQueue<Object>();

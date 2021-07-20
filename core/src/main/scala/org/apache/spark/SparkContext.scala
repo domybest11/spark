@@ -52,6 +52,7 @@ import org.apache.spark.internal.config.Tests._
 import org.apache.spark.internal.config.UI._
 import org.apache.spark.internal.plugin.PluginContainer
 import org.apache.spark.io.CompressionCodec
+import org.apache.spark.metrics.ExecutorMetricType
 import org.apache.spark.metrics.sink.KafkaHttpSink
 import org.apache.spark.metrics.source.JVMCPUSource
 import org.apache.spark.partial.{ApproximateEvaluator, PartialResult}
@@ -288,11 +289,14 @@ class SparkContext(config: SparkConf) extends Logging {
   private val BYTE_TO_MB = 1024 * 1024
   private val NS_TO_MS = 1000 * 1000
 
-  private var maxDriverUsedMemory: Int = _
+  private var maxDriverHeapUsedMemory: Int = _
+  private var maxDriverOffHeapUsedMemory: Int = _
   private var maxDriverUsedCpuPercent: Float = _
-  private var maxExecutorUsedMemory: Int = _
+  private var maxHeapExecutorUsedMemory: Int = _
+  private var maxOffHeapExecutorUsedMemory: Int = _
   private var maxExecutorUsedCpuPercent: Float = _
-  private var curDriverUsedMemory: Int = _
+  private var curDriverHeapUsedMemory: Int = _
+  private var curDriverOffHeapUsedMemory: Int = _
   private var curDriverUsedCpuPercent: Float = _
 
   // Used to store a URL for each static file/jar together with the file's local timestamp
@@ -2149,7 +2153,8 @@ class SparkContext(config: SparkConf) extends Logging {
 
     try {
       if (_kafkaHttpSink != null && _dagScheduler != null) {
-        maxExecutorUsedMemory = dagScheduler.maxExecutorUsedMemMb
+        maxHeapExecutorUsedMemory = dagScheduler.maxHeapExecutorUsedMemMb
+        maxOffHeapExecutorUsedMemory = dagScheduler.maxOffHeapExecutorUsedMemMb
         maxExecutorUsedCpuPercent = dagScheduler.maxExecutorUsedCpuPercent
 
         val driverAllocatedMemory = conf.get(DRIVER_MEMORY).toInt
@@ -2159,9 +2164,9 @@ class SparkContext(config: SparkConf) extends Logging {
 
         val appMaxUsedResourceWrap = new AppMaxUsedResourceWrap("appMaxUsedResource",
           applicationId, "spark", applicationAttemptId.getOrElse("1").toInt, driverAllocatedMemory,
-          driverAllocatedVCores, maxDriverUsedMemory, maxDriverUsedCpuPercent,
-          executorAllocatedMemory, executorAllocatedVCores, maxExecutorUsedMemory,
-          maxExecutorUsedCpuPercent, System.currentTimeMillis())
+          driverAllocatedVCores, maxDriverHeapUsedMemory, maxDriverUsedCpuPercent,
+          executorAllocatedMemory, executorAllocatedVCores, maxHeapExecutorUsedMemory,
+          maxOffHeapExecutorUsedMemory, maxExecutorUsedCpuPercent, System.currentTimeMillis())
         _kafkaHttpSink.produce(appMaxUsedResourceWrap)
         _kafkaHttpSink.stop()
       }
@@ -2710,15 +2715,16 @@ class SparkContext(config: SparkConf) extends Logging {
     }
 
     val currentMetrics = ExecutorMetrics.getCurrentMetrics(env.memoryManager)
+    // scalastyle:off
+    curDriverHeapUsedMemory = (executorMetricsSource.get.metricsSnapshot(ExecutorMetricType.metricToOffset("JVMHeapMemory")) / BYTE_TO_MB).toInt
+    curDriverOffHeapUsedMemory = (executorMetricsSource.get.metricsSnapshot(ExecutorMetricType.metricToOffset("JVMOffHeapMemory")) / BYTE_TO_MB).toInt
     executorMetricsSource.foreach(_.updateMetricsSnapshot(currentMetrics))
-
-    if (executorMetricsSource.get.metricsSnapshot.length == 20) {
-      curDriverUsedMemory = (executorMetricsSource.get.metricsSnapshot(11) / BYTE_TO_MB).toInt
+    if (curDriverHeapUsedMemory > maxDriverHeapUsedMemory) {
+      maxDriverHeapUsedMemory = curDriverHeapUsedMemory
     }
-    if (curDriverUsedMemory > maxDriverUsedMemory) {
-      maxDriverUsedMemory = curDriverUsedMemory
+    if (curDriverOffHeapUsedMemory > maxDriverOffHeapUsedMemory) {
+      maxDriverOffHeapUsedMemory = curDriverOffHeapUsedMemory
     }
-
     val driverUpdates = new HashMap[(Int, Int), ExecutorMetrics]
     // In the driver, we do not track per-stage metrics, so use a dummy stage for the key
     driverUpdates.put(EventLoggingListener.DRIVER_STAGE_KEY, new ExecutorMetrics(currentMetrics))
@@ -2730,7 +2736,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private def sinkUsedResource(kafkaHttpSink: KafkaHttpSink): Unit = {
     try {
       val usedResourceWrap = new AppUsedResourceWrap("appUsedResource", conf.getAppId,
-        applicationAttemptId.getOrElse("1").toInt, "spark", "-1", curDriverUsedMemory,
+        applicationAttemptId.getOrElse("1").toInt, "spark", "-1", curDriverHeapUsedMemory,
         curDriverUsedCpuPercent, System.currentTimeMillis())
       kafkaHttpSink.produce(usedResourceWrap)
     } catch {
