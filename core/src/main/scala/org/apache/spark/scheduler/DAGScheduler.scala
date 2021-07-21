@@ -256,7 +256,9 @@ private[spark] class DAGScheduler(
   private val pushBasedShuffleEnabled = Utils.isPushBasedShuffleEnabled(sc.getConf)
 
   private[spark] var maxExecutorUsedCpuPercent = 0.0f
-  private[spark] var maxExecutorUsedMemMb = 0
+  private[spark] var maxHeapExecutorUsedMemMb = 0
+  private[spark] var maxOffHeapExecutorUsedMemMb = 0
+
 
   private val BYTE_TO_MB = 1024 * 1024
   private val NS_TO_MS = 1000 * 1000
@@ -308,17 +310,25 @@ private[spark] class DAGScheduler(
     if (executorInfo.exception.nonEmpty) {
       listenerBus.post(SparkListenerExecutorReportInfo(execId, executorInfo))
     }
+    executorUpdates.foreach(entry => {
+      val curHeapExecutorUsedMemMb = (entry._2.getMetricValue("JVMHeapMemory") / BYTE_TO_MB).toInt
+      // scalastyle:off
+      val curOffHeapExecutorUsedMemMb = (entry._2.getMetricValue("JVMOffHeapMemory") / BYTE_TO_MB).toInt
+      if (curHeapExecutorUsedMemMb > maxHeapExecutorUsedMemMb) {
+        maxHeapExecutorUsedMemMb = curHeapExecutorUsedMemMb
+      }
+      if (curOffHeapExecutorUsedMemMb > maxHeapExecutorUsedMemMb) {
+        maxOffHeapExecutorUsedMemMb = curOffHeapExecutorUsedMemMb
+      }
+    })
     if (executorResources.length == 3) {
       val curExecutorUsedCpuPercent =
         executorResources(2).toFloat / (executorResources(1) * NS_TO_MS)
       if (curExecutorUsedCpuPercent > maxExecutorUsedCpuPercent) {
         maxExecutorUsedCpuPercent = curExecutorUsedCpuPercent
       }
-      val curExecutorUsedMemMb = (executorResources(0) / BYTE_TO_MB).toInt
-      if (curExecutorUsedMemMb > maxExecutorUsedMemMb) {
-        maxExecutorUsedMemMb = curExecutorUsedMemMb
-      }
     }
+
     blockManagerMaster.driverHeartbeatEndPoint.askSync[Boolean](
       BlockManagerHeartbeat(blockManagerId), new RpcTimeout(10.minutes, "BlockManagerHeartbeat"))
   }

@@ -27,7 +27,8 @@ public class AppMaxUsedResourceWrap {
   private float maxDriverUsedCpuPercent;
   private int executorAllocatedMemory;
   private int executorAllocatedVCores;
-  private int maxExecutorUsedMemory;
+  private int maxHeapExecutorUsedMemory;
+  private int maxOffHeapExecutorUsedMemory;
   private float maxExecutorUsedCpuPercent;
   private long sendTime;
 
@@ -35,7 +36,7 @@ public class AppMaxUsedResourceWrap {
       int driverAllocatedMemory, int driverAllocatedVCores,
       int maxDriverUsedMemory, float maxDriverUsedCpuPercent,
       int executorAllocatedMemory, int executorAllocatedVCores,
-      int maxExecutorUsedMemory, float maxExecutorUsedCpuPercent,
+      int maxHeapExecutorUsedMemory, int maxOffHeapExecutorUsedMemory,float maxExecutorUsedCpuPercent,
       long sendTime) {
     this.service = service;
     this.appId = appId;
@@ -47,7 +48,8 @@ public class AppMaxUsedResourceWrap {
     this.maxDriverUsedCpuPercent = maxDriverUsedCpuPercent;
     this.executorAllocatedMemory = executorAllocatedMemory;
     this.executorAllocatedVCores = executorAllocatedVCores;
-    this.maxExecutorUsedMemory = maxExecutorUsedMemory;
+    this.maxHeapExecutorUsedMemory = maxHeapExecutorUsedMemory;
+    this.maxOffHeapExecutorUsedMemory = maxOffHeapExecutorUsedMemory;
     this.maxExecutorUsedCpuPercent = maxExecutorUsedCpuPercent;
     this.sendTime = sendTime;
   }
@@ -132,14 +134,21 @@ public class AppMaxUsedResourceWrap {
     this.executorAllocatedVCores = executorAllocatedVCores;
   }
 
-  public int getMaxExecutorUsedMemory() {
-    return maxExecutorUsedMemory;
+  public int getMaxHeapExecutorUsedMemory() {
+    return maxHeapExecutorUsedMemory;
   }
 
-  public void setMaxExecutorUsedMemory(int maxExecutorUsedMemory) {
-    this.maxExecutorUsedMemory = maxExecutorUsedMemory;
+  public void setMaxHeapExecutorUsedMemory(int maxHeapExecutorUsedMemory) {
+    this.maxHeapExecutorUsedMemory = maxHeapExecutorUsedMemory;
   }
 
+  public int getMaxOffHeapExecutorUsedMemory() {
+    return maxOffHeapExecutorUsedMemory;
+  }
+
+  public void setMaxOffHeapExecutorUsedMemory(int maxOffHeapExecutorUsedMemory) {
+    this.maxOffHeapExecutorUsedMemory = maxOffHeapExecutorUsedMemory;
+  }
 
   public float getMaxExecutorUsedCpuPercent() {
     return maxExecutorUsedCpuPercent;
