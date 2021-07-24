@@ -66,7 +66,6 @@ class YarnShuffleServiceMetrics implements MetricsSource {
       // Snapshot inside the Timer provides the information for the operation delay
       Timer t = (Timer) metric;
       Snapshot snapshot = t.getSnapshot();
-      String timingName = name + "_nanos";
       metricsRecordBuilder
         .addCounter(new ShuffleServiceMetricsInfo(name + "_count", "Count of timer " + name),
           t.getCount())
@@ -82,13 +81,13 @@ class YarnShuffleServiceMetrics implements MetricsSource {
         .addGauge(new ShuffleServiceMetricsInfo(name + "_rateMean", "Mean rate of timer " + name),
           t.getMeanRate())
         .addGauge(
-          getShuffleServiceMetricsInfoForGenericValue(timingName, "max"), snapshot.getMax())
+          getShuffleServiceMetricsInfoForGenericValue(name, "max"), snapshot.getMax())
         .addGauge(
-          getShuffleServiceMetricsInfoForGenericValue(timingName, "min"), snapshot.getMin())
+          getShuffleServiceMetricsInfoForGenericValue(name, "min"), snapshot.getMin())
         .addGauge(
-          getShuffleServiceMetricsInfoForGenericValue(timingName, "mean"), snapshot.getMean())
+          getShuffleServiceMetricsInfoForGenericValue(name, "mean"), snapshot.getMean())
         .addGauge(
-          getShuffleServiceMetricsInfoForGenericValue(timingName, "stdDev"), snapshot.getStdDev());
+          getShuffleServiceMetricsInfoForGenericValue(name, "stdDev"), snapshot.getStdDev());
       for (int percentileThousands : new int[] { 10, 50, 250, 500, 750, 950, 980, 990, 999 }) {
         String percentileStr;
         switch (percentileThousands) {
@@ -103,7 +102,7 @@ class YarnShuffleServiceMetrics implements MetricsSource {
             break;
         }
         metricsRecordBuilder.addGauge(
-          getShuffleServiceMetricsInfoForGenericValue(timingName, percentileStr),
+          getShuffleServiceMetricsInfoForGenericValue(name, percentileStr),
           snapshot.getValue(percentileThousands / 1000.0));
       }
     } else if (metric instanceof Meter) {

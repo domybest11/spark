@@ -26,6 +26,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import com.codahale.metrics.Gauge;
@@ -53,6 +54,7 @@ import org.apache.spark.network.server.RpcHandler;
 import org.apache.spark.network.server.StreamManager;
 import org.apache.spark.network.shuffle.ExternalShuffleBlockResolver.AppExecId;
 import org.apache.spark.network.shuffle.protocol.*;
+import org.apache.spark.network.util.TimerWithCustomTimeUnit;
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 import org.apache.spark.network.util.TransportConf;
 
@@ -320,20 +322,6 @@ public class ExternalBlockHandler extends RpcHandler
     blockManager.executorRemoved(executorId, appId);
   }
 
-  /**
-   * Register an (application, executor) with the given shuffle info.
-   *
-   * The "re-" is meant to highlight the intended use of this method -- when this service is
-   * restarted, this is used to restore the state of executors from before the restart.  Normal
-   * registration will happen via a message handled in receive()
-   *
-   * @param appExecId
-   * @param executorInfo
-   */
-  public void reregisterExecutor(AppExecId appExecId, ExecutorShuffleInfo executorInfo) {
-    blockManager.registerExecutor(appExecId.appId, appExecId.execId, executorInfo);
-  }
-
   public void close() {
     blockManager.close();
   }
@@ -352,13 +340,17 @@ public class ExternalBlockHandler extends RpcHandler
   public class ShuffleMetrics implements MetricSet {
     private final Map<String, Metric> allMetrics;
     // Time latency for open block request in ms
-    private final Timer openBlockRequestLatencyMillis = new Timer();
+    private final Timer openBlockRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for executor registration latency in ms
-    private final Timer registerExecutorRequestLatencyMillis = new Timer();
+    private final Timer registerExecutorRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for processing fetch merged blocks meta request latency in ms
-    private final Timer fetchMergedBlocksMetaLatencyMillis = new Timer();
+    private final Timer fetchMergedBlocksMetaLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for processing finalize shuffle merge request latency in ms
-    private final Timer finalizeShuffleMergeLatencyMillis = new Timer();
+    private final Timer finalizeShuffleMergeLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Block transfer rate in blocks per second
     private final Meter blockTransferRate = new Meter();
     // Block fetch message rate per second. When using non-batch fetches
@@ -411,6 +403,7 @@ public class ExternalBlockHandler extends RpcHandler
     private int index = 0;
     private final Function<Integer, ManagedBuffer> blockDataForIndexFn;
     private final int size;
+    private boolean requestForMergedBlockChunks;
 
     ManagedBufferIterator(OpenBlocks msg) {
       String appId = msg.appId;
