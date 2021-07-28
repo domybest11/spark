@@ -23,7 +23,8 @@ public class AppMaxUsedResourceWrap {
   private String appType;
   private int driverAllocatedMemory;
   private int driverAllocatedVCores;
-  private int maxDriverUsedMemory;
+  private int maxDriverHeapUsedMemory;
+  private int maxDriverOffHeapUsedMemory;
   private float maxDriverUsedCpuPercent;
   private int executorAllocatedMemory;
   private int executorAllocatedVCores;
@@ -31,20 +32,22 @@ public class AppMaxUsedResourceWrap {
   private int maxOffHeapExecutorUsedMemory;
   private float maxExecutorUsedCpuPercent;
   private long sendTime;
+  private String platformId;
 
   public AppMaxUsedResourceWrap(String service, String appId, String appType, int appAttemptId,
       int driverAllocatedMemory, int driverAllocatedVCores,
-      int maxDriverUsedMemory, float maxDriverUsedCpuPercent,
+      int maxDriverHeapUsedMemory, int maxDriverOffHeapUsedMemory, float maxDriverUsedCpuPercent,
       int executorAllocatedMemory, int executorAllocatedVCores,
       int maxHeapExecutorUsedMemory, int maxOffHeapExecutorUsedMemory,float maxExecutorUsedCpuPercent,
-      long sendTime) {
+      long sendTime,String platformId) {
     this.service = service;
     this.appId = appId;
     this.appAttemptId = appAttemptId;
     this.appType = appType;
     this.driverAllocatedMemory = driverAllocatedMemory;
     this.driverAllocatedVCores = driverAllocatedVCores;
-    this.maxDriverUsedMemory = maxDriverUsedMemory;
+    this.maxDriverHeapUsedMemory = maxDriverHeapUsedMemory;
+    this.maxDriverOffHeapUsedMemory = maxDriverOffHeapUsedMemory;
     this.maxDriverUsedCpuPercent = maxDriverUsedCpuPercent;
     this.executorAllocatedMemory = executorAllocatedMemory;
     this.executorAllocatedVCores = executorAllocatedVCores;
@@ -52,6 +55,7 @@ public class AppMaxUsedResourceWrap {
     this.maxOffHeapExecutorUsedMemory = maxOffHeapExecutorUsedMemory;
     this.maxExecutorUsedCpuPercent = maxExecutorUsedCpuPercent;
     this.sendTime = sendTime;
+    this.platformId = platformId;
   }
 
   public String getService() {
@@ -100,14 +104,6 @@ public class AppMaxUsedResourceWrap {
 
   public void setDriverAllocatedVCores(int driverAllocatedVCores) {
     this.driverAllocatedVCores = driverAllocatedVCores;
-  }
-
-  public int getMaxDriverUsedMemory() {
-    return maxDriverUsedMemory;
-  }
-
-  public void setMaxDriverUsedMemory(int maxDriverUsedMemory) {
-    this.maxDriverUsedMemory = maxDriverUsedMemory;
   }
 
   public float getMaxDriverUsedCpuPercent() {
@@ -164,5 +160,29 @@ public class AppMaxUsedResourceWrap {
 
   public void setSendTime(Long sendTime) {
     this.sendTime = sendTime;
+  }
+
+  public int getMaxDriverHeapUsedMemory() {
+    return maxDriverHeapUsedMemory;
+  }
+
+  public void setMaxDriverHeapUsedMemory(int maxDriverHeapUsedMemory) {
+    this.maxDriverHeapUsedMemory = maxDriverHeapUsedMemory;
+  }
+
+  public int getMaxDriverOffHeapUsedMemory() {
+    return maxDriverOffHeapUsedMemory;
+  }
+
+  public void setMaxDriverOffHeapUsedMemory(int maxDriverOffHeapUsedMemory) {
+    this.maxDriverOffHeapUsedMemory = maxDriverOffHeapUsedMemory;
+  }
+
+  public String getPlatformId() {
+    return platformId;
+  }
+
+  public void setPlatformId(String platformId) {
+    this.platformId = platformId;
   }
 }

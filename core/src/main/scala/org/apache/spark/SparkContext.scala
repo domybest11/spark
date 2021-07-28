@@ -2161,12 +2161,13 @@ class SparkContext(config: SparkConf) extends Logging {
         val driverAllocatedVCores = conf.getInt("spark.driver.cores", 1)
         val executorAllocatedMemory = conf.get(EXECUTOR_MEMORY).toInt
         val executorAllocatedVCores = conf.getInt("spark.executor.cores", 1)
-
+        val platformId = conf.get("spark.deploy.jobTag", "")
         val appMaxUsedResourceWrap = new AppMaxUsedResourceWrap("appMaxUsedResource",
           applicationId, "spark", applicationAttemptId.getOrElse("1").toInt, driverAllocatedMemory,
-          driverAllocatedVCores, maxDriverHeapUsedMemory, maxDriverUsedCpuPercent,
-          executorAllocatedMemory, executorAllocatedVCores, maxHeapExecutorUsedMemory,
-          maxOffHeapExecutorUsedMemory, maxExecutorUsedCpuPercent, System.currentTimeMillis())
+          driverAllocatedVCores, maxDriverHeapUsedMemory, maxDriverOffHeapUsedMemory,
+          maxDriverUsedCpuPercent, executorAllocatedMemory, executorAllocatedVCores,
+          maxHeapExecutorUsedMemory, maxOffHeapExecutorUsedMemory, maxExecutorUsedCpuPercent,
+          System.currentTimeMillis(), platformId)
         _kafkaHttpSink.produce(appMaxUsedResourceWrap)
         _kafkaHttpSink.stop()
       }
