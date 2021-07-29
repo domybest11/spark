@@ -74,7 +74,6 @@ object AliasIdentifier {
  */
 case class TableIdentifier(table: String, database: Option[String])
   extends IdentifierWithDatabase {
-
   override val identifier: String = table
 
   def this(table: String) = this(table, None)

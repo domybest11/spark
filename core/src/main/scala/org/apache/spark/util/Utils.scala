@@ -3065,9 +3065,10 @@ private[spark] class CallerContext(
   stageId: Option[Int] = None,
   stageAttemptId: Option[Int] = None,
   taskId: Option[Long] = None,
-  taskAttemptNumber: Option[Int] = None) extends Logging {
+  taskAttemptNumber: Option[Int] = None,
+  conf: Option[SparkConf] = None) extends Logging {
 
-  val name: String = SparkEnv.get.conf.get("spark.app.name", "")
+  val name: String = if (conf.isDefined) conf.get.get("spark.app.name", "") else ""
   // scalastyle:off
   val jobInfo: String = if (org.apache.commons.lang3.StringUtils.isNotBlank(name) && name.startsWith("a_h")) {
     name

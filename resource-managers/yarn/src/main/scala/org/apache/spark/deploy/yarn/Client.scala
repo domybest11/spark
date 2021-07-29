@@ -193,7 +193,7 @@ private[spark] class Client(
       // scalastyle:on FileSystemGet
 
       new CallerContext("CLIENT", sparkConf.get(APP_CALLER_CONTEXT),
-        Option(appId.toString)).setCurrentContext()
+        Option(appId.toString), conf = Some(sparkConf)).setCurrentContext()
 
       // Verify whether the cluster has enough resources for our AM
       verifyClusterResources(newAppResponse)
