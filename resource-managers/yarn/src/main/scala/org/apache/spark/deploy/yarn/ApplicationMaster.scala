@@ -235,7 +235,8 @@ private[spark] class ApplicationMaster(
 
       new CallerContext(
         "APPMASTER", sparkConf.get(APP_CALLER_CONTEXT),
-        Option(appAttemptId.getApplicationId.toString), attemptID).setCurrentContext()
+        Option(appAttemptId.getApplicationId.toString), attemptID,
+        conf = Some(sparkConf)).setCurrentContext()
 
       logInfo("ApplicationAttemptId: " + appAttemptId)
 
@@ -300,7 +301,8 @@ private[spark] class ApplicationMaster(
     try {
       new CallerContext(
         "APPMASTER", sparkConf.get(APP_CALLER_CONTEXT),
-        Option(appAttemptId.getApplicationId.toString), None).setCurrentContext()
+        Option(appAttemptId.getApplicationId.toString), None,
+        conf = Some(sparkConf)).setCurrentContext()
 
       val driverRef = clientRpcEnv.setupEndpointRef(
         RpcAddress(sparkConf.get(DRIVER_HOST_ADDRESS),

@@ -3065,7 +3065,16 @@ private[spark] class CallerContext(
   stageId: Option[Int] = None,
   stageAttemptId: Option[Int] = None,
   taskId: Option[Long] = None,
-  taskAttemptNumber: Option[Int] = None) extends Logging {
+  taskAttemptNumber: Option[Int] = None,
+  conf: Option[SparkConf] = None) extends Logging {
+
+  val name: String = if (conf.isDefined) conf.get.get("spark.app.name", "") else ""
+  // scalastyle:off
+  val jobInfo: String = if (org.apache.commons.lang3.StringUtils.isNotBlank(name) && name.startsWith("a_h")) {
+    name
+  } else {
+    appId.getOrElse("")
+  }
 
   private val context = prepareContext("SPARK_" +
     from +
@@ -3076,11 +3085,11 @@ private[spark] class CallerContext(
     stageAttemptId.map("_" + _).getOrElse("") +
     taskId.map("_TId_" + _).getOrElse("") +
     taskAttemptNumber.map("_" + _).getOrElse("") +
-    upstreamCallerContext.map("_" + _).getOrElse(""))
+    upstreamCallerContext.map("_" + _).getOrElse("")) + "$" + s"JobId:$jobInfo"
 
   private def prepareContext(context: String): String = {
     // The default max size of Hadoop caller context is 128
-    lazy val len = SparkHadoopUtil.get.conf.getInt("hadoop.caller.context.max.size", 128)
+    lazy val len = SparkHadoopUtil.get.conf.getInt("hadoop.caller.context.max.size", 256)
     if (context == null || context.length <= len) {
       context
     } else {

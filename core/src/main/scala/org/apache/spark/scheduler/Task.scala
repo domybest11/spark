@@ -129,7 +129,8 @@ private[spark] abstract class Task[T](
       Option(stageId),
       Option(stageAttemptId),
       Option(taskAttemptId),
-      Option(attemptNumber)).setCurrentContext()
+      Option(attemptNumber),
+      conf = Some(SparkEnv.get.conf)).setCurrentContext()
 
     plugins.foreach(_.onTaskStart())
 
