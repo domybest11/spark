@@ -32,6 +32,7 @@ import java.util.{Locale, Properties, Random, UUID}
 import java.util.concurrent._
 import java.util.concurrent.TimeUnit.NANOSECONDS
 import java.util.zip.GZIPInputStream
+
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
 import scala.collection.Map
@@ -41,23 +42,25 @@ import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 import scala.util.control.{ControlThrowable, NonFatal}
 import scala.util.matching.Regex
+
 import _root_.io.netty.channel.unix.Errors.NativeIoException
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import com.google.common.io.{ByteStreams, Files => GFiles}
 import com.google.common.net.InetAddresses
 import org.apache.commons.codec.binary.Hex
-import org.apache.commons.lang3.{StringUtils, SystemUtils}
+import org.apache.commons.lang3.SystemUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, FileUtil, Path}
 import org.apache.hadoop.io.compress.{CompressionCodecFactory, SplittableCompressionCodec}
 import org.apache.hadoop.security.UserGroupInformation
-import org.apache.hadoop.util.RunJar
+import org.apache.hadoop.util.{RunJar, StringUtils}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.eclipse.jetty.util.MultiException
 import org.slf4j.Logger
+
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.internal.{Logging, config}
+import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.Streaming._
 import org.apache.spark.internal.config.Tests.IS_TESTING
@@ -3065,7 +3068,8 @@ private[spark] class CallerContext(
   taskAttemptNumber: Option[Int] = None) extends Logging {
 
   val name: String = SparkEnv.get.conf.get("spark.app.name", "")
-  val jobInfo: String = if (StringUtils.isNotBlank(name) && name.startsWith("a_h")) {
+  // scalastyle:off
+  val jobInfo: String = if (org.apache.commons.lang3.StringUtils.isNotBlank(name) && name.startsWith("a_h")) {
     name
   } else {
     appId.getOrElse("")
