@@ -1,0 +1,7 @@
+hostPort: 127.0.0.1:7030
+lowercaseOutputName: true
+ssl: false
+#whitelistObjectNames: ["metrics:*","java.lang:*"]
+#rules:
+# - pattern: metrics<name=([\w_-]+)_([\w_-]+).driver.([\w_-]+).([\w_-]+).([\w_-]+)><>Value
+#    name: Spark_ThriftServer_Driver_metric_$3_$4_$5
