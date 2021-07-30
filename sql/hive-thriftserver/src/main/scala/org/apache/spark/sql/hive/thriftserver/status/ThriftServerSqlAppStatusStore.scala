@@ -18,7 +18,9 @@
 package org.apache.spark.sql.hive.thriftserver.status
 
 import java.util.{List => JList}
+
 import scala.collection.mutable.ListBuffer
+
 import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SQLContext
@@ -82,7 +84,8 @@ class ThriftServerSqlAppStatusStore(
       var outputBytes: Long = 0
       val jobs: ListBuffer[SQLJobData] = applicationSQLExecutionData.sqlExecutionData.get.jobs
       var executionMsg = ""
-      val action = "resourceCost"
+      val action = "resource"
+      val statement = applicationSQLExecutionData.sqlExecutionData.get.statement
       if (jobs.nonEmpty) {
         jobs.foreach(job => {
           var jobRuntime = scala.math.ceil(1.0 * (job.endTime - job.startTime) / 1000).toInt
@@ -102,10 +105,11 @@ class ThriftServerSqlAppStatusStore(
           traceId = ""
         }
         // scalastyle:off
-        executionMsg = s"traceId:$traceId,当前任务使用的资源消耗情况:内存:${memorySeconds.toLong}(m*s)," +
-          s" CPU:$vcoreSeconds(c*s), 读数据量:$inputUnit, 写数据量:$outputUnit."
+        executionMsg = s"使用资源消耗情况($statement), 内存: ${memorySeconds.toLong}(m*s)," +
+          s" CPU: $vcoreSeconds(c*s), 读数据量: $inputUnit, 写数据量: $outputUnit"
 
-        reporter.postEvent(Some(traceId), action, "", executionMsg, System.currentTimeMillis())
+        val tags = Map[String, Any]("memory" -> memorySeconds, "cpu" -> vcoreSeconds, "readDataSize" -> inputBytes, "writeDataSize" -> outputBytes)
+        reporter.postEvent(Some(traceId), action,"", executionMsg, tags, System.currentTimeMillis())
       }
       executionMsg
     } catch {
