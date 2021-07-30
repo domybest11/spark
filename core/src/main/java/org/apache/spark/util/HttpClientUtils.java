@@ -44,32 +44,12 @@ public class HttpClientUtils {
         okHttpClient.newCall(builder.build()).enqueue(new Callback() {
             @Override
             public void onFailure(Call call, IOException e) {
-                logger.error("SQLAppStatusReporter report to lancer failed {} {}", body, e.getMessage());
+                logger.error("Report to lancer failed {} {}", body, e.getMessage());
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                logger.info("SQLAppStatusReporter report to lancer succeeded");
-                response.close();
-            }
-        });
-    }
-
-    public void doCostPost(String body, String url) {
-        Request.Builder builder = new Request.Builder()
-                .url(url)
-                .post(RequestBody.create(null, body))
-                .addHeader("Content-Type", "application/json;charset=UTF-8")
-                .addHeader("Accept-Encoding", "gzip");
-        okHttpClient.newCall(builder.build()).enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                logger.error("AppCostReporter report to lancer failed {} {}", body, e.getMessage());
-            }
-
-            @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                logger.info("AppCostReporter report to lancer succeeded");
+                logger.info("Report to lancer succeeded");
                 response.close();
             }
         });

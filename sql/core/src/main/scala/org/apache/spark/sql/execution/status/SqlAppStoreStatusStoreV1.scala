@@ -28,7 +28,6 @@ import org.apache.hadoop.yarn.api.records.ApplicationId
 import org.apache.hadoop.yarn.client.ClientRMProxy
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.util.Records
-
 import org.apache.spark.JobExecutionStatus
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkHadoopUtil
@@ -66,7 +65,8 @@ class SqlAppStoreStatusStoreV1(
     var outputBytes: Long = 0
     val jobs: ListBuffer[SQLJobData] = applicationSQLExecutionData.sqlExecutionData.get.jobs
     var costMessage = ""
-      val action = "resourceCost"
+      val action = "resource"
+      val statement = applicationSQLExecutionData.sqlExecutionData.get.statement
     if (jobs.nonEmpty) {
         jobs.foreach(job => {
           inputBytes += job.stages.filter(_.inComing == 0).map(_.inputBytes).toList.sum
@@ -79,10 +79,11 @@ class SqlAppStoreStatusStoreV1(
           traceId = ""
         }
         // scalastyle:off
-         costMessage = s"traceId:${traceId},当前任务使用的资源消耗情况: 内存:${memorySeconds}(m*s)," +
-          s"CPU: ${vcoreSeconds}(c*s), 读数据量:${inputUnit}, 写数据量:${outputUnit}."
+         costMessage = s"使用资源消耗情况(${statement}), 内存: ${memorySeconds}(m*s)," +
+          s" CPU: ${vcoreSeconds}(c*s), 读数据量: ${inputUnit}, 写数据量: ${outputUnit}"
 
-        reporter.postEvent(Some(traceId), action, "",  costMessage, System.currentTimeMillis())
+        val tags = Map[String, Any]("memory" -> memorySeconds, "cpu" -> vcoreSeconds, "readDataSize" -> inputBytes, "writeDataSize" -> outputBytes)
+        reporter.postEvent(Some(traceId), action, "", costMessage, tags, System.currentTimeMillis())
 
         logInfo(costMessage)
       }

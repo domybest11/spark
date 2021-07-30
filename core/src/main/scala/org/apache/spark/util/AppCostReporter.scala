@@ -17,10 +17,11 @@
 
 package org.apache.spark.util
 
-import org.apache.spark.SparkConf
-import org.apache.spark.internal.config.Status.{TRACE_REPORTER_LANCER_URL, TRACE_REPORTER_LOG_ID}
 import org.json4s.DefaultFormats
 import org.json4s.jackson.Serialization
+
+import org.apache.spark.SparkConf
+import org.apache.spark.internal.config.Status.{TRACE_REPORTER_APP, TRACE_REPORTER_ENABLED, TRACE_REPORTER_LANCER_URL, TRACE_REPORTER_LOG_ID, TRACE_REPORTER_SOURCE}
 
 /**
  * Created by guxiangrong on 2021/6/29.
@@ -28,16 +29,22 @@ import org.json4s.jackson.Serialization
 
 private[spark] class AppCostReporter(conf: SparkConf) {
 
+  private val enableTraceReporter = conf.get(TRACE_REPORTER_ENABLED)
+
   private val lancerUrl = conf.get(TRACE_REPORTER_LANCER_URL)
+
+  private val app = conf.get(TRACE_REPORTER_APP)
+
+  private val source = conf.get(TRACE_REPORTER_SOURCE)
 
   private val logId = conf.get(TRACE_REPORTER_LOG_ID)
 
   implicit val formats = DefaultFormats
 
   def postEvent(traceId: Option[String], action: String, parentEvent: String,
-                message: String, triggerTime: Long): Unit = {
+                message: String, tags: Map[String, Any], triggerTime: Long): Unit = {
     val params = Map[String, Any]("recordAction" -> action, "recordStatus" -> 2,
-      "parentRecordAction" -> parentEvent, "recordType" -> 2, "message" -> message,
+      "parentRecordAction" -> parentEvent, "recordType" -> 2, "message" -> message, "tags" -> tags,
       "triggerTime" -> triggerTime)
     post(traceId, params)
   }
@@ -48,11 +55,11 @@ private[spark] class AppCostReporter(conf: SparkConf) {
       case None => conf.getOption("spark.trace.id")
     }
 
-    if (finalTraceId.isDefined && Option(lancerUrl).isDefined) {
+    if (finalTraceId.isDefined && enableTraceReporter && Option(lancerUrl).isDefined) {
       val triggerTime = System.currentTimeMillis()
-      val commonParams = Map("traceId" -> finalTraceId.get)
+      val commonParams = Map("app" -> app, "recordSource" -> source, "traceId" -> finalTraceId.get)
       val paramJson = Serialization.write(commonParams ++ params)
-      HttpClientUtils.getInstance().doCostPost(s"$logId$triggerTime$paramJson", lancerUrl)
+      HttpClientUtils.getInstance().doPost(s"$logId$triggerTime$paramJson", lancerUrl)
     }
   }
 }
