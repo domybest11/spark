@@ -1,0 +1,85 @@
+<configuration>
+  <property>
+  <name>yarn.scheduler.capacity.root.queues</name>
+  <value>ai_queue,sycpb_queue,common_queue</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.ai_queue.capacity</name>
+  <value>30</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.ai_queue.maximum-capacity</name>
+  <value>45</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.ai_queue.maximum-applications</name>
+  <value>200</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.ai_queue.accessible-node-labels</name>
+  <value>ai_label</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.ai_queue.default-node-label-expression</name>
+  <value>ai_label</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.sycpb_queue.capacity</name>
+  <value>30</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.sycpb_queue.maximum-capacity</name>
+  <value>45</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.sycpb_queue.maximum-applications</name>
+  <value>200</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.sycpb_queue.accessible-node-labels</name>
+  <value>sycpb_label</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.sycpb_queue.default-node-label-expression</name>
+  <value>sycpb_label</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.common_queue.capacity</name>
+  <value>40</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.common_queue.maximum-capacity</name>
+  <value>55</value>
+</property>
+<property>
+  <name>yarn.scheduler.capacity.root.common_queue.maximum-applications</name>
+  <value>300</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.common_queue.accessible-node-labels</name>
+  <value>common_label</value>
+</property>
+
+<property>
+  <name>yarn.scheduler.capacity.root.common_queue.default-node-label-expression</name>
+  <value>common_label</value>
+</property>
+
+<property>
+    <name>yarn.scheduler.capacity.root.default.default-node-label-expression</name>
+    <value> </value>
+</property>
+</configuration>

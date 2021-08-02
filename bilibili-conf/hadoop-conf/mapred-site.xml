@@ -24,27 +24,27 @@
   <!--memory configuration-->
   <property>
     <name>yarn.app.mapreduce.am.resource.mb</name>
-    <value>4096</value>
+    <value>1536</value>
   </property>
   <property>
     <name>yarn.app.mapreduce.am.command-opts</name>
-    <value>-Xmx3276m</value>
+    <value>-Xmx1024m</value>
   </property>
   <property>
     <name>mapreduce.reduce.memory.mb</name>
-    <value>4096</value>
+    <value>3072</value>
   </property>
   <property>
     <name>mapreduce.reduce.java.opts</name>
-    <value>-Xmx3276m</value>
+    <value>-Xmx2300m</value>
   </property>
   <property>
     <name>mapreduce.map.memory.mb</name>
-    <value>4096</value>
+    <value>2560</value>
   </property>
   <property>
     <name>mapreduce.map.java.opts</name>
-    <value>-Xmx3276m</value>
+    <value>-Xmx2300m</value>
   </property>
 
   <!--shuffle configuration-->
@@ -62,7 +62,7 @@
   </property>
   <property>
     <name>mapreduce.task.io.sort.mb</name>
-    <value>1638</value>
+    <value>256</value>
   </property>
   <property>
     <name>mapreduce.task.io.sort.factor</name>
@@ -74,7 +74,7 @@
   </property>
   <property>
     <name>mapreduce.map.output.compress.codec</name>
-    <value>com.hadoop.compression.lzo.LzoCodec</value>
+    <value>org.apache.hadoop.io.compress.ZStandardCodec</value>
   </property>
   <property>
     <name>mapred.child.env</name>
@@ -95,6 +95,18 @@
     <value>20</value>
   </property>
 
+  <property>
+    <name>mapreduce.shuffle.transfer.buffer.size</name>
+    <value>524288</value>
+  </property>
+  <property>
+    <name>mapreduce.shuffle.readahead.bytes</name>
+    <value>8388608</value>
+  </property>
+  <property>
+    <name>yarn.app.mapreduce.am.staging-dir</name>
+    <value>hdfs://jssz-bigdata-ns7/tmp/yarn-staging</value>
+  </property>
 
   <!--每个任务默认的副本数 默认为4 减少后任务失败没有可选的副本使用会直接报错 -->
   <property>
@@ -134,9 +146,97 @@
     <value>HTTP/_HOST@BILIBILI.CO</value>
   </property>
 
- <property>
-    <name>yarn.app.mapreduce.am.staging-dir</name>
-    <value>hdfs://jssz-bigdata-ns4/tmp/yarn-staging</value>
+  <property>
+    <name>mapreduce.job.dependence-history-server</name>
+    <value>false</value>
+  </property>
+
+  <!-- fetch retry config -->
+  <property>
+    <name>mapreduce.reduce.shuffle.fetch.retry.enabled</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>mapreduce.reduce.shuffle.fetch.retry.timeout-ms</name>
+    <value>60000</value>
+  </property>
+
+  <!-- limit container log config -->
+  <property>
+    <name>yarn.app.mapreduce.am.container.log.limit.kb</name>
+    <value>102400</value>
+  </property>
+  <property>
+    <name>yarn.app.mapreduce.am.container.log.backups</name>
+    <value>1</value>
+  </property>
+  <property>
+    <name>mapreduce.task.userlog.limit.kb</name>
+    <value>102400</value>
+  </property>
+  <property>
+    <name>yarn.app.mapreduce.task.container.log.backups</name>
+    <value>1</value>
+  </property>
+  <property>
+    <name>yarn.app.mapreduce.shuffle.log.limit.kb</name>
+    <value>102400</value>
+  </property>
+  <property>
+    <name>yarn.app.mapreduce.shuffle.log.backups</name>
+    <value>1</value>
+  </property>
+  <property>
+    <name>mapreduce.task.userlog.stdout.limit.kb</name>
+    <value>102400</value>
+  </property>
+  <property>
+    <name>mapreduce.task.userlog.stderr.limit.kb</name>
+    <value>102400</value>
+  </property>
+
+  <property>
+    <name>mapreduce.admin.map.child.java.opts</name>
+    <value>-XX:ParallelGCThreads=8 -XX:CICompilerCount=3 -Djava.net.preferIPv4Stack=true -Dhadoop.metrics.log.level=WARN</value>
+  </property>
+  <property>
+    <name>mapreduce.admin.reduce.child.java.opts</name>
+    <value>-XX:ParallelGCThreads=8 -XX:CICompilerCount=3 -Djava.net.preferIPv4Stack=true -Dhadoop.metrics.log.level=WARN</value>
+  </property>
+  <property>
+    <name>yarn.app.mapreduce.am.admin-command-opts</name>
+    <value>-XX:ParallelGCThreads=8 -XX:CICompilerCount=3</value>
+  </property>
+
+  <property>
+    <name>mapreduce.fileoutputcommitter.algorithm.version</name>
+    <value>2</value>
+  </property>
+
+  <property>
+    <name>mapreduce.job.max.split.locations</name>
+    <value>10000</value>
+  </property>
+
+  <property>
+    <name>mapreduce.reduce.shuffle.parallelcopies</name>
+    <value>10</value>
+  </property>
+
+  <property>
+    <name>mapreduce.job.split.metainfo.maxsize</name>
+    <value>50000000</value>
+  </property>
+
+
+  <property>
+    <name>mapreduce.job.counters.max</name>
+    <value>100000</value>
+  </property>
+
+  <property>
+    <name>mapreduce.job.counters.counter.name.max</name>
+    <value>256</value>
   </property>
 
 </configuration>
