@@ -87,6 +87,10 @@
         fs space usage statistics refresh jitter in msec.
     </description>
   </property>
+  <property>
+    <name>hadoop.caller.context.enabled</name>
+    <value>true</value>
+  </property>
 
   <!-- security config -->
   <property>
@@ -104,14 +108,5 @@
   <property>
     <name>ipc.client.fallback-to-simple-auth-allowed</name>
     <value>true</value>
-  </property>
-
-  <property>
-          <name>hadoop.proxyuser.hive.groups</name>
-          <value>*</value>
-  </property>
-  <property>
-          <name>hadoop.proxyuser.hive.hosts</name>
-          <value>*</value>
   </property>
 </configuration>
