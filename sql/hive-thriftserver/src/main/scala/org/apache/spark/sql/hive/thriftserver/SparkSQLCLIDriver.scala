@@ -42,7 +42,6 @@ import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
-import org.apache.spark.sql.execution.ui.{AppClientStatus, SQLExecutionUIData}
 import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.hive.client.HiveClientImpl
 import org.apache.spark.sql.hive.security.HiveDelegationTokenProvider
@@ -509,18 +508,6 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
       CommandProcessorFactory.clean(conf.asInstanceOf[HiveConf])
       lastRet
     } finally {
-      try {
-        val END_FLAG = new SQLExecutionUIData(AppClientStatus.APP_CLIENT_END, "",
-          "", "", Seq.empty, 0L, None, Map.empty,
-          Set.empty, Map.empty)
-        END_FLAG.statement = "APP_CLIENT_END"
-        SparkSQLEnv.sqlContext.sparkSession.sharedState.sqlAppStatusScheduler
-          .sendOnceKafka(END_FLAG)
-      } catch {
-        case e: Exception =>
-          LOG.warn("an error occurred when the application finished preparing to send the state:"
-            + e.getMessage)
-      }
       // Once we are done processing the line, restore the old handler
       if (oldSignal != null && interruptSignal != null) {
         Signal.handle(interruptSignal, oldSignal)
