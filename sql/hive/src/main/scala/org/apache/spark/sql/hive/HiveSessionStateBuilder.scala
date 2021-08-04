@@ -21,6 +21,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, ResolveSessionCatalog}
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogWithListener
 import org.apache.spark.sql.catalyst.optimizer.Optimizer
+import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.{SparkOptimizer, SparkPlanner}
@@ -43,6 +44,15 @@ class HiveSessionStateBuilder(
   extends BaseSessionStateBuilder(session, parentState, options) {
 
   private def externalCatalog: ExternalCatalogWithListener = session.sharedState.externalCatalog
+
+  /**
+   * Parser that extracts expressions, plans, table identifiers etc. from SQL texts.
+   *
+   * Note: this depends on the `conf` field.
+   */
+  override protected lazy val sqlParser: ParserInterface = {
+    extensions.buildParser(session, new HiveSqlParser())
+  }
 
   /**
    * Create a Hive aware resource loader.
