@@ -46,9 +46,6 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
     override def run(): Unit = {
       var next: SQLExecutionUIData = _executionInfoQueue.take()
       while (next != POISON_PILL) {
-        if (sparkContext.isStopped) {
-          stopMetricThread()
-        }
         sendOnceKafka(next)
         next = _executionInfoQueue.take()
       }

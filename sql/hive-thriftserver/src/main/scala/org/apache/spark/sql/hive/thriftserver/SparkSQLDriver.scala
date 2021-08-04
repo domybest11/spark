@@ -17,19 +17,18 @@
 
 package org.apache.spark.sql.hive.thriftserver
 
-import java.util.{ArrayList => JArrayList, Arrays, List => JList}
+import java.util.{Arrays, ArrayList => JArrayList, List => JList}
 
 import scala.collection.JavaConverters._
-
 import org.apache.commons.lang3.exception.ExceptionUtils
 import org.apache.hadoop.hive.metastore.api.{FieldSchema, Schema}
 import org.apache.hadoop.hive.ql.Driver
 import org.apache.hadoop.hive.ql.processors.CommandProcessorResponse
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.{AnalysisException, SQLContext}
 import org.apache.spark.sql.execution.HiveResult.hiveResultString
 import org.apache.spark.sql.execution.QueryExecution
+import org.apache.spark.sql.execution.ui.{AppClientStatus, SQLExecutionUIData}
 import org.apache.spark.sql.internal.{SQLConf, VariableSubstitution}
 
 
@@ -75,6 +74,19 @@ private[hive] class SparkSQLDriver(val context: SQLContext = SparkSQLEnv.sqlCont
         case cause: Throwable =>
           logError(s"Failed in [$command]", cause)
           new CommandProcessorResponse(1, ExceptionUtils.getStackTrace(cause), null, cause)
+    } finally {
+      try {
+        val END_FLAG = new SQLExecutionUIData(AppClientStatus.APP_CLIENT_END, "",
+          "", "", Seq.empty, 0L, None, Map.empty,
+          Set.empty, Map.empty)
+        END_FLAG.statement = "APP_CLIENT_END"
+        SparkSQLEnv.sqlContext.sparkSession.sharedState.sqlAppStatusScheduler
+          .sendOnceKafka(END_FLAG)
+      } catch {
+        case e: Exception =>
+          logWarning("an error occurred when the application finished preparing to send the state:"
+            + e.getMessage)
+      }
     }
   }
 
