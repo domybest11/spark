@@ -1,5 +1,6 @@
 package org.apache.spark.util;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.OkHttpClient;
@@ -11,6 +12,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.GZIPOutputStream;
 
 public class HttpClientUtils {
@@ -55,6 +60,47 @@ public class HttpClientUtils {
         });
     }
 
+    public Optional<String> doGet(String url, int timeout) {
+        Request request = new Request.Builder()
+            .url(url)
+            .get()
+            .build();
+        CallbackFuture future = new CallbackFuture();
+        Response resp = null;
+        try {
+          okHttpClient.newCall(request).enqueue(future);
+          resp = future.get(timeout, TimeUnit.SECONDS);
+          if (resp.isSuccessful()) {
+            return Optional.of(resp.body().string());
+          }
+        } catch (Exception e) {
+          logger.error("Get {} failed", url, e);
+        } finally {
+          if (resp != null) {
+            resp.close();
+          }
+        }
+        return Optional.empty();
+    }
+
+    public Map<String, Object> getJobHistoryMetric(String jobTag) {
+      StringBuilder url = new StringBuilder();
+      url.append("http://luckbear-api.bilibili.co/api/statistics/spark/").append(jobTag);
+      Optional<String> resp = HttpClientUtils.getInstance().doGet(url.toString(), 5);
+      if (resp.isPresent()) {
+        try {
+          ObjectMapper mapper = new ObjectMapper();
+          Map res = mapper.readValue(resp.get(), Map.class);
+          if (String.valueOf(res.get("code")).equals("200")) {
+            return (Map<String, Object>) res.get("data");
+          }
+        } catch (Exception e) {
+          logger.warn("Fetch job history metric error: " + resp.get());
+        }
+      }
+      return null;
+    }
+
     public static byte[] compress(String str, String encoding) {
         if (str == null || str.isEmpty()) {
             return null;
@@ -69,4 +115,13 @@ public class HttpClientUtils {
         }
         return null;
     }
+
+  class CallbackFuture extends CompletableFuture<Response> implements Callback {
+    public void onResponse(Call call, Response response) {
+      super.complete(response);
+    }
+    public void onFailure(Call call, IOException e){
+      super.completeExceptionally(e);
+    }
+  }
 }
