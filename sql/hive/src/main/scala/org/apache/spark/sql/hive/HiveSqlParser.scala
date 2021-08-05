@@ -44,17 +44,17 @@ class HiveSqlAstBuilder extends SparkSqlAstBuilder {
    */
   override def visitTableIdentifier(
       ctx: TableIdentifierContext): TableIdentifier = withOrigin(ctx) {
-    if (ctx.table.getText.contains(".")) {
-      val s = ctx.table.getText.split("\\.")
-      TableIdentifier(s(1), Option(s(0)))
-    } else {
-      TableIdentifier(ctx.table.getText, Option(ctx.db).map(_.getText))
+    ctx.table.getText.split("\\.") match {
+      case Seq(tableName: String) =>
+        TableIdentifier(tableName)
+      case Seq(database: String, tableName: String) =>
+        TableIdentifier(tableName, Option(database))
+      case _ => operationNotAllowed(s"`${ctx.table.getText}` does not support as table name", ctx)
     }
   }
 
   override def visitMultipartIdentifier(ctx: MultipartIdentifierContext): Seq[String] =
     withOrigin(ctx) {
-      ctx.parts.asScala.map(_.getText).toSeq
       ctx.parts.asScala.map(_.getText).flatMap( t => t.split("\\.")).toSeq
     }
 
