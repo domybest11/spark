@@ -44,7 +44,7 @@ class HiveSqlAstBuilder extends SparkSqlAstBuilder {
    */
   override def visitTableIdentifier(
       ctx: TableIdentifierContext): TableIdentifier = withOrigin(ctx) {
-    ctx.table.getText.split("\\.") match {
+    ctx.table.getText.split("\\.").toSeq match {
       case Seq(tableName: String) =>
         TableIdentifier(tableName)
       case Seq(database: String, tableName: String) =>
