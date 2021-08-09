@@ -46,7 +46,7 @@ class HiveSqlAstBuilder extends SparkSqlAstBuilder {
       ctx: TableIdentifierContext): TableIdentifier = withOrigin(ctx) {
     ctx.table.getText.split("\\.").toSeq match {
       case Seq(tableName: String) =>
-        TableIdentifier(tableName)
+        TableIdentifier(tableName, Option(ctx.db.getText))
       case Seq(database: String, tableName: String) =>
         TableIdentifier(tableName, Option(database))
       case _ => operationNotAllowed(s"`${ctx.table.getText}` does not support as table name", ctx)
