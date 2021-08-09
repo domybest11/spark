@@ -28,7 +28,8 @@ import java.nio.channels.{Channels, FileChannel, WritableByteChannel}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.security.SecureRandom
-import java.util.{Locale, Properties, Random, UUID}
+import java.util
+import java.util.{ArrayList, Locale, Properties, Random, UUID}
 import java.util.concurrent._
 import java.util.concurrent.TimeUnit.NANOSECONDS
 import java.util.zip.GZIPInputStream
@@ -42,7 +43,6 @@ import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 import scala.util.control.{ControlThrowable, NonFatal}
 import scala.util.matching.Regex
-
 import _root_.io.netty.channel.unix.Errors.NativeIoException
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import com.google.common.io.{ByteStreams, Files => GFiles}
@@ -57,10 +57,9 @@ import org.apache.hadoop.util.{RunJar, StringUtils}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.eclipse.jetty.util.MultiException
 import org.slf4j.Logger
-
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.internal.{Logging, config}
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.Streaming._
 import org.apache.spark.internal.config.Tests.IS_TESTING
@@ -946,14 +945,94 @@ private[spark] object Utils extends Logging {
     }
   }
 
+  private var localDirs: Option[String] = None
+
+  private def getWellLocalDirs(conf: SparkConf): String = {
+    val degradeThreshold = conf.get(config.SHUFFLE_DISK_DEGRADE_THRESHOLD)
+    val degradeINodeThreshold = conf.get(config.SHUFFLE_DISK_INODE_DEGRADE_THRESHOLD)
+    val storageDirs = Option(conf.getenv("STORAGE_TYPE_LOCAL_DIRS"))
+      .getOrElse("").split(",").filter(_.nonEmpty)
+    val tiersDirs = Option(conf.getenv("LOCAL_DIR_TIERS"))
+      .getOrElse("").toCharArray.toList
+    val localDirs = Option(conf.getenv("LOCAL_DIRS"))
+      .getOrElse("").split(",").filter(_.nonEmpty)
+    val canUseDirs = storageDirs zip tiersDirs filter(t => localDirs.contains(t._1))
+    val SSDDirs = canUseDirs.filter(t => t._2 == '0')
+    val HDDDirs = canUseDirs.diff(SSDDirs)
+
+    def getPercentUsed(file: File) = {
+      val cap = file.getTotalSpace.toDouble
+      val used = cap - file.getUsableSpace.toDouble
+      (used * 100.0 / cap).toInt
+    }
+
+    def getInodeUsageRatio(path: String): Int = {
+      var process: Process = null
+      var reader: BufferedReader = null
+      val lines: util.ArrayList[String] = new util.ArrayList[String]
+      var ratio: Int = -1
+      try {
+        process = Runtime.getRuntime.exec("df -i ".concat(path))
+        reader = new BufferedReader(new InputStreamReader(process.getInputStream))
+        var line: String = null
+        while ( (line = reader.readLine) != null) {
+          lines.add(line)
+        }
+        if (lines.size == 2) {
+          val df: Array[String] = lines.get(1).split("[ ]+")
+          if (path.contains(df(5))) {
+            ratio = df(4).replace("%", "").toInt
+          }
+        }
+        reader.close()
+        process.destroy()
+      } catch {
+        case e: IOException =>
+          e.printStackTrace()
+      }
+      ratio
+    }
+
+    val chooseSSDs = SSDDirs.map(_._1).filter(path => {
+      val file = new File(path)
+      val diskUsedRatio = getPercentUsed(file)
+      val inodeUsedRatio = getInodeUsageRatio(path)
+      diskUsedRatio <= degradeThreshold && inodeUsedRatio <= inodeUsedRatio
+    })
+
+    if (chooseSSDs.nonEmpty) {
+      return chooseSSDs.toList.mkString(",")
+    }
+
+    val chooseHDDs = HDDDirs.map(_._1).filter(path => {
+      val file = new File(path)
+      val diskUsedRatio = getPercentUsed(file)
+      val inodeUsedRatio = getInodeUsageRatio(path)
+      diskUsedRatio <= degradeThreshold && inodeUsedRatio <= inodeUsedRatio
+    })
+
+    if (chooseHDDs.nonEmpty) {
+      return chooseHDDs.toList.mkString(",")
+    }
+
+    canUseDirs.toList.mkString(",")
+  }
+
   /** Get the Yarn approved local directories. */
   private def getYarnLocalDirs(conf: SparkConf): String = {
-    val localDirs = Option(conf.getenv("LOCAL_DIRS")).getOrElse("")
+    val degradeEnable = conf.get(config.SHUFFLE_DISK_DEGRADE_ENABLED)
+    if (degradeEnable) {
+      if (localDirs.isEmpty) {
+        localDirs = Some(getWellLocalDirs(conf))
+      }
+    } else {
+      localDirs = Option(conf.getenv("LOCAL_DIRS"))
+    }
 
-    if (localDirs.isEmpty) {
+    if (localDirs.get.isEmpty) {
       throw new Exception("Yarn Local dirs can't be empty")
     }
-    localDirs
+    localDirs.get
   }
 
   /** Used by unit tests. Do not call from other places. */
