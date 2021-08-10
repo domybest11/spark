@@ -972,7 +972,7 @@ private[spark] object Utils extends Logging {
       var process: Process = null
       var reader: BufferedReader = null
       val lines: ArrayList[String] = new ArrayList[String]
-      var ratio: Int = -1
+      var ratio: Int = 100
       try {
         process = Runtime.getRuntime.exec("df -i ".concat(path))
         reader = new BufferedReader(new InputStreamReader(process.getInputStream))
