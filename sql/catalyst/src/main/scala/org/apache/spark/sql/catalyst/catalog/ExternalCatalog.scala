@@ -174,6 +174,14 @@ trait ExternalCatalog {
       replace: Boolean,
       numDP: Int): Unit
 
+  def loadDynamicPartitionsWithReturn(
+      db: String,
+      table: String,
+      loadPath: String,
+      partition: TablePartitionSpec,
+      replace: Boolean,
+      numDP: Int): Seq[CatalogTablePartition] = {Seq.empty}
+
   // --------------------------------------------------------------------------
   // Partitions
   // --------------------------------------------------------------------------

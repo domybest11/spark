@@ -57,6 +57,13 @@ trait WriteTaskStatsTracker {
   def newPartition(partitionValues: InternalRow): Unit
 
   /**
+   * Record the current partition path, so we can stats row number per partition.
+   * Only be overridden by [[BasicWriteTaskStatsTracker]]
+   * @param partitionPath
+   */
+  def newPartitionPath(partitionPath: Option[String]): Unit = { }
+
+  /**
    * Process the fact that a new bucket is about to written.
    * Only triggered when the relation is bucketed by a (non-empty) sequence of columns.
    * @param bucketId The bucket number.

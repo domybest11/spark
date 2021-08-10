@@ -954,6 +954,25 @@ private[hive] class HiveClientImpl(
       listBucketingEnabled = hiveTable.isStoredAsSubDirectories)
   }
 
+  def loadDynamicPartitionsWithReturn(
+      loadPath: String,
+      dbName: String,
+      tableName: String,
+      partSpec: java.util.LinkedHashMap[String, String],
+      replace: Boolean,
+      numDP: Int): Seq[CatalogTablePartition] = withHiveState {
+    val hiveTable = client.getTable(dbName, tableName, true /* throw exception */)
+    shim.loadDynamicPartitionsWithReturn(
+      client,
+      new Path(loadPath),
+      s"$dbName.$tableName",
+      partSpec,
+      replace,
+      numDP,
+      listBucketingEnabled = hiveTable.isStoredAsSubDirectories)
+      .map(p => fromHivePartition(p._2)).toSeq
+  }
+
   override def createFunction(db: String, func: CatalogFunction): Unit = withHiveState {
     shim.createFunction(client, db, func)
   }

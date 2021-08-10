@@ -189,6 +189,16 @@ class ExternalCatalogWithListener(delegate: ExternalCatalog)
     delegate.loadDynamicPartitions(db, table, loadPath, partition, replace, numDP)
   }
 
+  override def loadDynamicPartitionsWithReturn(
+      db: String,
+      table: String,
+      loadPath: String,
+      partition: TablePartitionSpec,
+      replace: Boolean,
+      numDP: Int): Seq[CatalogTablePartition] = {
+    delegate.loadDynamicPartitionsWithReturn(db, table, loadPath, partition, replace, numDP)
+  }
+
   // --------------------------------------------------------------------------
   // Partitions
   // --------------------------------------------------------------------------

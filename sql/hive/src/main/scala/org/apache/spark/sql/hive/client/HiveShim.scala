@@ -134,6 +134,15 @@ private[client] sealed abstract class Shim {
       numDP: Int,
       listBucketingEnabled: Boolean): Unit
 
+  def loadDynamicPartitionsWithReturn(
+      hive: Hive,
+      loadPath: Path,
+      tableName: String,
+      partSpec: JMap[String, String],
+      replace: Boolean,
+      numDP: Int,
+      listBucketingEnabled: Boolean): Map[Map[String, String], Partition]
+
   def createFunction(hive: Hive, db: String, func: CatalogFunction): Unit
 
   def dropFunction(hive: Hive, db: String, name: String): Unit
@@ -416,6 +425,17 @@ private[client] class Shim_v0_12 extends Shim with Logging {
       listBucketingEnabled: Boolean): Unit = {
     loadDynamicPartitionsMethod.invoke(hive, loadPath, tableName, partSpec, replace: JBoolean,
       numDP: JInteger, holdDDLTime, listBucketingEnabled: JBoolean)
+  }
+
+  def loadDynamicPartitionsWithReturn(
+      hive: Hive,
+      loadPath: Path,
+      tableName: String,
+      partSpec: JMap[String, String],
+      replace: Boolean,
+      numDP: Int,
+      listBucketingEnabled: Boolean): Map[Map[String, String], Partition] = {
+    Map.empty
   }
 
   override def dropIndex(hive: Hive, dbName: String, tableName: String, indexName: String): Unit = {
@@ -1278,6 +1298,20 @@ private[client] class Shim_v2_1 extends Shim_v2_0 {
     loadDynamicPartitionsMethod.invoke(hive, loadPath, tableName, partSpec, replace: JBoolean,
       numDP: JInteger, listBucketingEnabled: JBoolean, isAcid, txnIdInLoadDynamicPartitions,
       hasFollowingStatsTask, AcidUtils.Operation.NOT_ACID)
+  }
+
+  override def loadDynamicPartitionsWithReturn(
+      hive: Hive,
+      loadPath: Path,
+      tableName: String,
+      partSpec: JMap[String, String],
+      replace: Boolean,
+      numDP: Int,
+      listBucketingEnabled: Boolean): Map[Map[String, String], Partition] = {
+    loadDynamicPartitionsMethod.invoke(hive, loadPath, tableName, partSpec, replace: JBoolean,
+      numDP: JInteger, listBucketingEnabled: JBoolean, isAcid, txnIdInLoadDynamicPartitions,
+      hasFollowingStatsTask, AcidUtils.Operation.NOT_ACID)
+      .asInstanceOf[JMap[Map[String, String], Partition]].asScala.toMap
   }
 
   override def alterTable(hive: Hive, tableName: String, table: Table): Unit = {

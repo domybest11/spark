@@ -40,9 +40,21 @@ case class BasicWriteTaskStats(
     partitions: Seq[InternalRow],
     numFiles: Int,
     numBytes: Long,
-    numRows: Long)
+    numRows: Long,
+    partitionStats: Map[String, BasicPartitionStats] = Map.empty)
   extends WriteTaskStats
 
+case class BasicPartitionStats(
+    numBytes: Long,
+    numRows: Long) {
+  def add(stat: Option[BasicPartitionStats]): BasicPartitionStats = {
+    if (stat.isEmpty) {
+      this
+    } else {
+      BasicPartitionStats(this.numBytes + stat.get.numBytes, this.numRows + stat.get.numRows)
+    }
+  }
+}
 
 /**
  * Simple [[WriteTaskStatsTracker]] implementation that produces [[BasicWriteTaskStats]].
@@ -57,6 +69,11 @@ class BasicWriteTaskStatsTracker(hadoopConf: Configuration)
   private[this] var numRows: Long = 0L
 
   private[this] var curFile: Option[String] = None
+
+  private[this] val partitionStats: mutable.Map[String, BasicPartitionStats] = mutable.HashMap.empty
+  private[this] var curPartition: Option[String] = None
+  private[this] var curPartitionNumRows: Long = 0L
+  private[this] var curPartitionNumBytes: Long = 0L
 
   /**
    * Get the size of the file expected to have been written by a worker.
@@ -81,6 +98,16 @@ class BasicWriteTaskStatsTracker(hadoopConf: Configuration)
     partitions.append(partitionValues)
   }
 
+  override def newPartitionPath(partitionPath: Option[String]): Unit = {
+    if (curPartition.isDefined) {
+      partitionStats.put(curPartition.get,
+        BasicPartitionStats(curPartitionNumBytes, curPartitionNumRows))
+    }
+    curPartition = partitionPath
+    curPartitionNumRows = 0L
+    curPartitionNumBytes = 0L
+  }
+
   override def newBucket(bucketId: Int): Unit = {
     // currently unhandled
   }
@@ -96,6 +123,7 @@ class BasicWriteTaskStatsTracker(hadoopConf: Configuration)
       getFileSize(path).foreach { len =>
         numBytes += len
         numFiles += 1
+        curPartitionNumBytes += len
       }
       curFile = None
     }
@@ -103,6 +131,7 @@ class BasicWriteTaskStatsTracker(hadoopConf: Configuration)
 
   override def newRow(row: InternalRow): Unit = {
     numRows += 1
+    curPartitionNumRows += 1
   }
 
   override def getFinalStats(): WriteTaskStats = {
@@ -114,12 +143,17 @@ class BasicWriteTaskStatsTracker(hadoopConf: Configuration)
       outputMetrics.setRecordsWritten(numRows)
     }
 
+    if (curPartition.isDefined) {
+      partitionStats.put(curPartition.get,
+        BasicPartitionStats(curPartitionNumBytes, curPartitionNumRows))
+    }
+
     if (submittedFiles != numFiles) {
       logInfo(s"Expected $submittedFiles files, but only saw $numFiles. " +
         "This could be due to the output format not writing empty files, " +
         "or files being not immediately visible in the filesystem.")
     }
-    BasicWriteTaskStats(partitions.toSeq, numFiles, numBytes, numRows)
+    BasicWriteTaskStats(partitions.toSeq, numFiles, numBytes, numRows, partitionStats.toMap)
   }
 }
 

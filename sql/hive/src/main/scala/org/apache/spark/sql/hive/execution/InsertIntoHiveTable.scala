@@ -19,6 +19,8 @@ package org.apache.spark.sql.hive.execution
 
 import java.util.Locale
 
+import scala.collection.mutable
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.hive.ql.ErrorMsg
@@ -28,11 +30,13 @@ import org.apache.hadoop.mapred.FileOutputFormat
 import org.apache.spark.SparkException
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog._
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command.CommandUtils
+import org.apache.spark.sql.execution.datasources.BasicPartitionStats
 import org.apache.spark.sql.hive.HiveExternalCatalog
 import org.apache.spark.sql.hive.HiveShim.{ShimFileSinkDesc => FileSinkDesc}
 import org.apache.spark.sql.hive.client.HiveClientImpl
@@ -221,14 +225,16 @@ case class InsertIntoHiveTable(
     val outputPath = FileOutputFormat.getOutputPath(jobConf)
     if (partition.nonEmpty) {
       if (numDynamicPartitions > 0) {
-        if (overwrite && table.tableType == CatalogTableType.EXTERNAL) {
+        val partitionStats: mutable.Map[TablePartitionSpec, BasicPartitionStats] =
+          mutable.HashMap.empty
+        if (overwrite) {
           // SPARK-29295: When insert overwrite to a Hive external table partition, if the
           // partition does not exist, Hive will not check if the external partition directory
           // exists or not before copying files. So if users drop the partition, and then do
           // insert overwrite to the same partition, the partition will have both old and new
           // data. We construct partition path. If the path exists, we delete it manually.
           writtenParts.foreach { partPath =>
-            val dpMap = partPath.split("/").map { part =>
+            val dpMap = partPath._1.split("/").map { part =>
               val splitPart = part.split("=")
               assert(splitPart.size == 2, s"Invalid written partition path: $part")
               ExternalCatalogUtils.unescapePathName(splitPart(0)) ->
@@ -246,28 +252,32 @@ case class InsertIntoHiveTable(
                 throw new SparkException(s"Dynamic partition key $key is not among " +
                   "written partition paths.")
             }
-            val partitionColumnNames = table.partitionColumnNames
-            val tablePath = new Path(table.location)
-            val partitionPath = ExternalCatalogUtils.generatePartitionPath(updatedPartitionSpec,
-              partitionColumnNames, tablePath)
+            partitionStats.put(updatedPartitionSpec, partPath._2)
+            if (table.tableType == CatalogTableType.EXTERNAL) {
+              val partitionColumnNames = table.partitionColumnNames
+              val tablePath = new Path(table.location)
+              val partitionPath = ExternalCatalogUtils.generatePartitionPath(updatedPartitionSpec,
+                partitionColumnNames, tablePath)
 
-            val fs = partitionPath.getFileSystem(hadoopConf)
-            if (fs.exists(partitionPath)) {
-              if (!fs.delete(partitionPath, true)) {
-                throw new RuntimeException(
-                  s"Cannot remove partition directory '$partitionPath'")
+              val fs = partitionPath.getFileSystem(hadoopConf)
+              if (fs.exists(partitionPath)) {
+                if (!fs.delete(partitionPath, true)) {
+                  throw new RuntimeException(
+                    s"Cannot remove partition directory '$partitionPath'")
+                }
               }
             }
           }
         }
 
-        externalCatalog.loadDynamicPartitions(
+        val updatedPartitions = externalCatalog.loadDynamicPartitionsWithReturn(
           db = table.database,
           table = table.identifier.table,
           outputPath.toString,
           partitionSpec,
           overwrite,
           numDynamicPartitions)
+        updateDynamicPartitionStats(externalCatalog, updatedPartitions, partitionStats)
       } else {
         // scalastyle:off
         // ifNotExists is only valid with static partition, refer to
@@ -340,6 +350,24 @@ case class InsertIntoHiveTable(
             isOverwrite = doHiveOverwrite,
             inheritTableSpecs = inheritTableSpecs,
             isSrcLocal = false)
+          // update partition stats
+          if (oldPart.isEmpty || doHiveOverwrite) {
+            try {
+              val updatedPartition = externalCatalog
+                .getPartitionOption(table.database, table.identifier.table, partitionSpec)
+              if (updatedPartition.isDefined && writtenParts.contains("staticPart")) {
+                val stat = writtenParts("staticPart")
+                val newProps = updatedPartition.get.parameters ++
+                  Map("totalSize" -> stat.numBytes.toString, "numRows" -> stat.numRows.toString)
+                externalCatalog.alterPartitions(
+                  table.database,
+                  table.identifier.table,
+                  Seq(updatedPartition.get.copy(parameters = newProps)))
+              }
+            } catch {
+              case e: Exception => logError("Update partitions statistics error", e)
+            }
+          }
         }
       }
     } else {
@@ -349,6 +377,28 @@ case class InsertIntoHiveTable(
         outputPath.toString, // TODO: URI
         overwrite,
         isSrcLocal = false)
+    }
+  }
+
+  def updateDynamicPartitionStats(
+      externalCatalog: ExternalCatalog,
+      updatedPartitions: Seq[CatalogTablePartition],
+      partitionStats: mutable.Map[TablePartitionSpec, BasicPartitionStats]): Unit = {
+    try {
+      val parts = updatedPartitions.filter(p => partitionStats.contains(p.spec)).map(p => {
+        val stat = partitionStats(p.spec)
+        val newProps = p.parameters ++
+          Map("totalSize" -> stat.numBytes.toString, "numRows" -> stat.numRows.toString)
+        p.copy(parameters = newProps)
+      })
+      if (parts.nonEmpty) {
+        externalCatalog.alterPartitions(
+          table.database,
+          table.identifier.table,
+          parts)
+      }
+    } catch {
+      case e: Exception => logError("Update partitions statistics error", e)
     }
   }
 }
