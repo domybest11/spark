@@ -997,25 +997,14 @@ private[spark] object Utils extends Logging {
       val file = new File(path)
       val diskUsedRatio = getPercentUsed(file)
       val inodeUsedRatio = getInodeUsageRatio(path)
-      diskUsedRatio <= degradeThreshold && inodeUsedRatio <= inodeUsedRatio
+      diskUsedRatio <= degradeThreshold && inodeUsedRatio <= degradeINodeThreshold
     })
 
     if (chooseSSDs.nonEmpty) {
-      return chooseSSDs.toList.mkString(",")
+      chooseSSDs.toList.mkString(",")
+    } else {
+      HDDDirs.toList.mkString(",")
     }
-
-    val chooseHDDs = HDDDirs.map(_._1).filter(path => {
-      val file = new File(path)
-      val diskUsedRatio = getPercentUsed(file)
-      val inodeUsedRatio = getInodeUsageRatio(path)
-      diskUsedRatio <= degradeThreshold && inodeUsedRatio <= inodeUsedRatio
-    })
-
-    if (chooseHDDs.nonEmpty) {
-      return chooseHDDs.toList.mkString(",")
-    }
-
-    canUseDirs.toList.mkString(",")
   }
 
   /** Get the Yarn approved local directories. */
