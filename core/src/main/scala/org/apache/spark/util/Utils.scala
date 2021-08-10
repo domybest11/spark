@@ -977,7 +977,7 @@ private[spark] object Utils extends Logging {
         process = Runtime.getRuntime.exec("df -i ".concat(path))
         reader = new BufferedReader(new InputStreamReader(process.getInputStream))
         var line: String = null
-        while ( (line = reader.readLine) != null) {
+        while ({line = reader.readLine; line} != null) {
           lines.add(line)
         }
         if (lines.size == 2) {
