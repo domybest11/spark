@@ -28,7 +28,7 @@ import java.nio.channels.{Channels, FileChannel, WritableByteChannel}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.security.SecureRandom
-import java.util.{Locale, Properties, Random, UUID}
+import java.util.{ArrayList, Locale, Properties, Random, UUID}
 import java.util.concurrent._
 import java.util.concurrent.TimeUnit.NANOSECONDS
 import java.util.zip.GZIPInputStream
@@ -946,14 +946,88 @@ private[spark] object Utils extends Logging {
     }
   }
 
+  private var localDirs: Option[String] = None
+
+  private def getWellLocalDirs(conf: SparkConf): String = {
+    var result = ""
+    val degradeThreshold = conf.get(config.SHUFFLE_DISK_DEGRADE_THRESHOLD)
+    val degradeINodeThreshold = conf.get(config.SHUFFLE_DISK_INODE_DEGRADE_THRESHOLD)
+    val storageDirs = Option(conf.getenv("STORAGE_TYPE_LOCAL_DIRS"))
+      .getOrElse("").split(",").filter(_.nonEmpty)
+    val tiersDirs = Option(conf.getenv("LOCAL_DIR_TIERS"))
+      .getOrElse("").toCharArray.toList
+    val localDirs = Option(conf.getenv("LOCAL_DIRS"))
+      .getOrElse("").split(",").filter(_.nonEmpty)
+    val canUseDirs = storageDirs zip tiersDirs filter(t => localDirs.contains(t._1))
+    val SSDDirs = canUseDirs.filter(t => t._2 == '0')
+    val HDDDirs = canUseDirs.diff(SSDDirs)
+
+    def getPercentUsed(file: File) = {
+      val cap = file.getTotalSpace.toDouble
+      val used = cap - file.getUsableSpace.toDouble
+      (used * 100.0 / cap).toInt
+    }
+
+    def getInodeUsageRatio(path: String): Int = {
+      var process: Process = null
+      var reader: BufferedReader = null
+      val lines: ArrayList[String] = new ArrayList[String]
+      var ratio: Int = 100
+      try {
+        process = Runtime.getRuntime.exec("df -i ".concat(path))
+        reader = new BufferedReader(new InputStreamReader(process.getInputStream))
+        var line: String = null
+        while ( (line = reader.readLine) != null) {
+          lines.add(line)
+        }
+        if (lines.size == 2) {
+          val df: Array[String] = lines.get(1).split("[ ]+")
+          if (path.contains(df(5))) {
+            ratio = df(4).replace("%", "").toInt
+          }
+        }
+        reader.close()
+        process.destroy()
+      } catch {
+        case e: IOException =>
+          e.printStackTrace()
+      }
+      ratio
+    }
+
+    val chooseSSDs = SSDDirs.map(_._1).filter(path => {
+      val file = new File(path)
+      val diskUsedRatio = getPercentUsed(file)
+      val inodeUsedRatio = getInodeUsageRatio(path)
+      diskUsedRatio <= degradeThreshold && inodeUsedRatio <= degradeINodeThreshold
+    })
+
+    if (chooseSSDs.nonEmpty) {
+      result = chooseSSDs.toList.mkString(",")
+      logInfo("using the disk downgrade, SSD is preferred:" + result)
+      result
+    } else {
+      result = HDDDirs.toList.mkString(",")
+      logInfo("using the disk downgrade, HDD is preferred:" + result)
+      result
+    }
+  }
+
   /** Get the Yarn approved local directories. */
   private def getYarnLocalDirs(conf: SparkConf): String = {
-    val localDirs = Option(conf.getenv("LOCAL_DIRS")).getOrElse("")
+    val degradeEnable = conf.get(config.SHUFFLE_DISK_DEGRADE_ENABLED)
+    if (degradeEnable) {
+      if (localDirs.isEmpty) {
+        localDirs = Some(getWellLocalDirs(conf))
+      }
+    } else {
+      localDirs = Option(conf.getenv("LOCAL_DIRS"))
+    }
 
-    if (localDirs.isEmpty) {
+    if (localDirs.get.isEmpty) {
       throw new Exception("Yarn Local dirs can't be empty")
     }
-    localDirs
+    localDirs.get
   }
 
   /** Used by unit tests. Do not call from other places. */

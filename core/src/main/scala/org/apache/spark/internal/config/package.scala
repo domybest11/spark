@@ -687,6 +687,27 @@ package object config {
       .booleanConf
       .createWithDefault(true)
 
+  private[spark] val SHUFFLE_DISK_DEGRADE_ENABLED =
+    ConfigBuilder("spark.shuffle.disk.degrade.enble")
+      .doc("Whether to use shuffle disk degrade, priority use of SSD disks.")
+      .version("3.0.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val SHUFFLE_DISK_DEGRADE_THRESHOLD =
+    ConfigBuilder("spark.shuffle.disk.degrade.threshold")
+    .doc("Check whether the disk usage exceeds the threshold.")
+    .version("3.0.0")
+    .intConf
+    .createWithDefault(70)
+
+  private[spark] val SHUFFLE_DISK_INODE_DEGRADE_THRESHOLD =
+    ConfigBuilder("spark.shuffle.disk.inode.degrade.threshold")
+      .doc("Check whether the inode usage exceeds the threshold.")
+      .version("3.0.0")
+      .intConf
+      .createWithDefault(70)
+
   private[spark] val SHUFFLE_SERVICE_PORT =
     ConfigBuilder("spark.shuffle.service.port").version("1.2.0").intConf.createWithDefault(7337)
 
