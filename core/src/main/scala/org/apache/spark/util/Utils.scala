@@ -28,7 +28,6 @@ import java.nio.channels.{Channels, FileChannel, WritableByteChannel}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.security.SecureRandom
-import java.util
 import java.util.{ArrayList, Locale, Properties, Random, UUID}
 import java.util.concurrent._
 import java.util.concurrent.TimeUnit.NANOSECONDS
@@ -43,6 +42,7 @@ import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 import scala.util.control.{ControlThrowable, NonFatal}
 import scala.util.matching.Regex
+
 import _root_.io.netty.channel.unix.Errors.NativeIoException
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import com.google.common.io.{ByteStreams, Files => GFiles}
@@ -57,9 +57,10 @@ import org.apache.hadoop.util.{RunJar, StringUtils}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.eclipse.jetty.util.MultiException
 import org.slf4j.Logger
+
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.internal.{Logging, config}
+import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.Streaming._
 import org.apache.spark.internal.config.Tests.IS_TESTING
@@ -969,7 +970,7 @@ private[spark] object Utils extends Logging {
     def getInodeUsageRatio(path: String): Int = {
       var process: Process = null
       var reader: BufferedReader = null
-      val lines: util.ArrayList[String] = new util.ArrayList[String]
+      val lines: ArrayList[String] = new ArrayList[String]
       var ratio: Int = -1
       try {
         process = Runtime.getRuntime.exec("df -i ".concat(path))
