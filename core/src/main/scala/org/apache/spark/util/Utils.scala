@@ -949,6 +949,7 @@ private[spark] object Utils extends Logging {
   private var localDirs: Option[String] = None
 
   private def getWellLocalDirs(conf: SparkConf): String = {
+    var result = ""
     val degradeThreshold = conf.get(config.SHUFFLE_DISK_DEGRADE_THRESHOLD)
     val degradeINodeThreshold = conf.get(config.SHUFFLE_DISK_INODE_DEGRADE_THRESHOLD)
     val storageDirs = Option(conf.getenv("STORAGE_TYPE_LOCAL_DIRS"))
@@ -1002,9 +1003,13 @@ private[spark] object Utils extends Logging {
     })
 
     if (chooseSSDs.nonEmpty) {
-      chooseSSDs.toList.mkString(",")
+      result = chooseSSDs.toList.mkString(",")
+      logInfo("using the disk downgrade, SSD is preferred:" + result)
+      result
     } else {
-      HDDDirs.toList.mkString(",")
+      result = HDDDirs.toList.mkString(",")
+      logInfo("using the disk downgrade, HDD is preferred:" + result)
+      result
     }
   }
 
