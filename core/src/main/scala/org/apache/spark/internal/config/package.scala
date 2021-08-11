@@ -688,7 +688,7 @@ package object config {
       .createWithDefault(true)
 
   private[spark] val SHUFFLE_DISK_DEGRADE_ENABLED =
-    ConfigBuilder("spark.shuffle.disk.degrade.enble")
+    ConfigBuilder("spark.shuffle.disk.degrade.enabled")
       .doc("Whether to use shuffle disk degrade, priority use of SSD disks.")
       .version("3.0.0")
       .booleanConf

@@ -953,15 +953,14 @@ private[spark] object Utils extends Logging {
     val degradeThreshold = conf.get(config.SHUFFLE_DISK_DEGRADE_THRESHOLD)
     val degradeINodeThreshold = conf.get(config.SHUFFLE_DISK_INODE_DEGRADE_THRESHOLD)
     val storageDirs = Option(conf.getenv("STORAGE_TYPE_LOCAL_DIRS"))
-      .getOrElse("").split(",").filter(_.nonEmpty)
+      .getOrElse("").replaceAll("\n", "").split(",").map(_.trim).filter(_.nonEmpty)
     val tiersDirs = Option(conf.getenv("LOCAL_DIR_TIERS"))
       .getOrElse("").toCharArray.toList
     val localDirs = Option(conf.getenv("LOCAL_DIRS"))
-      .getOrElse("").split(",").filter(_.nonEmpty)
-    val canUseDirs = storageDirs zip tiersDirs filter(t => localDirs.contains(t._1))
+      .getOrElse("").split(",").map(_.trim).filter(_.nonEmpty)
+    val canUseDirs = storageDirs zip tiersDirs filter(t => localDirs.exists(_.contains(t._1)))
     val SSDDirs = canUseDirs.filter(t => t._2 == '0')
     val HDDDirs = canUseDirs.diff(SSDDirs)
-
     def getPercentUsed(file: File) = {
       val cap = file.getTotalSpace.toDouble
       val used = cap - file.getUsableSpace.toDouble
@@ -1003,11 +1002,17 @@ private[spark] object Utils extends Logging {
     })
 
     if (chooseSSDs.nonEmpty) {
-      result = chooseSSDs.toList.mkString(",")
+      result = localDirs.filter(path => {
+       val subpath = path.substring(0, chooseSSDs.head.length)
+       chooseSSDs.exists(_.contains(subpath))
+      }).toList.mkString(",")
       logInfo("using the disk downgrade, SSD is preferred:" + result)
       result
     } else {
-      result = HDDDirs.toList.mkString(",")
+      result = localDirs.filter(path => {
+        val subpath = path.substring(0, HDDDirs.map(_._1).head.length)
+        HDDDirs.map(_._1).exists(_.contains(subpath))
+      }).toList.mkString(",")
       logInfo("using the disk downgrade, HDD is preferred:" + result)
       result
     }
