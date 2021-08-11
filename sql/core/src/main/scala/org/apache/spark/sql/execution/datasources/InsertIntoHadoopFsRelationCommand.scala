@@ -82,7 +82,8 @@ case class InsertIntoHadoopFsRelationCommand(
     val enableDynamicOverwrite = partitionOverwriteMode == PartitionOverwriteMode.DYNAMIC
     // This config only makes sense when we are overwriting a partitioned dataset with dynamic
     // partition columns.
-    enableDynamicOverwrite && mode == SaveMode.Overwrite
+    enableDynamicOverwrite && mode == SaveMode.Overwrite &&
+      staticPartitions.size < partitionColumns.length
   }
 
 
