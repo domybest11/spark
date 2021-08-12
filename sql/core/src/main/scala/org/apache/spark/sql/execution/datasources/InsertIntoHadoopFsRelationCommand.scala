@@ -83,7 +83,7 @@ case class InsertIntoHadoopFsRelationCommand(
     // This config only makes sense when we are overwriting a partitioned dataset with dynamic
     // partition columns.
     enableDynamicOverwrite && mode == SaveMode.Overwrite &&
-      staticPartitions.size < partitionColumns.length
+      (staticPartitions.size < partitionColumns.length || staticPartitions.nonEmpty)
   }
 
 
