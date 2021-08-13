@@ -67,6 +67,7 @@ object SQLExecution extends Logging {
       name: Option[String] = None)(body: => T): T = queryExecution.sparkSession.withActive {
     val sparkSession = queryExecution.sparkSession
     val sc = sparkSession.sparkContext
+    queryExecution.sqlText = sc.getLocalProperty("spark.trace.sqlIdentifier")
     val oldExecutionId = sc.getLocalProperty(EXECUTION_ID_KEY)
     val executionId = SQLExecution.nextExecutionId
     sc.setLocalProperty(EXECUTION_ID_KEY, executionId.toString)
