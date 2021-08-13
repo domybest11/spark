@@ -116,9 +116,11 @@ private[sql] class SharedState(
       sparkContext.listenerBus.addToStatusQueue(listener)
       statusStore = new SQLAppStatusStore(kvStore, Some(listener))
       sparkContext.ui.foreach(new SQLTab(statusStore, _))
-      val sqlAppStatusStoreV1 = new SqlAppStoreStatusStoreV1(Some(statusStore),
-        Some(sparkContext.statusStore), sparkContext.conf)
-      sqlAppStatusScheduler.start(sqlAppStatusStoreV1)
+      if (!Utils.isTesting) {
+        val sqlAppStatusStoreV1 = new SqlAppStoreStatusStoreV1(Some(statusStore),
+          Some(sparkContext.statusStore), sparkContext.conf)
+        sqlAppStatusScheduler.start(sqlAppStatusStoreV1)
+      }
     }
     statusStore
   }
