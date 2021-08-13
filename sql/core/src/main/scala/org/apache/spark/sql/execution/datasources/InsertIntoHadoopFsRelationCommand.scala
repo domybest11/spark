@@ -244,7 +244,7 @@ case class InsertIntoHadoopFsRelationCommand(
           partitionColumns = partitionColumns,
           bucketSpec = bucketSpec,
           statsTrackers = Seq(basicWriteJobStatsTracker(hadoopConf)),
-          options = options)
+          options = options) - "staticPart"
 
       var updatedPartitionPaths = updatedPartitionsWithStats.keySet
       logInfo("updated partition paths " + updatedPartitionPaths.mkString(","))
