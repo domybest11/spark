@@ -253,6 +253,7 @@ class DynamicPartitionDataWriter(
       if (isPartitioned && currentPartitionValues != nextPartitionValues) {
         currentPartitionValues = Some(nextPartitionValues.get.copy())
         statsTrackers.foreach(_.newPartition(currentPartitionValues.get))
+        statsTrackers.foreach(_.newPartitionPath(currentPartitionValues.map(getPartitionPath(_))))
       }
       if (isBucketed) {
         currentBucketId = nextBucketId

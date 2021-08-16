@@ -943,6 +943,35 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
       numDP)
   }
 
+  override def loadDynamicPartitionsWithReturn(
+      db: String,
+      table: String,
+      loadPath: String,
+      partition: TablePartitionSpec,
+      replace: Boolean,
+      numDP: Int): Seq[CatalogTablePartition] = withClient {
+    requireTableExists(db, table)
+
+    val orderedPartitionSpec = new util.LinkedHashMap[String, String]()
+    getTable(db, table).partitionColumnNames.foreach { colName =>
+      // Hive metastore is not case preserving and keeps partition columns with lower cased names,
+      // and Hive will validate the column names in partition spec to make sure they are partition
+      // columns. Here we Lowercase the column names before passing the partition spec to Hive
+      // client, to satisfy Hive.
+      // scalastyle:off caselocale
+      orderedPartitionSpec.put(colName.toLowerCase, partition(colName))
+      // scalastyle:on caselocale
+    }
+
+    client.loadDynamicPartitionsWithReturn(
+      loadPath,
+      db,
+      table,
+      orderedPartitionSpec,
+      replace,
+      numDP)
+  }
+
   // --------------------------------------------------------------------------
   // Partitions
   // --------------------------------------------------------------------------

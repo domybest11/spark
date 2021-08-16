@@ -95,7 +95,7 @@ object FileFormatWriter extends Logging {
       bucketSpec: Option[BucketSpec],
       statsTrackers: Seq[WriteJobStatsTracker],
       options: Map[String, String])
-    : Set[String] = {
+    : Map[String, BasicPartitionStats] = {
 
     val job = Job.getInstance(hadoopConf)
     job.setOutputKeyClass(classOf[Void])
@@ -225,12 +225,33 @@ object FileFormatWriter extends Logging {
       logInfo(s"Finished processing stats for write job ${description.uuid}.")
 
       // return a set of all the partition paths that were updated during this job
-      ret.map(_.summary.updatedPartitions).reduceOption(_ ++ _).getOrElse(Set.empty)
+      getPartitionSummary(ret)
     } catch { case cause: Throwable =>
       logError(s"Aborting job ${description.uuid}.", cause)
       committer.abortJob(job)
       throw new SparkException("Job aborted.", cause)
     }
+  }
+
+  def getPartitionSummary(
+      ret: Array[WriteTaskResult]): Map[String, BasicPartitionStats] = {
+    var partitionStats = Map.empty[String, BasicPartitionStats]
+    val taskStats = ret.flatMap(_.summary.stats.filter(_.isInstanceOf[BasicWriteTaskStats]))
+      .map(s => s.asInstanceOf[BasicWriteTaskStats])
+
+    val partitionPath = ret.map(_.summary.updatedPartitions).reduceOption(_ ++ _)
+      .getOrElse(Set.empty)
+    if (partitionPath.isEmpty) {
+      partitionStats = Map("staticPart" -> BasicPartitionStats(
+          taskStats.map(s => s.numBytes).sum, taskStats.map(s => s.numRows).sum))
+    } else {
+      partitionStats = taskStats
+        .map(s => s.partitionStats)
+        .foldLeft(Map.empty[String, BasicPartitionStats]) {
+          (map1, map2) => map1 ++ map2.map(t => (t._1, t._2.add(map1.get(t._1))))
+        }
+    }
+    partitionStats
   }
 
   /* Writes rdd into outputSpec,

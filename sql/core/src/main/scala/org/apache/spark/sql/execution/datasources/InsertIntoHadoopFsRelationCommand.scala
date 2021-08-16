@@ -173,9 +173,12 @@ case class InsertIntoHadoopFsRelationCommand(
 
     if (doInsertion) {
 
-      def refreshUpdatedPartitions(updatedPartitionPaths: Set[String]): Unit = {
-        val updatedPartitions = updatedPartitionPaths.map(PartitioningUtils.parsePathFragment)
+      def refreshUpdatedPartitions(
+          updatedPartitionPaths: Map[String, BasicPartitionStats]): Unit = {
         if (partitionsTrackedByCatalog) {
+          val partitionStats =
+            updatedPartitionPaths.map(p => PartitioningUtils.parsePathFragment(p._1) -> p._2)
+          val updatedPartitions = partitionStats.keySet
           val newPartitions = updatedPartitions -- initialMatchingPartitions
           if (newPartitions.nonEmpty) {
             AlterTableAddPartitionCommand(
@@ -193,6 +196,29 @@ case class InsertIntoHadoopFsRelationCommand(
                 retainData = true /* already deleted */).run(sparkSession)
             }
           }
+          // Update partition stats
+          try {
+            val updatedPartitionSpec = if (mode == SaveMode.Overwrite) {
+              updatedPartitions
+            } else {
+              newPartitions
+            }
+            val updatedPartitionStat = sparkSession.sessionState.catalog.listPartitions(
+              catalogTable.get.identifier, Some(staticPartitions))
+              .filter(p => updatedPartitionSpec.contains(p.spec))
+              .map(p => {
+                val stat = partitionStats(p.spec)
+                val newProps = p.parameters ++
+                  Map("totalSize" -> stat.numBytes.toString, "numRows" -> stat.numRows.toString)
+                p.copy(parameters = newProps)
+            })
+            if (updatedPartitionStat.nonEmpty) {
+              sparkSession.sessionState.catalog.alterPartitions(catalogTable.get.identifier,
+                updatedPartitionStat)
+            }
+          } catch {
+            case e: Exception => logError("Update partitions statistics error", e)
+          }
         }
       }
 
@@ -206,7 +232,7 @@ case class InsertIntoHadoopFsRelationCommand(
       }
 
 
-      var updatedPartitionPaths =
+      val updatedPartitionsWithStats =
         FileFormatWriter.write(
           sparkSession = sparkSession,
           plan = child,
@@ -218,8 +244,9 @@ case class InsertIntoHadoopFsRelationCommand(
           partitionColumns = partitionColumns,
           bucketSpec = bucketSpec,
           statsTrackers = Seq(basicWriteJobStatsTracker(hadoopConf)),
-          options = options)
+          options = options) - "staticPart"
 
+      var updatedPartitionPaths = updatedPartitionsWithStats.keySet
       logInfo("updated partition paths " + updatedPartitionPaths.mkString(","))
       logInfo("updated partition total " + updatedPartitionPaths.size)
       if (canMerge) {
@@ -330,17 +357,15 @@ case class InsertIntoHadoopFsRelationCommand(
         }
       }
 
-
-
       // update metastore partition metadata
       if (updatedPartitionPaths.isEmpty && staticPartitions.nonEmpty
         && partitionColumns.length == staticPartitions.size) {
         // Avoid empty static partition can't loaded to datasource table.
         val staticPathFragment =
           PartitioningUtils.getPathFragment(staticPartitions, partitionColumns)
-        refreshUpdatedPartitions(Set(staticPathFragment))
+        refreshUpdatedPartitions(Map(staticPathFragment -> BasicPartitionStats(0L, 0L)))
       } else {
-        refreshUpdatedPartitions(updatedPartitionPaths)
+        refreshUpdatedPartitions(updatedPartitionsWithStats)
       }
 
       // refresh cached files in FileIndex

@@ -262,6 +262,14 @@ private[hive] trait HiveClient {
       replace: Boolean,
       numDP: Int): Unit
 
+  def loadDynamicPartitionsWithReturn(
+      loadPath: String,
+      dbName: String,
+      tableName: String,
+      partSpec: java.util.LinkedHashMap[String, String],
+      replace: Boolean,
+      numDP: Int): Seq[CatalogTablePartition]
+
   /** Create a function in an existing database. */
   def createFunction(db: String, func: CatalogFunction): Unit
 
