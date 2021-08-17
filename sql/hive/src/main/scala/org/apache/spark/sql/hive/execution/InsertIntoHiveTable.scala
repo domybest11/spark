@@ -223,6 +223,7 @@ case class InsertIntoHiveTable(
     val jobConf = MergeUtils.mergeHiveTableOutput(sparkSession,
       table, tmpLocation, hadoopConf, numDynamicPartitions > 0)
     val outputPath = FileOutputFormat.getOutputPath(jobConf)
+    val partitionStatsEnabled = SQLConf.get.partitionStatsEnabled
     if (partition.nonEmpty) {
       if (numDynamicPartitions > 0) {
         val partitionStats: mutable.Map[TablePartitionSpec, BasicPartitionStats] =
@@ -277,7 +278,9 @@ case class InsertIntoHiveTable(
           partitionSpec,
           overwrite,
           numDynamicPartitions)
-        updateDynamicPartitionStats(externalCatalog, updatedPartitions, partitionStats)
+        if (partitionStatsEnabled) {
+          updateDynamicPartitionStats(externalCatalog, updatedPartitions, partitionStats)
+        }
       } else {
         // scalastyle:off
         // ifNotExists is only valid with static partition, refer to
@@ -351,7 +354,7 @@ case class InsertIntoHiveTable(
             inheritTableSpecs = inheritTableSpecs,
             isSrcLocal = false)
           // update partition stats
-          if (oldPart.isEmpty || doHiveOverwrite) {
+          if ((oldPart.isEmpty || doHiveOverwrite) && partitionStatsEnabled) {
             try {
               val updatedPartition = externalCatalog
                 .getPartitionOption(table.database, table.identifier.table, partitionSpec)

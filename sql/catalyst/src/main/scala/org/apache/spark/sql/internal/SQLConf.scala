@@ -3094,6 +3094,14 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
+  val PARTITION_STATS_ENABLED =
+    buildConf("spark.sql.partitionStats.enabled")
+      .doc("When true, Spark will update partitions of partitioned table with totalSize " +
+        "and numRows. This is only effective when insert empty partitions or " +
+        "insert overwrite partitions")
+      .booleanConf
+      .createWithDefault(false)
+
   /**
    * Holds information about keys that have been deprecated.
    *
@@ -3762,6 +3770,7 @@ class SQLConf extends Serializable with Logging {
 
   def mirrorExecute: Boolean = getConf(SQLConf.MIRROR_EXECUTE)
 
+  def partitionStatsEnabled: Boolean = getConf(SQLConf.PARTITION_STATS_ENABLED)
 
   /** ********************** SQLConf functionality methods ************ */
 
