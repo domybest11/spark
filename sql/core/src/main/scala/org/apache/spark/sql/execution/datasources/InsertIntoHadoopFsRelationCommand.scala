@@ -197,27 +197,29 @@ case class InsertIntoHadoopFsRelationCommand(
             }
           }
           // Update partition stats
-          try {
-            val updatedPartitionSpec = if (mode == SaveMode.Overwrite) {
-              updatedPartitions
-            } else {
-              newPartitions
+          if (SQLConf.get.partitionStatsEnabled) {
+            try {
+              val updatedPartitionSpec = if (mode == SaveMode.Overwrite) {
+                updatedPartitions
+              } else {
+                newPartitions
+              }
+              val updatedPartitionStat = sparkSession.sessionState.catalog.listPartitions(
+                catalogTable.get.identifier, Some(staticPartitions))
+                .filter(p => updatedPartitionSpec.contains(p.spec))
+                .map(p => {
+                  val stat = partitionStats(p.spec)
+                  val newProps = p.parameters ++
+                    Map("totalSize" -> stat.numBytes.toString, "numRows" -> stat.numRows.toString)
+                  p.copy(parameters = newProps)
+                })
+              if (updatedPartitionStat.nonEmpty) {
+                sparkSession.sessionState.catalog.alterPartitions(catalogTable.get.identifier,
+                  updatedPartitionStat)
+              }
+            } catch {
+              case e: Exception => logError("Update partitions statistics error", e)
             }
-            val updatedPartitionStat = sparkSession.sessionState.catalog.listPartitions(
-              catalogTable.get.identifier, Some(staticPartitions))
-              .filter(p => updatedPartitionSpec.contains(p.spec))
-              .map(p => {
-                val stat = partitionStats(p.spec)
-                val newProps = p.parameters ++
-                  Map("totalSize" -> stat.numBytes.toString, "numRows" -> stat.numRows.toString)
-                p.copy(parameters = newProps)
-            })
-            if (updatedPartitionStat.nonEmpty) {
-              sparkSession.sessionState.catalog.alterPartitions(catalogTable.get.identifier,
-                updatedPartitionStat)
-            }
-          } catch {
-            case e: Exception => logError("Update partitions statistics error", e)
           }
         }
       }
