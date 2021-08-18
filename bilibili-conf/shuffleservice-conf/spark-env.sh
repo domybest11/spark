@@ -18,7 +18,7 @@ export SPARK_DIST_CLASSPATH="$SPARK_DIST_CLASSPATH:${HADOOP_CLASSPATH}:${LZO_CLA
 
 #SPARK_SHUFFLE_OPTS="-verbose:gc -Xloggc:/data/log/jssz-spark31-ess/externalshuffleservice-gc-%t.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/data/log/jssz-spark31-ess/"
 export SPARK_DAEMON_MEMORY=10240m
-SPARK_SHUFFLE_OPTS="-verbose:gc -Xloggc:/data/log/jssz-spark31-ess/externalshuffleservice-gc-%t.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/data/log/jssz-spark31-ess/ -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=7030 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dspark.metrics.conf=/data/service/spark3.1/conf/metrics.properties"
+SPARK_SHUFFLE_OPTS="-verbose:gc -Xloggc:/data/log/jssz-spark31-ess/externalshuffleservice-gc-%t.log -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/data/log/jssz-spark31-ess/ -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=7030 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Dspark.metrics.conf=/data/service/spark3.1/conf/metrics.properties -Dlog4j.configuration=log4j-driver.properties"
 
 
 #
