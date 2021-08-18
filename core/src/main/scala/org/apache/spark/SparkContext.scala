@@ -271,10 +271,10 @@ class SparkContext(config: SparkConf) extends Logging {
    */
   def isStopped: Boolean = stopped.get()
 
-  private[spark] def statusStore: AppStatusStore = _statusStore
+  def statusStore: AppStatusStore = _statusStore
 
   // An asynchronous listener bus for Spark events
-  private[spark] def listenerBus: LiveListenerBus = _listenerBus
+  def listenerBus: LiveListenerBus = _listenerBus
 
   // This function allows components created by SparkEnv to be mocked in unit tests:
   private[spark] def createSparkEnv(
