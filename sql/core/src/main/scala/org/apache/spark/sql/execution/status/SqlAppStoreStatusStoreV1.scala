@@ -18,7 +18,9 @@
 package org.apache.spark.sql.execution.status
 
 import java.util.{List => JList}
+
 import scala.collection.mutable.ListBuffer
+
 import org.apache.hadoop.ipc.RPC
 import org.apache.hadoop.yarn.api.ApplicationClientProtocol
 import org.apache.hadoop.yarn.api.protocolrecords.GetApplicationReportRequest
@@ -36,8 +38,6 @@ import org.apache.spark.status.AppStatusStore
 import org.apache.spark.status.api.v1.{JobData, StageData, _}
 import org.apache.spark.ui.scope.RDDOperationGraph
 import org.apache.spark.util.{AppCostReporter, SqlTextTruncate, Utils}
-
-import scala.util.control.Breaks.{break, breakable}
 
 /**
  * A wrapper around a KVStore that provides methods for accessing the API data stored within.
