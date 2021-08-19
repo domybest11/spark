@@ -59,7 +59,7 @@ build:all:
         --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
         --data '{
          "bossPath":"'"$DEST_FILE_REMOTE_PATH"'",
-         "ciBranch":"'"$CI_BUILD_REF_NAME"'",
+         "ciBranch":"3.1",
          "ciTag":"'"$CI_COMMIT_TAG"'",
          "ciTime":"'"$START_BUILD_TIME"'",
          "ciUser":"'"$GITLAB_USER_LOGIN"'",
