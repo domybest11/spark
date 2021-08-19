@@ -37,7 +37,7 @@ import org.apache.spark.sql.execution.ui.{AppClientStatus, SQLAppStatusStore, SQ
 import org.apache.spark.status.AppStatusStore
 import org.apache.spark.status.api.v1.{JobData, StageData, _}
 import org.apache.spark.ui.scope.RDDOperationGraph
-import org.apache.spark.util.{AppCostReporter, Utils}
+import org.apache.spark.util.{AppCostReporter, SqlTextTruncate, Utils}
 
 /**
  * A wrapper around a KVStore that provides methods for accessing the API data stored within.
@@ -79,7 +79,7 @@ class SqlAppStoreStatusStoreV1(
           traceId = ""
         }
         // scalastyle:off
-         costMessage = s"使用资源消耗情况(${statement}), 内存: ${memorySeconds}(m*s)," +
+         costMessage = s"使用资源消耗情况(${SqlTextTruncate.getSqlIdentifier(statement).get}), 内存: ${memorySeconds}(m*s)," +
           s" CPU: ${vcoreSeconds}(c*s), 读数据量: ${inputUnit}, 写数据量: ${outputUnit}"
 
         val tags = Map[String, Any]("memory" -> memorySeconds, "cpu" -> vcoreSeconds, "readDataSize" -> inputBytes, "writeDataSize" -> outputBytes)
