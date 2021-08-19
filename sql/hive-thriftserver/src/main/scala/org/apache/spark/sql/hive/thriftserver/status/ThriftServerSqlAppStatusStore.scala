@@ -30,7 +30,7 @@ import org.apache.spark.sql.hive.thriftserver.ui.{HiveThriftServer2Listener, Liv
 import org.apache.spark.status.AppStatusStore
 import org.apache.spark.status.api.v1.{JobData, StageData, _}
 import org.apache.spark.ui.scope.RDDOperationGraph
-import org.apache.spark.util.{AppCostReporter, Utils}
+import org.apache.spark.util.{AppCostReporter, SqlTextTruncate, Utils}
 
 
 
@@ -105,7 +105,7 @@ class ThriftServerSqlAppStatusStore(
           traceId = ""
         }
         // scalastyle:off
-        executionMsg = s"使用资源消耗情况($statement), 内存: ${memorySeconds.toLong}(m*s)," +
+        executionMsg = s"使用资源消耗情况(${SqlTextTruncate.getSqlIdentifier(statement).get}), 内存: ${memorySeconds.toLong}(m*s)," +
           s" CPU: $vcoreSeconds(c*s), 读数据量: $inputUnit, 写数据量: $outputUnit"
 
         val tags = Map[String, Any]("memory" -> memorySeconds, "cpu" -> vcoreSeconds, "readDataSize" -> inputBytes, "writeDataSize" -> outputBytes)
