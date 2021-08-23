@@ -57,7 +57,7 @@ case class ExecutorMemoryRule(sparkConf: SparkConf) extends SparkConfRule {
         var executorMemory = originalExecutorMemory
 
         if (peakExecutorMemory == 0) {
-          executorMemory = math.min(originalExecutorMemory, 4096)
+          executorMemory = math.min(originalExecutorMemory, 3072)
           helper.addEffectiveRules(EXECUTOR_MEMORY)
         }
         if (peakExecutorMemory > 0) {
@@ -69,7 +69,8 @@ case class ExecutorMemoryRule(sparkConf: SparkConf) extends SparkConfRule {
             val originalExecutorMemoryOverhead =
               sparkConf.getSizeAsMb(config.EXECUTOR_MEMORY_OVERHEAD.key)
             val capacity = 28672 - originalExecutorMemoryOverhead
-            executorMemory = math.min(capacity, originalExecutorMemory + 1024)
+            executorMemory = math.min(capacity,
+              math.max(originalExecutorMemory, peakExecutorMemory) + 1024)
             helper.addEffectiveRules(EXECUTOR_MEMORY)
           }
         }
