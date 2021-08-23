@@ -32,10 +32,9 @@ test:
   script:
     - echo "test"
 
-build:all:
+build:shuffleservice:
   stage: build
   only:
-    - merge_requests
     - tags
   artifacts:
     paths:
@@ -69,8 +68,34 @@ build:all:
          "gitRepo":"'"$CI_PROJECT_NAME"'",
          "packMd5":"'"$DEST_FILE_MD5"'",
          "packName":"'"$DEST_FILE_NAME"'",
-         "packType":"tgz"
+         "packType":"tgz",
        }'
+
+build:client:
+  stage: build
+  only:
+    - tags
+  artifacts:
+    paths:
+      - ./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
+    expire_in: 2 week
+  script:
+    - dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.1-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -DskipTests -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
+
+package:client:
+  stage: package
+  tags:
+    - rider-shared-shell
+  only:
+    - master
+    - tags
+  script:
+    - docker build -f client.dockerfile -t hub.bilibili.co/datacenter-spark31/build.jssz-spark31-client:${CI_COMMIT_TAG} .
+    - docker push hub.bilibili.co/datacenter-spark31/build.jssz-spark31-client:${CI_COMMIT_TAG}
+    - /home/gitlab-runner/rider.py $CI_BUILD_ID $CI_COMMIT_REF_NAME $CI_COMMIT_SHA $CI_COMMIT_MESSAGE $GITLAB_USER_EMAIL datacenter.spark31.build.jssz-spark31-client hub.bilibili.co/datacenter-spark31/build.jssz-spark31-client:${CI_COMMIT_TAG} $CI_COMMIT_TAG
+  dependencies:
+    - build:client
+
 
 
 
