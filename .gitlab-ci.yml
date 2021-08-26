@@ -80,6 +80,9 @@ build:client:
       - ./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
     expire_in: 2 week
   script:
+    - export
+    - mv conf conf_bak
+    - mv bilibili-conf/client-conf conf
     - dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.1-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -DskipTests -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
 
 package:client:docker:
