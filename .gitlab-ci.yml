@@ -52,7 +52,7 @@ build:shuffleservice:
     - export DEST_FILE_MD5=`alterctl md5 $DEST_FILE_LOCAL_PATH`
     - alterctl fs upload $DEST_FILE_LOCAL_PATH $DEST_FILE_REMOTE_PATH --debug
     - |
-      curl -X POST 'http://uat-alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata' \
+      curl -X POST 'http://alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata' \
         --header 'Content-Type: application/json' \
         --header 'Accept: application/json' \
         --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
@@ -77,13 +77,19 @@ build:client:
     - tags
   artifacts:
     paths:
-      - ./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
+      - dest
     expire_in: 2 week
   script:
     - export
     - mv conf conf_bak
     - mv bilibili-conf/client-conf conf
+    - sed -i '' "s/hdfs:\/\/jssz\-bigdata\-ns4\/data\/spark\/production\/jars\/spark\-3.1\-20210806.zip/hdfs:\/\/jssz\-bigdata\-ns4\/data\/spark\/production\/jars\/spark\-3.1\-${CI_COMMIT_TAG}.zip/g" ./conf/spark-defaults.conf
     - dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.1-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -DskipTests -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
+    - mkdir -p dest/tmp
+    - mv *.tgz dest
+    - tar -zxvf dest/*.tgz -C dest/tmp
+    - zip dest/spark31_${CI_COMMIT_TAG}.zip dest/tmp/spark*/jars/*
+    - rm -rf dest/tmp
 
 package:client:docker:
   stage: package

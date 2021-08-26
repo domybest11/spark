@@ -15,7 +15,7 @@ RUN mkdir -p /data/service/ \
          /etc/kerberos-hadoop \
          /etc/security/keytabs
 
-COPY spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz /data/src/
+COPY dest/spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz /data/src/
 #WORKDIR /data/src/
 RUN tar zxvf /data/src/spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz -C /data/src/ \
 && rm -rf /data/src/spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8/conf/* \
