@@ -234,7 +234,7 @@ case class InsertIntoHiveTable(
           // exists or not before copying files. So if users drop the partition, and then do
           // insert overwrite to the same partition, the partition will have both old and new
           // data. We construct partition path. If the path exists, we delete it manually.
-          writtenParts.foreach { partPath =>
+          (writtenParts - "staticPart").foreach { partPath =>
             val dpMap = partPath._1.split("/").map { part =>
               val splitPart = part.split("=")
               assert(splitPart.size == 2, s"Invalid written partition path: $part")
