@@ -1,11 +1,8 @@
 
 package org.apache.spark.deploy
 
-import scala.collection.JavaConverters._
-
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.{config, Logging}
-import org.apache.spark.util.HttpClientUtils
 
 sealed trait SparkConfRule extends Logging {
 
@@ -45,14 +42,10 @@ case class ExecutorMemoryRule(sparkConf: SparkConf) extends SparkConfRule {
 //  implicit val formats = DefaultFormats
 
   override def doApply(helper: SparkConfHelper): Unit = {
-    val jobTag = sparkConf.getOption("spark.deploy.jobTag")
-    if (enabled(sparkConf) && jobTag.isDefined) {
-      val metrics = HttpClientUtils.getInstance().getJobHistoryMetric(jobTag.get).asScala
+    if (enabled(sparkConf) && helper.getJobTag().isDefined) {
+      val metrics = helper.getMetricByKey(PEAK_EXECUTOR_MEMORY)
       if (metrics != null) {
-//        val metricsMap = JsonMethods.parse(metrics).extract[Map[String, AnyVal]]
-        val peakExecutorMemory =
-          metrics.get(PEAK_EXECUTOR_MEMORY).map(_.asInstanceOf[Int]).getOrElse(-1)
-        logInfo(s"Get history peak executor memory $peakExecutorMemory")
+        val peakExecutorMemory = metrics.map(_.asInstanceOf[Int]).getOrElse(-1)
         val originalExecutorMemory = sparkConf.getSizeAsMb(config.EXECUTOR_MEMORY.key)
         var executorMemory = originalExecutorMemory
 
@@ -74,9 +67,35 @@ case class ExecutorMemoryRule(sparkConf: SparkConf) extends SparkConfRule {
             helper.addEffectiveRules(EXECUTOR_MEMORY)
           }
         }
-        logInfo(s"Rule ExecutorMemory set executor memory $executorMemory")
+        logInfo(s"Set Rule ExecutorMemory from ${originalExecutorMemory}m to ${executorMemory}m")
         helper.setConf(config.EXECUTOR_MEMORY.key, s"${executorMemory}m")
       }
+    }
+  }
+}
+
+case class AllocationRatioRule(sparkConf: SparkConf) extends SparkConfRule {
+
+  private[spark] val PEAK_ELAPSE_TIME = "costTime"
+
+  private[spark] val EXECUTOR_ALLOCATION_RATIO = "executorAllocationRatio"
+
+  override def doApply(helper: SparkConfHelper): Unit = {
+    if (enabled(sparkConf) && helper.getJobTag().isDefined) {
+      val metrics = helper.getMetricByKey(PEAK_ELAPSE_TIME)
+      val originalAllocationRatio = sparkConf.get(
+        config.DYN_ALLOCATION_EXECUTOR_ALLOCATION_RATIO.key)
+      var allocationRatio = originalAllocationRatio
+      if (metrics != null) {
+        val peakElapsedTime = metrics.map(_.asInstanceOf[Int]).getOrElse(-1)
+        logInfo(s"Get history job cost time $peakElapsedTime")
+        if (peakElapsedTime > 300000) {
+          helper.addEffectiveRules(EXECUTOR_ALLOCATION_RATIO)
+          allocationRatio = "1.0"
+        }
+      }
+      logInfo(s"Set Rule ExecutorAllocationRatio from $originalAllocationRatio to $allocationRatio")
+      helper.setConf(config.DYN_ALLOCATION_EXECUTOR_ALLOCATION_RATIO.key, s"${allocationRatio}")
     }
   }
 }

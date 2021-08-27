@@ -86,7 +86,7 @@ public class HttpClientUtils {
     public Map<String, Object> getJobHistoryMetric(String jobTag) {
       StringBuilder url = new StringBuilder();
       url.append("http://luckbear-api.bilibili.co/api/statistics/spark/").append(jobTag);
-      Optional<String> resp = HttpClientUtils.getInstance().doGet(url.toString(), 5);
+      Optional<String> resp = HttpClientUtils.getInstance().doGet(url.toString(), 10);
       if (resp.isPresent()) {
         try {
           ObjectMapper mapper = new ObjectMapper();
