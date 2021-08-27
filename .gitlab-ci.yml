@@ -97,7 +97,7 @@ build:client:
         --header 'Content-Type: application/json' \
         --header 'Accept: text/json' \
         --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
-        --data-raw '{
+        --data '{
           "bossPath":"'"$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME"'",
           "fileName":"'"$DEST_FILE_NAME"'",
            "replica": 100
