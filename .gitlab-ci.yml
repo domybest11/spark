@@ -93,13 +93,14 @@ build:client:
     - rm -rf dest/tmp
     - alterctl fs upload dest/$DEST_FILE_NAME $CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
     - |
-      curl -X POST 'http://alter.bilibili.co/api/alter/cicd/pack/hdfs/open/spark/jars/upload' \
+      curl --location --request POST 'http://alter.bilibili.co/api/alter/cicd/pack/hdfs/open/spark/jars/upload' \
         --header 'Content-Type: application/json' \
         --header 'Accept: text/json' \
         --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
-        --data '{
+        --data-raw '{
           "bossPath":"'"$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME"'",
-          "fileName":"'"$DEST_FILE_NAME"'"
+          "fileName":"'"$DEST_FILE_NAME"'",
+           "replica": 100
         }'
 
 package:client:docker:
