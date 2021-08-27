@@ -5,6 +5,7 @@ import scala.collection.mutable
 
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
+import org.apache.spark.util.HttpClientUtils
 
 class SparkConfHelper(sparkConf: SparkConf) extends Logging{
 
@@ -13,7 +14,12 @@ class SparkConfHelper(sparkConf: SparkConf) extends Logging{
   private val conf = new mutable.LinkedHashMap[String, String]()
   private val effectiveRules = new mutable.HashSet[String]()
 
-  private val rules = Seq(ExecutorMemoryRule(sparkConf), DataSourceGrayScaleRelease(sparkConf))
+  private lazy val jobTag = sparkConf.getOption("spark.deploy.jobTag")
+  private lazy val metrics = HttpClientUtils.getInstance().getJobHistoryMetric(jobTag.get)
+
+  private val rules = Seq(ExecutorMemoryRule(sparkConf),
+                            DataSourceGrayScaleRelease(sparkConf),
+                            AllocationRatioRule(sparkConf))
 
   def execute: Unit = {
     rules.foreach(r => r.apply(this))
@@ -25,6 +31,17 @@ class SparkConfHelper(sparkConf: SparkConf) extends Logging{
 
   def setConf(key: String, value: String): Unit = {
     conf.put(key, value)
+  }
+
+  def getMetricByKey(key: String): Option[AnyRef] = {
+    if (metrics == null) {
+      return null
+    }
+    Option(metrics.get(key))
+  }
+
+  def getJobTag(): Option[String] = {
+    jobTag
   }
 
   def applySparkConf: Unit = {
