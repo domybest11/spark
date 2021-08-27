@@ -95,7 +95,6 @@ build:client:
     - |
       curl --location --request POST 'http://alter.bilibili.co/api/alter/cicd/pack/hdfs/open/spark/jars/upload' \
         --header 'Content-Type: application/json' \
-        --header 'Accept: text/json' \
         --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
         --data '{
           "bossPath":"'"$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME"'",
