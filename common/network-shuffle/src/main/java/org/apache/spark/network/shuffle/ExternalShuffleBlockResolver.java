@@ -241,6 +241,7 @@ public class ExternalShuffleBlockResolver {
   }
 
   public void cleanShuffleMeta() {
+    long startTime = System.currentTimeMillis();
     Map<String, String[]> appIdToLocalDirs = new HashMap<>();
     for (Map.Entry<AppExecId, ExecutorShuffleInfo> entry : executors.entrySet()) {
       String appId = entry.getKey().appId;
@@ -254,6 +255,7 @@ public class ExternalShuffleBlockResolver {
         applicationRemoved(appId, false);
       }
     }
+    logger.info("Cleaning up meta cost {} ms", System.currentTimeMillis() - startTime);
   }
 
   public boolean checkLocalDirsExists(String[] localDirs) {
