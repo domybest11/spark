@@ -185,6 +185,89 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
     </script>
   }
 
+
+  private def makeTimelineByPagination(
+                            stages: Seq[v1.StageData],
+                            executors: Seq[v1.ExecutorSummary],
+                            appStartTime: Long,
+                            page: Int,
+                            pageSize: Int,
+                            totalPages: Int,
+                            totalJobs: Int,
+                            request: HttpServletRequest): Seq[Node] = {
+    val parameterId = request.getParameter("id")
+    require(parameterId != null && parameterId.nonEmpty, "Missing id parameter")
+    val jobId = parameterId.toInt
+    val stageEventJsonAsStrSeq = makeStageEvent(stages)
+    val executorsJsonAsStrSeq = makeExecutorEvent(executors)
+
+    val groupJsonArrayAsStr =
+      s"""
+         |[
+         |  {
+         |    'id': 'executors',
+         |    'content': '<div>Executors</div>${EXECUTORS_LEGEND}',
+         |  },
+         |  {
+         |    'id': 'stages',
+         |    'content': '<div>Stages</div>${STAGES_LEGEND}',
+         |  }
+         |]
+        """.stripMargin
+
+    val eventArrayAsStr =
+      (stageEventJsonAsStrSeq ++ executorsJsonAsStrSeq).mkString("[", ",", "]")
+    val timeLineUrl = s"${UIUtils.prependBaseUri(request, parent.basePath)}/jobs/job/?id=$jobId" +
+      s"&jobs.eventTimelinePageNumber=$page&jobs.eventTimelinePageSize=$pageSize"
+    <span class="expand-job-timeline">
+      <span class="expand-job-timeline-arrow arrow-closed"></span>
+      <a data-toggle="tooltip" title={ToolTips.STAGE_TIMELINE} data-placement="top">
+        Event Timeline
+      </a>
+    </span> ++
+      <div id="job-timeline" class="collapsed">
+        <div class="control-panel">
+          <div id="job-timeline-zoom-lock">
+            <input type="checkbox"></input>
+            <span>Enable zooming</span>
+          </div>
+          <div>
+            <form id={s"form-event-timeline-page"}
+                  method="get"
+                  action={timeLineUrl}
+                  class="form-inline justify-content-end"
+                  style="width: 50%; margin-left: auto; margin-bottom: 0px;">
+              <label>items:
+                {totalJobs}
+                .
+                {totalPages}
+                Pages. Jump to</label>
+              <input type="text"
+                     name="jobs.eventTimelinePageNumber"
+                     id={s"form-event-timeline-page-no"}
+                     value={page.toString}
+                     class="col-1 form-control"/>
+              <label>. Show</label>
+              <input type="text"
+                     id={s"form-event-timeline-page-size"}
+                     name="jobs.eventTimelinePageSize"
+                     value={pageSize.toString}
+                     class="col-1 form-control"/>
+              <label>items in a page.</label>
+              <button type="submit" id="form-event-timeline-page-button" class="btn btn-spark">
+                Go
+              </button>
+            </form>
+          </div>
+        </div>
+      </div> ++
+      <script type="text/javascript">
+        {Unparsed(s"drawJobTimeline(${groupJsonArrayAsStr}, ${eventArrayAsStr}, " +
+        s"${appStartTime}, ${UIUtils.getTimeZoneOffset()});")}
+      </script>
+  }
+
+
   def render(request: HttpServletRequest): Seq[Node] = {
     val parameterId = request.getParameter("id")
     require(parameterId != null && parameterId.nonEmpty, "Missing id parameter")
@@ -392,9 +475,70 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
 
     var content = summary
     val appStartTime = store.applicationInfo().attempts.head.startTime.getTime()
+    if (parent.sc.get.conf.getBoolean("spark.thriftserver.model.enabled", false) ||
+      parent.sc.get.conf.getBoolean("spark.kyuubi.model.enabled", false)) {
+      val eventTimelineParameterJobsPage = request.getParameter("jobs.eventTimelinePageNumber")
+      val eventTimelineParameterJobsPageSize = request.getParameter("jobs.eventTimelinePageSize")
+      var eventTimelineJobsPage = Option(eventTimelineParameterJobsPage).map(_.toInt).getOrElse(1)
+      var eventTimelineJobsPageSize =
+        Option(eventTimelineParameterJobsPageSize).map(_.toInt).getOrElse(50)
+      val totalJobs = activeStages.size + completedStages.size + failedStages.size
+      if (eventTimelineJobsPageSize < 1 || eventTimelineJobsPageSize > totalJobs) {
+        eventTimelineJobsPageSize = totalJobs
+      }
+      val eventTimelineTotalPages = if (eventTimelineJobsPageSize > 0) {
+        (totalJobs + eventTimelineJobsPageSize - 1) / eventTimelineJobsPageSize
+      } else {
+        0
+      }
+      if (eventTimelineJobsPage < 1 || eventTimelineJobsPage > eventTimelineTotalPages) {
+        eventTimelineJobsPage = 1
+      }
+      var from = (eventTimelineJobsPage - 1) * eventTimelineJobsPageSize
+      var to = from + eventTimelineJobsPageSize
+      if (from > totalJobs) {
+        from = 0
+        to = totalJobs - 1
+      }
 
-    content ++= makeTimeline((activeStages ++ completedStages ++ failedStages).toSeq,
-      store.executorList(false), appStartTime)
+      val eventTimelineParameterExecutorsPage = request.getParameter("jobs.eventTimelinePageNumber")
+      val eventTimelineParameterExecutorsPageSize = request
+        .getParameter("jobs.eventTimelinePageSize")
+      var eventTimelineExecutorsPage = Option(eventTimelineParameterExecutorsPage)
+        .map(_.toInt).getOrElse(1)
+      var eventTimelineExecutorsPageSize =
+        Option(eventTimelineParameterExecutorsPageSize).map(_.toInt).getOrElse(50)
+      val executors = store.executorList(false)
+      val totalExecutors = executors.size
+      if (eventTimelineExecutorsPageSize < 1 || eventTimelineExecutorsPageSize > totalExecutors) {
+        eventTimelineExecutorsPageSize = totalExecutors
+      }
+      val eventTimelineExecutorsTotalPages = if (eventTimelineExecutorsPageSize > 0) {
+        (totalExecutors + eventTimelineExecutorsPageSize - 1) / eventTimelineExecutorsPageSize
+      } else {
+        0
+      }
+      if (eventTimelineExecutorsPage < 1 || eventTimelineExecutorsPage > eventTimelineTotalPages) {
+        eventTimelineExecutorsPage = 1
+      }
+      var fromExecutors = (eventTimelineExecutorsPage - 1) * eventTimelineExecutorsPageSize
+      var toExecutors = fromExecutors + eventTimelineExecutorsPageSize
+      if (fromExecutors >= totalExecutors) {
+        fromExecutors = 0
+        toExecutors = totalExecutors-1
+      }
+      content ++= makeTimelineByPagination(
+        (activeStages ++ completedStages ++ failedStages).sortBy(_.submissionTime).slice(from, to),
+        executors.sortBy(_.addTime).slice(fromExecutors, toExecutors),
+        appStartTime, scala.math.max(eventTimelineJobsPage, eventTimelineExecutorsPage),
+        scala.math.max(eventTimelineJobsPageSize, eventTimelineExecutorsPageSize),
+        scala.math.max(eventTimelineTotalPages, eventTimelineExecutorsTotalPages),
+        scala.math.max(totalJobs, totalExecutors),
+        request)
+    } else {
+      content ++= makeTimeline((activeStages ++ completedStages ++ failedStages).toSeq,
+        store.executorList(false), appStartTime)
+    }
 
     val operationGraphContent = store.asOption(store.operationGraphForJob(jobId)) match {
       case Some(operationGraph) => UIUtils.showDagVizForJob(jobId, operationGraph)
