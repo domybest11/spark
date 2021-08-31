@@ -18,7 +18,7 @@
 package org.apache.spark.deploy
 
 import java.io.File
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import scala.collection.JavaConverters._
 
@@ -31,7 +31,7 @@ import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.server.{TransportServer, TransportServerBootstrap}
 import org.apache.spark.network.shuffle.ExternalBlockHandler
 import org.apache.spark.network.util.TransportConf
-import org.apache.spark.util.{ShutdownHookManager, Utils}
+import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}
 
 /**
  * Provides a server from which Executors can read shuffle files (rather than reading directly from
@@ -49,6 +49,9 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
 
   private val enabled = sparkConf.get(config.SHUFFLE_SERVICE_ENABLED)
   private val port = sparkConf.get(config.SHUFFLE_SERVICE_PORT)
+
+  private val cleanEnable = sparkConf.get(config.SHUFFLE_SERVICE_CLEAN_ENABLE)
+  private val cleanInterval = sparkConf.get(config.SHUFFLE_SERVICE_CLEAN_INTERNAL)
 
   private val registeredExecutorsDB = "registeredExecutors.ldb"
 
@@ -119,6 +122,12 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
     shuffleServiceSource.registerMetricSet(blockHandler.getAllMetrics)
     masterMetricsSystem.registerSource(shuffleServiceSource)
     masterMetricsSystem.start()
+    if (cleanEnable && cleanInterval > 0) {
+      val cleanScheduler = ThreadUtils.newDaemonSingleThreadScheduledExecutor("ess-meta-cleaner")
+      cleanScheduler.scheduleWithFixedDelay(() => blockHandler.cleanShuffleMeta(),
+        cleanInterval, cleanInterval, TimeUnit.SECONDS)
+      logInfo("Shuffle meta cleaner already started")
+    }
   }
 
   /** Clean up all shuffle files associated with an application that has exited. */

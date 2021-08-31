@@ -669,6 +669,16 @@ package object config {
       .booleanConf
       .createWithDefault(false)
 
+  private[spark] val SHUFFLE_SERVICE_CLEAN_ENABLE =
+    ConfigBuilder("spark.shuffle.service.clean.enable")
+      .booleanConf
+      .createWithDefault(true)
+
+  private[spark] val SHUFFLE_SERVICE_CLEAN_INTERNAL =
+    ConfigBuilder("spark.shuffle.service.clean.interval")
+      .timeConf(TimeUnit.SECONDS)
+      .createWithDefaultString("1h")
+
   private[spark] val SHUFFLE_SERVICE_FETCH_RDD_ENABLED =
     ConfigBuilder(Constants.SHUFFLE_SERVICE_FETCH_RDD_ENABLED)
       .doc("Whether to use the ExternalShuffleService for fetching disk persisted RDD blocks. " +
