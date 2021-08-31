@@ -240,6 +240,32 @@ public class ExternalShuffleBlockResolver {
     }
   }
 
+  public void cleanShuffleMeta() {
+    Map<String, String[]> appIdToLocalDirs = new HashMap<>();
+    for (Map.Entry<AppExecId, ExecutorShuffleInfo> entry : executors.entrySet()) {
+      String appId = entry.getKey().appId;
+      String[] localDirs = entry.getValue().localDirs;
+      appIdToLocalDirs.putIfAbsent(appId, localDirs);
+    }
+    for (String appId : appIdToLocalDirs.keySet()) {
+      boolean localDirsExists = checkLocalDirsExists(appIdToLocalDirs.get(appId));
+      if (!localDirsExists) {
+        logger.info("Cleaning up meta for application {}", appId);
+        applicationRemoved(appId, false);
+      }
+    }
+  }
+
+  public boolean checkLocalDirsExists(String[] localDirs) {
+    for (int i = 0; i < localDirs.length - 1; i++) {
+      File localDir = new File(localDirs[i]);
+      if (localDir.getParentFile().exists()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Removes all the files which cannot be served by the external shuffle service (non-shuffle and
    * non-RDD files) in any local directories associated with the finished executor.

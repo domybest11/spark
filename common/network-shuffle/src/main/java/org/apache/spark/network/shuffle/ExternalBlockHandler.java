@@ -285,6 +285,10 @@ public class ExternalBlockHandler extends RpcHandler {
     mergeManager.applicationRemoved(appId, cleanupLocalDirs);
   }
 
+  public void cleanShuffleMeta() {
+    blockManager.cleanShuffleMeta();
+  }
+
   /**
    * Clean up any non-shuffle files in any local directories associated with an finished executor.
    */
