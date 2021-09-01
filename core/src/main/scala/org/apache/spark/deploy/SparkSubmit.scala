@@ -361,7 +361,8 @@ private[spark] class SparkSubmit extends Logging {
 
       if (!Utils.isLocalUri(args.keytab)) {
         require(new File(args.keytab).exists(), s"Keytab file: ${args.keytab} does not exist")
-        UserGroupInformation.loginUserFromKeytab(args.principal, args.keytab)
+        val principal = args.principal.replace("_HOST", Utils.localCanonicalHostName())
+        UserGroupInformation.loginUserFromKeytab(principal, args.keytab)
       }
     }
 
@@ -833,6 +834,12 @@ private[spark] class SparkSubmit extends Logging {
       val principal = sparkConf.get("spark.executorEnv.EXECUTOR_PRINCIPAL")
         .replace("_HOST", Utils.localCanonicalHostName())
       sparkConf.set("spark.executorEnv.EXECUTOR_PRINCIPAL", principal)
+    }
+
+    if (sparkConf.contains("spark.kerberos.principal")) {
+      val principal = sparkConf.get("spark.kerberos.principal")
+        .replace("_HOST", Utils.localCanonicalHostName())
+      sparkConf.set("spark.kerberos.principal", principal)
     }
 
     // Resolve paths in certain spark properties

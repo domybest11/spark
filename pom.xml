@@ -1096,6 +1096,50 @@
         <scope>test</scope>
       </dependency>
       <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-hdfs</artifactId>
+      <version>${hadoop.version}</version>
+      <scope>${hadoop.deps.scope}</scope>
+        <exclusions>
+          <exclusion>
+            <artifactId>netty</artifactId>
+            <groupId>org.jboss.netty</groupId>
+          </exclusion>
+          <exclusion>
+            <artifactId>netty</artifactId>
+            <groupId>io.netty</groupId>
+          </exclusion>
+        <exclusion>
+          <groupId>asm</groupId>
+          <artifactId>asm</artifactId>
+        </exclusion>
+          <exclusion>
+          <groupId>xerces</groupId>
+          <artifactId>xercesImpl</artifactId>
+          </exclusion>
+          <exclusion>
+          <groupId>xml-apis</groupId>
+          <artifactId>xml-apis</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.sun.jersey</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.sun.jersey.jersey-test-framework</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+            <groupId>com.sun.jersey.contribs</groupId>
+            <artifactId>*</artifactId>
+          </exclusion>
+          <exclusion>
+          <groupId>commons-daemon</groupId>
+          <artifactId>commons-daemon</artifactId>
+          </exclusion>
+        </exclusions>
+      </dependency>
+      <dependency>
         <groupId>org.apache.hadoop</groupId>
         <artifactId>hadoop-client</artifactId>
         <version>${hadoop.version}</version>
@@ -2266,10 +2310,6 @@
           <exclusion>
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-common</artifactId>
-          </exclusion>
-          <exclusion>
-            <groupId>org.apache.hadoop</groupId>
-            <artifactId>hadoop-hdfs</artifactId>
           </exclusion>
           <exclusion>
             <groupId>org.apache.hive</groupId>
