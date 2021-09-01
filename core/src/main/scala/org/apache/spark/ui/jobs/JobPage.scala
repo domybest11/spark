@@ -217,8 +217,6 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
 
     val eventArrayAsStr =
       (stageEventJsonAsStrSeq ++ executorsJsonAsStrSeq).mkString("[", ",", "]")
-    val timeLineUrl = s"${UIUtils.prependBaseUri(request, parent.basePath)}/jobs/job/?id=$jobId" +
-      s"&jobs.eventTimelinePageNumber=$page&jobs.eventTimelinePageSize=$pageSize"
     <span class="expand-job-timeline">
       <span class="expand-job-timeline-arrow arrow-closed"></span>
       <a data-toggle="tooltip" title={ToolTips.STAGE_TIMELINE} data-placement="top">
@@ -232,9 +230,9 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
             <span>Enable zooming</span>
           </div>
           <div>
-            <form id={s"form-event-timeline-page"}
+            <form id={s"form-event-timeline-job-page"}
                   method="get"
-                  action={timeLineUrl}
+                  action=""
                   class="form-inline justify-content-end"
                   style="width: 50%; margin-left: auto; margin-bottom: 0px;">
               <label>items:
@@ -242,19 +240,20 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
                 .
                 {totalPages}
                 Pages. Jump to</label>
+              <input type="hidden" name="id" value={parameterId}/>
               <input type="text"
-                     name="jobs.eventTimelinePageNumber"
-                     id={s"form-event-timeline-page-no"}
+                     name="job.eventTimelinePageNumber"
+                     id={s"form-event-timeline-job-page-no"}
                      value={page.toString}
                      class="col-1 form-control"/>
               <label>. Show</label>
               <input type="text"
-                     id={s"form-event-timeline-page-size"}
-                     name="jobs.eventTimelinePageSize"
+                     id={s"form-event-timeline-job-page-size"}
+                     name="job.eventTimelinePageSize"
                      value={pageSize.toString}
                      class="col-1 form-control"/>
               <label>items in a page.</label>
-              <button type="submit" id="form-event-timeline-page-button" class="btn btn-spark">
+              <button type="submit" id="form-event-timeline-job-page-button" class="btn btn-spark">
                 Go
               </button>
             </form>
@@ -477,8 +476,8 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
     val appStartTime = store.applicationInfo().attempts.head.startTime.getTime()
     if (parent.sc.get.conf.getBoolean("spark.thriftserver.model.enabled", false) ||
       parent.sc.get.conf.getBoolean("spark.kyuubi.model.enabled", false)) {
-      val eventTimelineParameterJobsPage = request.getParameter("jobs.eventTimelinePageNumber")
-      val eventTimelineParameterJobsPageSize = request.getParameter("jobs.eventTimelinePageSize")
+      val eventTimelineParameterJobsPage = request.getParameter("job.eventTimelinePageNumber")
+      val eventTimelineParameterJobsPageSize = request.getParameter("job.eventTimelinePageSize")
       var eventTimelineJobsPage = Option(eventTimelineParameterJobsPage).map(_.toInt).getOrElse(1)
       var eventTimelineJobsPageSize =
         Option(eventTimelineParameterJobsPageSize).map(_.toInt).getOrElse(50)
@@ -501,9 +500,9 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
         to = totalJobs - 1
       }
 
-      val eventTimelineParameterExecutorsPage = request.getParameter("jobs.eventTimelinePageNumber")
+      val eventTimelineParameterExecutorsPage = request.getParameter("job.eventTimelinePageNumber")
       val eventTimelineParameterExecutorsPageSize = request
-        .getParameter("jobs.eventTimelinePageSize")
+        .getParameter("job.eventTimelinePageSize")
       var eventTimelineExecutorsPage = Option(eventTimelineParameterExecutorsPage)
         .map(_.toInt).getOrElse(1)
       var eventTimelineExecutorsPageSize =
