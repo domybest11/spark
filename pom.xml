@@ -1101,6 +1101,14 @@
       <version>${hadoop.version}</version>
       <scope>${hadoop.deps.scope}</scope>
         <exclusions>
+          <exclusion>
+            <artifactId>netty</artifactId>
+            <groupId>org.jboss.netty</groupId>
+          </exclusion>
+          <exclusion>
+            <artifactId>netty</artifactId>
+            <groupId>io.netty</groupId>
+          </exclusion>
         <exclusion>
           <groupId>asm</groupId>
           <artifactId>asm</artifactId>
