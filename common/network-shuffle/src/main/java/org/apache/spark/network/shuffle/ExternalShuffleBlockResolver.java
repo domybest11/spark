@@ -243,6 +243,7 @@ public class ExternalShuffleBlockResolver {
   public void cleanShuffleMeta() {
     long startTime = System.currentTimeMillis();
     Map<String, String[]> appIdToLocalDirs = new HashMap<>();
+    int cleanedApps = 0;
     for (Map.Entry<AppExecId, ExecutorShuffleInfo> entry : executors.entrySet()) {
       String appId = entry.getKey().appId;
       String[] localDirs = entry.getValue().localDirs;
@@ -253,13 +254,15 @@ public class ExternalShuffleBlockResolver {
       if (!localDirsExists) {
         logger.info("Cleaning up meta for application {}", appId);
         applicationRemoved(appId, false);
+        cleanedApps++;
       }
     }
-    logger.info("Cleaning up meta cost {} ms", System.currentTimeMillis() - startTime);
+    logger.info("Cleaning up meta of {}/{} app(s) cost {} ms", cleanedApps, appIdToLocalDirs.size(),
+        System.currentTimeMillis() - startTime);
   }
 
   public boolean checkLocalDirsExists(String[] localDirs) {
-    for (int i = 0; i < localDirs.length - 1; i++) {
+    for (int i = 0; i <= localDirs.length - 1; i++) {
       File localDir = new File(localDirs[i]);
       if (localDir.getParentFile().exists()) {
         return true;
