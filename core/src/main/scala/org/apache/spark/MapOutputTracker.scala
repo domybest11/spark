@@ -1310,7 +1310,7 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
   }
 
   def calculatePartitionStats(shuffleId: Int, numPartitions: Int): (Array[Long], Long) = {
-    val statuses = getStatuses(shuffleId, conf)
+    val statuses = getStatuses(shuffleId, conf)._1
     val totalSizes = new Array[Long](numPartitions)
     for (s <- statuses) {
       for (i <- 0 until numPartitions) {
