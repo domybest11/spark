@@ -21,7 +21,7 @@ import org.apache.spark.sql.catalyst.expressions
 import org.apache.spark.sql.catalyst.expressions.{CreateNamedStruct, DynamicPruningExpression, ListQuery, Literal}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution
-import org.apache.spark.sql.execution.{BaseSubqueryExec, InSubqueryExec, SparkPlan}
+import org.apache.spark.sql.execution.{BaseSubqueryExec, InBloomFilterSubqueryExec, InSubqueryExec, SparkPlan}
 
 case class PlanAdaptiveSubqueries(
     subqueryMap: Map[Long, BaseSubqueryExec]) extends Rule[SparkPlan] {
@@ -43,6 +43,9 @@ case class PlanAdaptiveSubqueries(
         InSubqueryExec(expr, subqueryMap(exprId.id), exprId)
       case expressions.DynamicPruningSubquery(value, _, _, _, _, exprId) =>
         DynamicPruningExpression(InSubqueryExec(value, subqueryMap(exprId.id), exprId))
+
+      case expressions.DynamicBloomFilterPruningSubquery(value, _, _, _, exprId) =>
+        DynamicPruningExpression(InBloomFilterSubqueryExec(value, subqueryMap(exprId.id), exprId))
     }
   }
 }
