@@ -316,7 +316,7 @@ class SparkContext(config: SparkConf) extends Logging {
 
   private[spark] def progressBar: Option[ConsoleProgressBar] = _progressBar
 
-  private[spark] def ui: Option[SparkUI] = _ui
+  def ui: Option[SparkUI] = _ui
 
   def uiWebUrl: Option[String] = _ui.map(_.webUrl)
 
