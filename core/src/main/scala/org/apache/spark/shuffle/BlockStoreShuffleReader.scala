@@ -21,7 +21,7 @@ import org.apache.spark._
 import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.io.CompressionCodec
 import org.apache.spark.serializer.SerializerManager
-import org.apache.spark.storage.{BlockId, BlockManager, BlockManagerId, ShuffleBlockFetcherIterator}
+import org.apache.spark.storage.{BlockManager, ShuffleBlockFetcherIterator}
 import org.apache.spark.util.CompletionIterator
 import org.apache.spark.util.collection.ExternalSorter
 
@@ -30,7 +30,10 @@ import org.apache.spark.util.collection.ExternalSorter
  */
 private[spark] class BlockStoreShuffleReader[K, C](
     handle: BaseShuffleHandle[K, _, C],
-    blocksByAddress: Iterator[(BlockManagerId, Seq[(BlockId, Long, Int)])],
+    startMapIndex: Int,
+    endMapIndex: Int,
+    startPartition: Int,
+    endPartition: Int,
     context: TaskContext,
     readMetrics: ShuffleReadMetricsReporter,
     serializerManager: SerializerManager = SparkEnv.get.serializerManager,
@@ -73,7 +76,8 @@ private[spark] class BlockStoreShuffleReader[K, C](
       blockManager.blockStoreClient,
       blockManager,
       mapOutputTracker,
-      blocksByAddress,
+      mapOutputTracker.getMapSizesByExecutorId(handle.shuffleId, startMapIndex, endMapIndex,
+        startPartition, endPartition),
       serializerManager.wrapStream,
       // Note: we use getSizeAsMb when no suffix is provided for backwards compatibility
       SparkEnv.get.conf.get(config.REDUCER_MAX_SIZE_IN_FLIGHT) * 1024 * 1024,
@@ -96,14 +100,14 @@ private[spark] class BlockStoreShuffleReader[K, C](
       serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
     }
 
-//    var foundDataSkew: Boolean = false
-//    if (dep.partitioner != null) {
-//      foundDataSkew = mapOutputTracker.checkDataSkewTask(handle.shuffleId,
-//        dep.partitioner.numPartitions, startPartition, endPartition)
-//    }
-//    if (foundDataSkew) {
-//      context.getLocalProperties.setProperty("spark.sql.autoDetectDataSkew", "true")
-//    }
+    var foundDataSkew: Boolean = false
+    if (dep.partitioner != null) {
+      foundDataSkew = mapOutputTracker.checkDataSkewTask(handle.shuffleId,
+        dep.partitioner.numPartitions, startPartition, endPartition)
+    }
+    if (foundDataSkew) {
+      context.getLocalProperties.setProperty("spark.sql.autoDetectDataSkew", "true")
+    }
 
     // Update the context task metrics for each record read.
     val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
