@@ -90,7 +90,7 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
     val sqlExecutionList: Seq[SQLExecutionUIData] = appStatusStore.executionsList
       .filterNot(sqlExecution => sqlExecution.statement == null ||
         sqlExecution.statement.equals(""))
-    if (null == sqlExecutionList && sqlExecutionList.isEmpty) {
+    if (null == sqlExecutionList || sqlExecutionList.isEmpty) {
       return
     }
     sqlExecutionList.filter(!_.finishAndReport).foreach(executionInfo => {

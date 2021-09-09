@@ -80,8 +80,8 @@ class ThriftServerAppStatusScheduler extends Logging{
 
    def sendPeriodlyKafka(): Unit = {
      logDebug("starting to send metrics to Kafka periodically")
-    var sqlExecutionList: Seq[LiveExecutionData] = listener.getExecutionList
-    if (null == sqlExecutionList && sqlExecutionList.isEmpty) {
+    val sqlExecutionList: Seq[LiveExecutionData] = listener.getExecutionList
+    if (null == sqlExecutionList || sqlExecutionList.isEmpty) {
       return
     }
     sqlExecutionList.filter(!_.finishOrErroAndReport).foreach(executionInfo => {
