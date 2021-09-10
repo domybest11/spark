@@ -24,8 +24,6 @@ import java.util.concurrent.ExecutorService
 
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 
-import com.google.common.base.Throwables
-
 import org.apache.spark.{ShuffleDependency, SparkConf, SparkEnv}
 import org.apache.spark.annotation.Since
 import org.apache.spark.internal.Logging
@@ -33,9 +31,11 @@ import org.apache.spark.internal.config._
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer, NioManagedBuffer}
 import org.apache.spark.network.netty.SparkTransportConf
+import org.apache.spark.network.server.BlockPushNonFatalFailure
 import org.apache.spark.network.shuffle.BlockPushingListener
 import org.apache.spark.network.shuffle.ErrorHandler.BlockPushErrorHandler
 import org.apache.spark.network.util.TransportConf
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.ShufflePushCompletion
 import org.apache.spark.shuffle.ShuffleBlockPusher._
 import org.apache.spark.storage.{BlockId, BlockManagerId, ShufflePushBlockId}
 import org.apache.spark.util.{ThreadUtils, Utils}
@@ -63,6 +63,9 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
   private[this] val errorHandler = createErrorHandler()
   // VisibleForTesting
   private[shuffle] val unreachableBlockMgrs = new HashSet[BlockManagerId]()
+  private[this] var shuffleId = -1
+  private[this] var mapIndex = -1
+  private[this] var pushCompletionNotified = false
 
   // VisibleForTesting
   private[shuffle] def createErrorHandler(): BlockPushErrorHandler = {
@@ -78,13 +81,16 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
         if (t.getCause != null && t.getCause.isInstanceOf[FileNotFoundException]) {
           return false
         }
-        val errorStackTraceString = Throwables.getStackTraceAsString(t)
-        // If the block is too late or the invalid block push, there is no need to retry it
-        !errorStackTraceString.contains(
-          BlockPushErrorHandler.TOO_LATE_OR_STALE_BLOCK_PUSH_MESSAGE_SUFFIX)
+        // If the block is too late or the invalid block push or the attempt is not the latest one,
+        // there is no need to retry it
+        !(t.isInstanceOf[BlockPushNonFatalFailure] &&
+          BlockPushNonFatalFailure.
+            shouldNotRetryErrorCode(t.asInstanceOf[BlockPushNonFatalFailure].getReturnCode));
       }
     }
   }
+  // VisibleForTesting
+  private[shuffle] def isPushCompletionNotified = pushCompletionNotified
 
   /**
    * Initiates the block push.
@@ -102,11 +108,15 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
       mapIndex: Int): Unit = {
     val numPartitions = dep.partitioner.numPartitions
     val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")
+    this.mapIndex = mapIndex
     val requests = prepareBlockPushRequests(numPartitions, mapIndex, dep.shuffleId,
       dep.shuffleMergeId, dataFile, partitionLengths, dep.getMergerLocs, transportConf)
     // Randomize the orders of the PushRequest, so different mappers pushing blocks at the same
     // time won't be pushing the same ranges of shuffle partitions.
     pushRequests ++= Utils.randomize(requests)
+    if (pushRequests.isEmpty) {
+      notifyDriverAboutPushCompletion()
+    }
 
     submitTask(() => {
       tryPushUpToMax()
@@ -212,7 +222,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
       // Initiating a connection and pushing blocks to a remote shuffle service is always handled by
       // the block-push-threads. We should not initiate the connection creation in the
       // blockPushListener callbacks which are invoked by the netty eventloop because:
-      // 1. TrasportClient.createConnection(...) blocks for connection to be established and it's
+      // 1. TransportClient.createConnection(...) blocks for connection to be established and it's
       // recommended to avoid any blocking operations in the eventloop;
       // 2. The actual connection creation is a task that gets added to the task queue of another
       // eventloop which could have eventloops eventually blocking each other.
@@ -242,10 +252,16 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
         handleResult(PushResult(blockId, exception))
       }
     }
+    // In addition to randomizing the order of the push requests, further randomize the order
+    // of blocks within the push request to further reduce the likelihood of shuffle server side
+    // collision of pushed blocks. This does not increase the cost of reading unmerged shuffle
+    // files on the executor side, because we are still reading MB-size chunks and only randomize
+    // the in-memory sliced buffers post reading.
+    val (blockPushIds, blockPushBuffers) = Utils.randomize(blockIds.zip(
+      sliceReqBufferIntoBlockBuffers(request.reqBuffer, request.blocks.map(_._2)))).unzip
     SparkEnv.get.blockManager.blockStoreClient.pushBlocks(
-      address.host, address.port, blockIds.toArray,
-      sliceReqBufferIntoBlockBuffers(request.reqBuffer, request.blocks.map(_._2)),
-      blockPushListener)
+      address.host, address.port, blockPushIds.toArray,
+      blockPushBuffers.toArray, blockPushListener)
   }
 
   /**
@@ -322,7 +338,27 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
         s"stop.")
       return false
     } else {
+      if (remainingBlocks.isEmpty && pushRequests.isEmpty && deferredPushRequests.isEmpty &&
+        !pushCompletionNotified) {
+        notifyDriverAboutPushCompletion()
+        pushCompletionNotified = true
+      }
       remainingBlocks.isEmpty && (pushRequests.nonEmpty || deferredPushRequests.nonEmpty)
+    }
+  }
+
+  /**
+   * Notify the driver via the saved RPC endpoint about all the blocks generated by the current
+   * map task having been pushed. This enables the DAGScheduler to finalize shuffle merge as soon
+   * as sufficient map tasks have completed push instead of always waiting for a fixed amount of
+   * time.
+   */
+  private def notifyDriverAboutPushCompletion(): Unit = {
+    assert(shuffleId >= 0 && mapIndex >= 0)
+    val msg = ShufflePushCompletion(shuffleId, mapIndex)
+    SparkEnv.driverRpcEndpoint match {
+      case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because executor has not yet connected to driver")
     }
   }
 
@@ -335,7 +371,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
    * manner to make sure each target location receives shuffle blocks belonging to the same set
    * of partition ranges. 0-length blocks and blocks that are large enough will be skipped.
    *
-   * @param numPartitions sumber of shuffle partitions in the shuffle file
+   * @param numPartitions number of shuffle partitions in the shuffle file
    * @param partitionId map index of the current mapper
    * @param shuffleId shuffleId of current shuffle
    * @param shuffleMergeId shuffleMergeId is used to uniquely identify merging process

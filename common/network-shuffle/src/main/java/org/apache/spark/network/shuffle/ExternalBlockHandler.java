@@ -17,7 +17,6 @@
 
 package org.apache.spark.network.shuffle;
 
-import com.google.common.base.Preconditions;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -26,17 +25,19 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricSet;
+import com.codahale.metrics.RatioGauge;
 import com.codahale.metrics.Timer;
 import com.codahale.metrics.Counter;
-import com.google.common.collect.Sets;
 import com.google.common.annotations.VisibleForTesting;
-import org.apache.spark.network.client.StreamCallbackWithID;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,7 +52,9 @@ import org.apache.spark.network.server.OneForOneStreamManager.StreamState;
 import org.apache.spark.network.server.RpcHandler;
 import org.apache.spark.network.server.StreamManager;
 import org.apache.spark.network.shuffle.ExternalShuffleBlockResolver.AppExecId;
+import org.apache.spark.network.shuffle.checksum.Cause;
 import org.apache.spark.network.shuffle.protocol.*;
+import org.apache.spark.network.util.TimerWithCustomTimeUnit;
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 import org.apache.spark.network.util.TransportConf;
 
@@ -240,6 +243,14 @@ public class ExternalBlockHandler extends RpcHandler
       } finally {
         responseDelayContext.stop();
       }
+    } else if (msgObj instanceof DiagnoseCorruption) {
+      DiagnoseCorruption msg = (DiagnoseCorruption) msgObj;
+      checkAuth(client, msg.appId);
+      Cause cause = blockManager.diagnoseShuffleBlockCorruption(
+        msg.appId, msg.execId, msg.shuffleId, msg.mapId, msg.reduceId, msg.checksum, msg.algorithm);
+      // In any cases of the error, diagnoseShuffleBlockCorruption should return UNKNOWN_ISSUE,
+      // so it should always reply as success.
+      callback.onSuccess(new CorruptionCause(cause).toByteBuffer());
     } else {
       throw new UnsupportedOperationException("Unexpected message: " + msgObj);
     }
@@ -319,20 +330,6 @@ public class ExternalBlockHandler extends RpcHandler
     blockManager.executorRemoved(executorId, appId);
   }
 
-  /**
-   * Register an (application, executor) with the given shuffle info.
-   *
-   * The "re-" is meant to highlight the intended use of this method -- when this service is
-   * restarted, this is used to restore the state of executors from before the restart.  Normal
-   * registration will happen via a message handled in receive()
-   *
-   * @param appExecId
-   * @param executorInfo
-   */
-  public void reregisterExecutor(AppExecId appExecId, ExecutorShuffleInfo executorInfo) {
-    blockManager.registerExecutor(appExecId.appId, appExecId.execId, executorInfo);
-  }
-
   public void close() {
     blockManager.close();
   }
@@ -351,13 +348,25 @@ public class ExternalBlockHandler extends RpcHandler
   public class ShuffleMetrics implements MetricSet {
     private final Map<String, Metric> allMetrics;
     // Time latency for open block request in ms
-    private final Timer openBlockRequestLatencyMillis = new Timer();
+    private final Timer openBlockRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for executor registration latency in ms
-    private final Timer registerExecutorRequestLatencyMillis = new Timer();
+    private final Timer registerExecutorRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for processing fetch merged blocks meta request latency in ms
-    private final Timer fetchMergedBlocksMetaLatencyMillis = new Timer();
+    private final Timer fetchMergedBlocksMetaLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for processing finalize shuffle merge request latency in ms
-    private final Timer finalizeShuffleMergeLatencyMillis = new Timer();
+    private final Timer finalizeShuffleMergeLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    // Block transfer rate in blocks per second
+    private final Meter blockTransferRate = new Meter();
+    // Block fetch message rate per second. When using non-batch fetches
+    // (`OpenBlocks` or `FetchShuffleBlocks` with `batchFetchEnabled` as false), this will be the
+    // same as the `blockTransferRate`. When batch fetches are enabled, this will represent the
+    // number of batch fetches, and `blockTransferRate` will represent the number of blocks
+    // returned by the fetches.
+    private final Meter blockTransferMessageRate = new Meter();
     // Block transfer rate in byte per second
     private final Meter blockTransferRateBytes = new Meter();
     // Number of active connections to the shuffle service
@@ -371,7 +380,20 @@ public class ExternalBlockHandler extends RpcHandler
       allMetrics.put("registerExecutorRequestLatencyMillis", registerExecutorRequestLatencyMillis);
       allMetrics.put("fetchMergedBlocksMetaLatencyMillis", fetchMergedBlocksMetaLatencyMillis);
       allMetrics.put("finalizeShuffleMergeLatencyMillis", finalizeShuffleMergeLatencyMillis);
+      allMetrics.put("blockTransferRate", blockTransferRate);
+      allMetrics.put("blockTransferMessageRate", blockTransferMessageRate);
       allMetrics.put("blockTransferRateBytes", blockTransferRateBytes);
+      allMetrics.put("blockTransferAvgSize_1min", new RatioGauge() {
+        @Override
+        protected Ratio getRatio() {
+          return Ratio.of(
+              blockTransferRateBytes.getOneMinuteRate(),
+              // use blockTransferMessageRate here instead of blockTransferRate to represent the
+              // average size of the disk read / network message which has more operational impact
+              // than the actual size of the block
+              blockTransferMessageRate.getOneMinuteRate());
+        }
+      });
       allMetrics.put("registeredExecutorsSize",
                      (Gauge<Integer>) () -> blockManager.getRegisteredExecutorsSize());
       allMetrics.put("numActiveConnections", activeConnections);
@@ -389,6 +411,7 @@ public class ExternalBlockHandler extends RpcHandler
     private int index = 0;
     private final Function<Integer, ManagedBuffer> blockDataForIndexFn;
     private final int size;
+    private boolean requestForMergedBlockChunks;
 
     ManagedBufferIterator(OpenBlocks msg) {
       String appId = msg.appId;
@@ -501,6 +524,8 @@ public class ExternalBlockHandler extends RpcHandler
     public ManagedBuffer next() {
       final ManagedBuffer block = blockDataForIndexFn.apply(index);
       index += 2;
+      metrics.blockTransferRate.mark();
+      metrics.blockTransferMessageRate.mark();
       metrics.blockTransferRateBytes.mark(block != null ? block.size() : 0);
       return block;
     }
@@ -548,12 +573,17 @@ public class ExternalBlockHandler extends RpcHandler
           reduceIdx = 0;
           mapIdx += 1;
         }
+        metrics.blockTransferRate.mark();
       } else {
         assert(reduceIds[mapIdx].length == 2);
+        int startReduceId = reduceIds[mapIdx][0];
+        int endReduceId = reduceIds[mapIdx][1];
         block = blockManager.getContinuousBlocksData(appId, execId, shuffleId, mapIds[mapIdx],
-          reduceIds[mapIdx][0], reduceIds[mapIdx][1]);
+          startReduceId, endReduceId);
         mapIdx += 1;
+        metrics.blockTransferRate.mark(endReduceId - startReduceId);
       }
+      metrics.blockTransferMessageRate.mark();
       metrics.blockTransferRateBytes.mark(block != null ? block.size() : 0);
       return block;
     }

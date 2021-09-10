@@ -1402,7 +1402,7 @@ package object config {
     ConfigBuilder("spark.shuffle.checksum.enabled")
       .doc("Whether to calculate the checksum of shuffle output. If enabled, Spark will try " +
         "its best to tell if shuffle data corruption is caused by network or disk or others.")
-      .version("3.3.0")
+      .version("3.2.0")
       .booleanConf
       .createWithDefault(true)
 
@@ -1410,7 +1410,7 @@ package object config {
     ConfigBuilder("spark.shuffle.checksum.algorithm")
       .doc("The algorithm used to calculate the checksum. Currently, it only supports" +
         " built-in algorithms of JDK.")
-      .version("3.3.0")
+      .version("3.2.0")
       .stringConf
       .transform(_.toUpperCase(Locale.ROOT))
       .checkValue(Set("ADLER32", "CRC32").contains, "Shuffle checksum algorithm " +
@@ -2122,6 +2122,31 @@ package object config {
       .timeConf(TimeUnit.SECONDS)
       .checkValue(_ >= 0L, "Timeout must be >= 0.")
       .createWithDefaultString("10s")
+
+
+  private[spark] val PUSH_BASED_SHUFFLE_MERGE_FINALIZE_THREADS =
+    ConfigBuilder("spark.shuffle.push.merge.finalizeThreads")
+      .doc("Specify the number of threads used by DAGScheduler to finalize shuffle merge. " +
+        "Since it could potentially take seconds for a large shuffle to finalize, having " +
+        "multiple threads helps DAGScheduler to handle multiple concurrent shuffle merge " +
+        "finalize requests when push-based shuffle is enabled.")
+      .intConf
+      .createWithDefault(3)
+
+  private[spark] val PUSH_BASED_SHUFFLE_SIZE_MIN_SHUFFLE_SIZE_TO_WAIT =
+    ConfigBuilder("spark.shuffle.push.minShuffleSizeToWait")
+      .doc("The min size of total shuffle size for DAGScheduler to actually wait for merge " +
+        "finalization when push based shuffle is enabled.")
+      .bytesConf(ByteUnit.BYTE)
+      .createWithDefaultString("500m")
+
+  private[spark] val PUSH_BASED_SHUFFLE_MIN_PUSH_RATIO =
+    ConfigBuilder("spark.shuffle.push.minPushRatio")
+      .doc("The min percentage of map tasks that have completed pushing their shuffle output " +
+        "for DAGScheduler to start merge finalization.")
+      .doubleConf
+      .createWithDefault(1.0)
+
 
   private[spark] val SHUFFLE_MERGER_MAX_RETAINED_LOCATIONS =
     ConfigBuilder("spark.shuffle.push.maxRetainedMergerLocations")

@@ -15,18 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.spark.network.client;
+package org.apache.spark.network.shuffle.checksum;
 
-import java.nio.ByteBuffer;
-
-public interface StreamCallbackWithID extends StreamCallback {
-  String getID();
-
-  /**
-   * Response to return to client upon the completion of a stream. Currently only invoked in
-   * {@link org.apache.spark.network.server.TransportRequestHandler#processStreamUpload}
-   */
-  default ByteBuffer getCompletionResponse() {
-    return ByteBuffer.allocate(0);
-  }
+/**
+ * The cause of shuffle data corruption.
+ */
+public enum Cause {
+  DISK_ISSUE, NETWORK_ISSUE, UNKNOWN_ISSUE, CHECKSUM_VERIFY_PASS, UNSUPPORTED_CHECKSUM_ALGORITHM
 }
