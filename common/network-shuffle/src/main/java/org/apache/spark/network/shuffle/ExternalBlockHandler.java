@@ -82,9 +82,12 @@ public class ExternalBlockHandler extends RpcHandler
   public ExternalBlockHandler(TransportConf conf, File registeredExecutorFile)
     throws IOException {
     this(new OneForOneStreamManager(),
-      new ExternalShuffleBlockResolver(conf, registeredExecutorFile),
-      new NoOpMergedShuffleFileManager(conf));
-  }
+            new ExternalShuffleBlockResolver(conf, registeredExecutorFile),
+            conf.get("spark.shuffle.push.enabled",
+                    "false").equals("true") ?
+      new RemoteBlockPushResolver(conf) :
+      new NoOpMergedShuffleFileManager(conf)) ;
+    }
 
   public ExternalBlockHandler(
       TransportConf conf,
