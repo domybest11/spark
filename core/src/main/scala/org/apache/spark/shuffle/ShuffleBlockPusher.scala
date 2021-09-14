@@ -105,10 +105,11 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
       dataFile: File,
       partitionLengths: Array[Long],
       dep: ShuffleDependency[_, _, _],
-      mapIndex: Int): Unit = {
+      mapIndex: Int, shuffleId: Int = -1): Unit = {
     val numPartitions = dep.partitioner.numPartitions
     val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")
     this.mapIndex = mapIndex
+    this.shuffleId = shuffleId
     val requests = prepareBlockPushRequests(numPartitions, mapIndex, dep.shuffleId,
       dep.shuffleMergeId, dataFile, partitionLengths, dep.getMergerLocs, transportConf)
     // Randomize the orders of the PushRequest, so different mappers pushing blocks at the same
