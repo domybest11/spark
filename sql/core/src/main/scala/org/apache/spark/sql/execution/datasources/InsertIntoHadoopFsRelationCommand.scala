@@ -38,6 +38,7 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command._
+import org.apache.spark.sql.execution.datasources.FileFormatWriter.logError
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PartitionOverwriteMode
 import org.apache.spark.sql.merge.MergeUtils
@@ -235,18 +236,26 @@ case class InsertIntoHadoopFsRelationCommand(
 
 
       val updatedPartitionsWithStats =
-        FileFormatWriter.write(
-          sparkSession = sparkSession,
-          plan = child,
-          fileFormat = fileFormat,
-          committer = committer,
-          outputSpec = FileFormatWriter.OutputSpec(
-            committerOutputPath.toString, customPartitionLocations, outputColumns),
-          hadoopConf = hadoopConf,
-          partitionColumns = partitionColumns,
-          bucketSpec = bucketSpec,
-          statsTrackers = Seq(basicWriteJobStatsTracker(hadoopConf)),
-          options = options) - "staticPart"
+        try {
+          FileFormatWriter.write(
+            sparkSession = sparkSession,
+            plan = child,
+            fileFormat = fileFormat,
+            committer = committer,
+            outputSpec = FileFormatWriter.OutputSpec(
+              committerOutputPath.toString, customPartitionLocations, outputColumns),
+            hadoopConf = hadoopConf,
+            partitionColumns = partitionColumns,
+            bucketSpec = bucketSpec,
+            statsTrackers = Seq(basicWriteJobStatsTracker(hadoopConf)),
+            options = options) - "staticPart"
+        } catch {
+          case cause: SparkException =>
+            if (canMerge) {
+              fs.delete(qualifiedOutputPath, true)
+            }
+            throw cause
+        }
 
       var updatedPartitionPaths = updatedPartitionsWithStats.keySet
       logInfo("updated partition paths " + updatedPartitionPaths.mkString(","))
