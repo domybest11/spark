@@ -202,10 +202,10 @@ class SqlMarioListener(conf: SparkConf,
     speculativeTask: SparkListenerSpeculativeTaskSubmitted): Unit = {
   }
 
-  override def onOtherEvent(event: SparkListenerEvent): Unit = {
+  override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
     case e: SparkListenerSQLExecutionStart => onExecutionStart(e)
     case e: SparkListenerSQLExecutionEnd => onExecutionEnd(e)
-    case _ =>
+    case _ => // Ignore
   }
 
   override def onResourceProfileAdded(event: SparkListenerResourceProfileAdded): Unit = {

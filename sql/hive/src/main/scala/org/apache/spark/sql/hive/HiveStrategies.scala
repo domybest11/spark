@@ -21,6 +21,7 @@ import java.io.IOException
 import java.util.{Locale, Random}
 
 import org.apache.hadoop.fs.{FileSystem, Path}
+
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.expressions._
@@ -29,7 +30,7 @@ import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoDir, InsertIntoSta
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Util.assertNoNullTypeInSchema
 import org.apache.spark.sql.execution._
-import org.apache.spark.sql.execution.command.{CreateDataSourceTableAsSelectCommand, CreateTableCommand, DDLUtils}
+import org.apache.spark.sql.execution.command.{CreateDataSourceTableAsSelectCommand, CreateTableCommand, DataWritingCommand, DDLUtils}
 import org.apache.spark.sql.execution.datasources.{CreateTable, DataSourceStrategy, InsertIntoHadoopFsRelationCommand}
 import org.apache.spark.sql.hive.RepartitionBeforeWriteHelper._
 import org.apache.spark.sql.hive.execution._
@@ -255,112 +256,98 @@ case class RepartitionBeforeWriteHive(session: SparkSession) extends Rule[Logica
     }
   }
 
-  def addRepartition(plan: LogicalPlan): LogicalPlan = plan match {
-    case i @ InsertIntoHiveTable(table, partition, query, _, _, _)
-      if query.resolved && table.bucketSpec.isEmpty && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = partition.filter(_._2.isEmpty).keys
-        .flatMap(name => query.output.find(_.name == name)).toSeq
-      if (dynamicPartitionColumns.isEmpty) {
-        i.copy(query =
-          RepartitionByExpression(
-            Seq.empty,
-            query,
-            conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
-      } else {
-        val extended = dynamicPartitionColumns ++ dynamicPartitionExtraExpression(
-          conf.getConf(SQLConf.DYNAMIC_PARTITION_INSERTION_REPARTITION_NUM))
-        i.copy(query =
-          RepartitionByExpression(
-            extended,
-            query,
-            conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
-      }
-
-    case c @ CreateHiveTableAsSelectCommand(table, query, _, _)
-      if query.resolved && table.bucketSpec.isEmpty && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns =
-        query.output.filter(attr => table.partitionColumnNames.contains(attr.name))
-      if (dynamicPartitionColumns.isEmpty) {
-        c.copy(query =
-          RepartitionByExpression(
-            Seq.empty,
-            query,
-            conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
-      } else {
-        val extended = dynamicPartitionColumns ++ dynamicPartitionExtraExpression(
-          conf.getConf(SQLConf.DYNAMIC_PARTITION_INSERTION_REPARTITION_NUM))
-        c.copy(query =
-          RepartitionByExpression(
-            extended,
-            query,
-            conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
-      }
-
-    case o @ OptimizedCreateHiveTableAsSelectCommand(table, query, _, _)
-      if query.resolved && table.bucketSpec.isEmpty && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns =
-        query.output.filter(attr => table.partitionColumnNames.contains(attr.name))
-      if (dynamicPartitionColumns.isEmpty) {
-        o.copy(query =
-          RepartitionByExpression(
-            Seq.empty,
-            query,
-            conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
-      } else {
-        val extended = dynamicPartitionColumns ++ dynamicPartitionExtraExpression(
-          conf.getConf(SQLConf.DYNAMIC_PARTITION_INSERTION_REPARTITION_NUM))
-        o.copy(query =
-          RepartitionByExpression(
-            extended,
-            query,
-            conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
-      }
-
-    case i @ InsertIntoHadoopFsRelationCommand(_, _, _, _, _, _, _, query, _, table, _, _) =>
-      if (query.resolved &&
-        !table.getOrElse("").equals("") &&
-        table.get.bucketSpec.isEmpty &&
-        canInsertRepartitionByExpression(query)) {
-        val dynamicPartitionColumns =
-          query.output.filter(attr => table.get.partitionColumnNames.contains(attr.name))
-        if (dynamicPartitionColumns.isEmpty) {
-          i.copy(query =
-            RepartitionByExpression(
+  def applyRepartition(dataWriting: DataWritingCommand,
+                       bucketSpec: Option[BucketSpec],
+                       partitionColumns: Seq[Expression]): LogicalPlan = {
+    val query = dataWriting.query
+    (bucketSpec, partitionColumns) match {
+      case (None, partExps) =>
+        if (partExps.nonEmpty) {
+          val extended = partExps ++ dynamicPartitionExtraExpression(
+            conf.getConf(SQLConf.DYNAMIC_PARTITION_INSERTION_REPARTITION_NUM))
+          dataWriting.withNewChildren(
+            IndexedSeq(RepartitionByExpression(extended,
+              query,
+              conf.getConf(SQLConf.INSERT_REPARTITION_NUM)
+            ))
+          )
+        } else {
+          dataWriting.withNewChildren(
+            IndexedSeq(RepartitionByExpression(
               Seq.empty,
               query,
-              conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
-        } else {
-          val extended = dynamicPartitionColumns ++ dynamicPartitionExtraExpression(
-            conf.getConf(SQLConf.DYNAMIC_PARTITION_INSERTION_REPARTITION_NUM))
-          i.copy(query =
-            RepartitionByExpression(
-              extended,
-              query,
-              conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
+              conf.getConf(SQLConf.INSERT_REPARTITION_NUM)
+            ))
+          )
         }
-      } else {
-        i
-      }
+      case (Some(bucket), partExps) =>
+        if (dataWriting.isInstanceOf[InsertIntoHiveTable] ||
+          dataWriting.isInstanceOf[InsertIntoHiveDirCommand] ||
+          dataWriting.isInstanceOf[CreateHiveTableAsSelectCommand] ||
+          dataWriting.isInstanceOf[OptimizedCreateHiveTableAsSelectCommand]
+        ) {
+          query
+        } else {
+          val extended = partExps ++ resolveColumnNames(bucket.bucketColumnNames, query.output) ++
+            dynamicPartitionExtraExpression(
+              conf.getConf(SQLConf.DYNAMIC_PARTITION_INSERTION_REPARTITION_NUM))
+          if (bucket.sortColumnNames.nonEmpty) {
+            val sortExps = resolveColumnNames(bucket.sortColumnNames, query.output)
+              .map(SortOrder(_, Ascending))
+            dataWriting.withNewChildren(
+              IndexedSeq(Sort(sortExps, false, RepartitionByExpression(extended,
+                query,
+                conf.getConf(SQLConf.INSERT_REPARTITION_NUM)
+              )))
+            )
+          } else {
+            dataWriting.withNewChildren(
+              IndexedSeq(RepartitionByExpression(extended,
+                query,
+                conf.getConf(SQLConf.INSERT_REPARTITION_NUM)
+              ))
+            )
+          }
+        }
+      case _ => query
+    }
+  }
+
+  private def resolveColumnNames(
+      columnNames: Seq[String],
+      outputAttrs: Seq[Attribute]): Seq[NamedExpression] = {
+    columnNames.map { c =>
+      outputAttrs.resolve(c :: Nil, conf.resolver).
+        getOrElse(throw new AnalysisException(s"Cannot resolve column name $c among (" +
+          s"${outputAttrs.map(_.name).mkString(",")})."))
+    }
+  }
+
+  def addRepartition(plan: LogicalPlan): LogicalPlan = plan match {
+    case i @ InsertIntoHiveTable(table, _, query, _, _, _)
+      if query.resolved && canInsertRepartitionByExpression(query) =>
+      val dynamicPartExps = resolveColumnNames(table.partitionColumnNames, query.output)
+      applyRepartition(i, table.bucketSpec, dynamicPartExps)
+
+    case c @ CreateHiveTableAsSelectCommand(table, query, _, _)
+      if query.resolved && canInsertRepartitionByExpression(query) =>
+      val dynamicPartExps = resolveColumnNames(table.partitionColumnNames, query.output)
+      applyRepartition(c, table.bucketSpec, dynamicPartExps)
+
+    case o @ OptimizedCreateHiveTableAsSelectCommand(table, query, _, _)
+      if query.resolved && canInsertRepartitionByExpression(query) =>
+      val dynamicPartExps = resolveColumnNames(table.partitionColumnNames, query.output)
+      applyRepartition(o, table.bucketSpec, dynamicPartExps)
+
+    case i @ InsertIntoHadoopFsRelationCommand(_, _, _, _, _, _, _, query, _, table, _, _)
+      if query.resolved && table.isDefined && canInsertRepartitionByExpression(query) =>
+        val dynamicPartExps = resolveColumnNames(table.get.partitionColumnNames, query.output)
+        applyRepartition(i, table.get.bucketSpec, dynamicPartExps)
 
     case o @ CreateDataSourceTableAsSelectCommand(table, _, query, _)
-      if query.resolved && table.bucketSpec.isEmpty && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns =
-        query.output.filter(attr => table.partitionColumnNames.contains(attr.name))
-      if (dynamicPartitionColumns.isEmpty) {
-        o.copy(query =
-          RepartitionByExpression(
-            Seq.empty,
-            query,
-            conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
-      } else {
-        val extended = dynamicPartitionColumns ++ dynamicPartitionExtraExpression(
-          conf.getConf(SQLConf.DYNAMIC_PARTITION_INSERTION_REPARTITION_NUM))
-        o.copy(query =
-          RepartitionByExpression(
-            extended,
-            query,
-            conf.getConf(SQLConf.INSERT_REPARTITION_NUM)))
-      }
+      if query.resolved && canInsertRepartitionByExpression(query) =>
+      val dynamicPartExps = resolveColumnNames(table.partitionColumnNames, query.output)
+      applyRepartition(o, table.bucketSpec, dynamicPartExps)
 
     case _ => plan
   }
