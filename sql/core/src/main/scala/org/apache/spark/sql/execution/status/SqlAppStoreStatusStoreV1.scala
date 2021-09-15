@@ -28,6 +28,7 @@ import org.apache.hadoop.yarn.api.records.ApplicationId
 import org.apache.hadoop.yarn.client.ClientRMProxy
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.util.Records
+
 import org.apache.spark.JobExecutionStatus
 import org.apache.spark.SparkConf
 import org.apache.spark.deploy.SparkHadoopUtil
