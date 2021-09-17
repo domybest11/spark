@@ -32,11 +32,29 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
   private[executor] val _bytesWritten = new LongAccumulator
   private[executor] val _recordsWritten = new LongAccumulator
   private[executor] val _writeTime = new LongAccumulator
-
+  private[executor] val _blocksNotPushed = new LongAccumulator
+  private[executor] val _blocksTooLate = new LongAccumulator
+  private[executor] val _blocksCollided = new LongAccumulator
   /**
    * Number of bytes written for the shuffle by this task.
    */
   def bytesWritten: Long = _bytesWritten.sum
+
+  /**
+   * Number of large blocks that are not pushed to be merged at the remote shuffle service.
+   */
+  def blocksNotPushed: Long = _blocksNotPushed.sum
+
+  /**
+   * Number of blocks that didn't get merged because the shuffle merge was already finalized.
+   */
+  def blocksTooLate: Long = _blocksTooLate.sum
+
+  /**
+   * Number of blocks that didn't get merged because they collided with the other shuffle blocks
+   * getting merged to the same reduce partition.
+   */
+  def blocksCollided: Long = _blocksCollided.sum
 
   /**
    * Total number of records written to the shuffle by this task.
@@ -54,6 +72,13 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
   private[spark] override def decBytesWritten(v: Long): Unit = {
     _bytesWritten.setValue(bytesWritten - v)
   }
+
+  private[spark] override def incBlocksNotPushed(v: Long): Unit = _blocksNotPushed.add(v)
+
+  private[spark] override def incBlocksTooLate(v: Long): Unit = _blocksTooLate.add(v)
+
+  private[spark] override def incBlocksCollided(v: Long): Unit = _blocksCollided.add(v)
+
   private[spark] override def decRecordsWritten(v: Long): Unit = {
     _recordsWritten.setValue(recordsWritten - v)
   }
