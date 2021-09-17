@@ -29,7 +29,8 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.status.api.v1.JacksonMessageWriter
 
 private[spark] class KafkaProducerUtil(conf: SparkConf) extends Logging {
-  val METRIC_TOPIC: String = "ods_s_inf_kyuubi-spark_postresourcecost_rt"
+//  conf.get("spark.topic", "lancer_bigdata_spark_spark")
+  val METRIC_TOPIC: String = "lancer_bigdata_spark_job"
   val producer: org.apache.kafka.clients.producer.KafkaProducer[String, Array[Byte]] = {
     val kafkaProps = new Properties
     kafkaProps.put(
