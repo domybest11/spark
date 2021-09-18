@@ -1955,6 +1955,12 @@ package object config {
       .doubleConf
       .createWithDefault(0.75)
 
+  private[spark] val RUNNING_TASK_LIMIT =
+    ConfigBuilder("spark.stage.running.task.limit")
+      .version("3.1.0")
+      .intConf
+      .createWithDefault(Integer.MAX_VALUE)
+
   private[spark] val SPECULATION_TASK_DURATION_THRESHOLD =
     ConfigBuilder("spark.speculation.task.duration.threshold")
       .doc("Task duration after which scheduler would try to speculative run the task. If " +
