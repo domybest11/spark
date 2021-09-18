@@ -1955,8 +1955,20 @@ package object config {
       .doubleConf
       .createWithDefault(0.75)
 
-  private[spark] val RUNNING_TASK_LIMIT =
-    ConfigBuilder("spark.stage.running.task.limit")
+  private[spark] val RUNNING_TASK_LIMIT_ENABLE =
+    ConfigBuilder("spark.stage.running.task.limit.enable")
+      .version("3.1.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val RUNNING_TASK_LIMIT_RATIO =
+    ConfigBuilder("spark.stage.running.task.limitRatio")
+      .version("3.1.0")
+      .doubleConf
+      .createWithDefault(1.0)
+
+  private[spark] val RUNNING_TASK_LIMIT_NUM =
+    ConfigBuilder("spark.stage.running.task.limit.count")
       .version("3.1.0")
       .intConf
       .createWithDefault(Integer.MAX_VALUE)
