@@ -1332,12 +1332,11 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
     }
 
     private String generateFileName(
-        String appId,
         int shuffleId,
         int shuffleMergeId,
         int reduceId) {
       return String.format(
-        "%s_%s_%d_%d_%d", MERGED_SHUFFLE_FILE_NAME_PREFIX, appId, shuffleId,
+        "%s_%d_%d_%d", MERGED_SHUFFLE_FILE_NAME_PREFIX, shuffleId,
           shuffleMergeId, reduceId);
     }
 
@@ -1345,7 +1344,7 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
         int shuffleId,
         int shuffleMergeId,
         int reduceId) {
-      String fileName = String.format("%s.data", generateFileName(appId, shuffleId,
+      String fileName = String.format("%s.data", generateFileName(shuffleId,
         shuffleMergeId, reduceId));
       return getFile(fileName);
     }
@@ -1354,7 +1353,7 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
         int shuffleId,
         int shuffleMergeId,
         int reduceId) {
-      String indexName = String.format("%s.index", generateFileName(appId, shuffleId,
+      String indexName = String.format("%s.index", generateFileName(shuffleId,
         shuffleMergeId, reduceId));
       return getFile(indexName);
     }
@@ -1363,7 +1362,7 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
         int shuffleId,
         int shuffleMergeId,
         int reduceId) {
-      String metaName = String.format("%s.meta", generateFileName(appId, shuffleId,
+      String metaName = String.format("%s.meta", generateFileName(shuffleId,
         shuffleMergeId, reduceId));
       return getFile(metaName);
     }
