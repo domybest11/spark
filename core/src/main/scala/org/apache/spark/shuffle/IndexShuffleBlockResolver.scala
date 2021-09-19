@@ -114,13 +114,12 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   private def getMergedBlockDataFile(
-      appId: String,
       shuffleId: Int,
       shuffleMergeId: Int,
       reduceId: Int,
       dirs: Option[Array[String]] = None): File = {
     blockManager.diskBlockManager.getMergedShuffleFile(
-      ShuffleMergedDataBlockId(appId, shuffleId, shuffleMergeId, reduceId), dirs)
+      ShuffleMergedDataBlockId(shuffleId, shuffleMergeId, reduceId), dirs)
   }
 
   private def getMergedBlockIndexFile(
@@ -134,13 +133,12 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   private def getMergedBlockMetaFile(
-      appId: String,
       shuffleId: Int,
       shuffleMergeId: Int,
       reduceId: Int,
       dirs: Option[Array[String]] = None): File = {
     blockManager.diskBlockManager.getMergedShuffleFile(
-      ShuffleMergedMetaBlockId(appId, shuffleId, shuffleMergeId, reduceId), dirs)
+      ShuffleMergedMetaBlockId(shuffleId, shuffleMergeId, reduceId), dirs)
   }
 
   /**
@@ -475,7 +473,7 @@ private[spark] class IndexShuffleBlockResolver(
     val indexFile =
       getMergedBlockIndexFile(conf.getAppId, blockId.shuffleId, blockId.shuffleMergeId,
         blockId.reduceId, dirs)
-    val dataFile = getMergedBlockDataFile(conf.getAppId, blockId.shuffleId,
+    val dataFile = getMergedBlockDataFile(blockId.shuffleId,
       blockId.shuffleMergeId, blockId.reduceId, dirs)
     // Load all the indexes in order to identify all chunks in the specified merged shuffle file.
     val size = indexFile.length.toInt
@@ -506,7 +504,7 @@ private[spark] class IndexShuffleBlockResolver(
         blockId.shuffleMergeId, blockId.reduceId, dirs)
     val size = indexFile.length.toInt
     val numChunks = (size / 8) - 1
-    val metaFile = getMergedBlockMetaFile(conf.getAppId, blockId.shuffleId,
+    val metaFile = getMergedBlockMetaFile(blockId.shuffleId,
       blockId.shuffleMergeId, blockId.reduceId, dirs)
     val chunkBitMaps = new FileSegmentManagedBuffer(transportConf, metaFile, 0L, metaFile.length)
     new MergedBlockMeta(numChunks, chunkBitMaps)

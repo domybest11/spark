@@ -131,12 +131,11 @@ class BlockIdSuite extends SparkFunSuite {
   }
 
   test("shuffle merged meta") {
-    val id = ShuffleMergedMetaBlockId("app_000", 8, 0, 9)
-    assertSame(id, ShuffleMergedMetaBlockId("app_000", 8, 0, 9))
-    assertDifferent(id, ShuffleMergedMetaBlockId("app_000", 9, 0, 9))
-    assert(id.name === "shuffleMerged_app_000_8_0_9.meta")
+    val id = ShuffleMergedMetaBlockId(8, 0, 9)
+    assertSame(id, ShuffleMergedMetaBlockId(8, 0, 9))
+    assertDifferent(id, ShuffleMergedMetaBlockId(9, 0, 9))
+    assert(id.name === "shuffleMerged_8_0_9.meta")
     assert(id.asRDDId === None)
-    assert(id.appId === "app_000")
     assert(id.shuffleId=== 8)
     assert(id.shuffleMergeId == 0)
     assert(id.reduceId === 9)

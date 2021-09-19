@@ -129,7 +129,7 @@ case class ShuffleMergedDataBlockId(
     shuffleMergeId: Int,
     reduceId: Int) extends BlockId {
   override def name: String = RemoteBlockPushResolver.MERGED_SHUFFLE_FILE_NAME_PREFIX + "_" +
-    appId + "_" + shuffleId + "_" + shuffleMergeId + "_" + reduceId + ".data"
+    shuffleId + "_" + shuffleMergeId + "_" + reduceId + ".data"
 }
 
 @Since("3.2.0")
@@ -146,12 +146,11 @@ case class ShuffleMergedIndexBlockId(
 @Since("3.2.0")
 @DeveloperApi
 case class ShuffleMergedMetaBlockId(
-    appId: String,
     shuffleId: Int,
     shuffleMergeId: Int,
     reduceId: Int) extends BlockId {
   override def name: String = RemoteBlockPushResolver.MERGED_SHUFFLE_FILE_NAME_PREFIX + "_" +
-    appId + "_" + shuffleId + "_" + shuffleMergeId + "_" + reduceId + ".meta"
+    shuffleId + "_" + shuffleMergeId + "_" + reduceId + ".meta"
 }
 
 @DeveloperApi
@@ -198,11 +197,11 @@ object BlockId {
   val SHUFFLE_PUSH = "shufflePush_([0-9]+)_([0-9]+)_([0-9]+)_([0-9]+)".r
   val SHUFFLE_MERGED = "shuffleMerged_([0-9]+)_([0-9]+)_([0-9]+)".r
   val SHUFFLE_MERGED_DATA =
-    "shuffleMerged_([_A-Za-z0-9]*)_([0-9]+)_([0-9]+)_([0-9]+).data".r
+    "shuffleMerged_([0-9]+)_([0-9]+)_([0-9]+).data".r
   val SHUFFLE_MERGED_INDEX =
-    "shuffleMerged_([_A-Za-z0-9]*)_([0-9]+)_([0-9]+)_([0-9]+).index".r
+    "shuffleMerged_([0-9]+)_([0-9]+)_([0-9]+).index".r
   val SHUFFLE_MERGED_META =
-    "shuffleMerged_([_A-Za-z0-9]*)_([0-9]+)_([0-9]+)_([0-9]+).meta".r
+    "shuffleMerged_([0-9]+)_([0-9]+)_([0-9]+).meta".r
   val SHUFFLE_CHUNK = "shuffleChunk_([0-9]+)_([0-9]+)_([0-9]+)_([0-9]+)".r
   val BROADCAST = "broadcast_([0-9]+)([_A-Za-z0-9]*)".r
   val TASKRESULT = "taskresult_([0-9]+)".r
@@ -227,13 +226,13 @@ object BlockId {
         reduceId.toInt)
     case SHUFFLE_MERGED(shuffleId, shuffleMergeId, reduceId) =>
       ShuffleMergedBlockId(shuffleId.toInt, shuffleMergeId.toInt, reduceId.toInt)
-    case SHUFFLE_MERGED_DATA(appId, shuffleId, shuffleMergeId, reduceId) =>
-      ShuffleMergedDataBlockId(appId, shuffleId.toInt, shuffleMergeId.toInt, reduceId.toInt)
-    case SHUFFLE_MERGED_INDEX(appId, shuffleId, shuffleMergeId, reduceId) =>
-      ShuffleMergedIndexBlockId(appId, shuffleId.toInt, shuffleMergeId.toInt,
+    case SHUFFLE_MERGED_DATA(shuffleId, shuffleMergeId, reduceId) =>
+      ShuffleMergedDataBlockId(shuffleId.toInt, shuffleMergeId.toInt, reduceId.toInt)
+    case SHUFFLE_MERGED_INDEX(shuffleId, shuffleMergeId, reduceId) =>
+      ShuffleMergedIndexBlockId(shuffleId.toInt, shuffleMergeId.toInt,
         reduceId.toInt)
-    case SHUFFLE_MERGED_META(appId, shuffleId, shuffleMergeId, reduceId) =>
-      ShuffleMergedMetaBlockId(appId, shuffleId.toInt, shuffleMergeId.toInt,
+    case SHUFFLE_MERGED_META(shuffleId, shuffleMergeId, reduceId) =>
+      ShuffleMergedMetaBlockId(shuffleId.toInt, shuffleMergeId.toInt,
         reduceId.toInt)
     case SHUFFLE_CHUNK(shuffleId, shuffleMergeId, reduceId, chunkId) =>
       ShuffleBlockChunkId(shuffleId.toInt, shuffleMergeId.toInt, reduceId.toInt,

@@ -239,14 +239,14 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
       }
 
       override def onBlockPushSuccess(blockId: String, data: ManagedBuffer): Unit = {
-        logTrace(s"Push for block $blockId to $address successful.")
+        logInfo(s"Push for block $blockId (size:${data.size()}) to $address successful.")
         handleResult(PushResult(blockId, null))
       }
 
       override def onBlockPushFailure(blockId: String, exception: Throwable): Unit = {
         // check the message or it's cause to see it needs to be logged.
         if (!errorHandler.shouldLogError(exception)) {
-          logTrace(s"Pushing block $blockId to $address failed.", exception)
+          logWarning(s"Pushing block $blockId to $address failed.", exception)
         } else {
           logWarning(s"Pushing block $blockId to $address failed.", exception)
         }
