@@ -195,7 +195,7 @@ private class PushBasedFetchHelper(
     val cachedPushedMergedDirs = hostLocalDirManager.getCachedHostLocalDirsFor(
       SHUFFLE_MERGER_IDENTIFIER)
     if (cachedPushedMergedDirs.isDefined) {
-      logDebug(s"Fetch the push-merged-local blocks with cached merged dirs: " +
+      logInfo(s"Fetch the push-merged-local blocks with cached merged dirs: " +
         s"${cachedPushedMergedDirs.get.mkString(", ")}")
       pushMergedLocalBlocks.foreach { blockId =>
         fetchPushMergedLocalBlock(blockId, cachedPushedMergedDirs.get,
@@ -206,11 +206,11 @@ private class PushBasedFetchHelper(
       hostLocalDirManager.getHostLocalDirs(localShuffleMergerBlockMgrId.host,
         localShuffleMergerBlockMgrId.port, Array(SHUFFLE_MERGER_IDENTIFIER)) {
         case Success(dirs) =>
-          logDebug(s"Fetched merged dirs in " +
+          logInfo(s"Fetched merged dirs in " +
             s"${TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTimeNs)} ms")
           pushMergedLocalBlocks.foreach {
             blockId =>
-              logDebug(s"Successfully fetched local dirs: " +
+              logInfo(s"Successfully fetched local dirs: " +
                 s"${dirs.get(SHUFFLE_MERGER_IDENTIFIER).mkString(", ")}")
               fetchPushMergedLocalBlock(blockId, dirs(SHUFFLE_MERGER_IDENTIFIER),
                 localShuffleMergerBlockMgrId)

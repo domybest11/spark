@@ -123,13 +123,12 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   private def getMergedBlockIndexFile(
-      appId: String,
       shuffleId: Int,
       shuffleMergeId: Int,
       reduceId: Int,
       dirs: Option[Array[String]] = None): File = {
     blockManager.diskBlockManager.getMergedShuffleFile(
-      ShuffleMergedIndexBlockId(appId, shuffleId, shuffleMergeId, reduceId), dirs)
+      ShuffleMergedIndexBlockId(shuffleId, shuffleMergeId, reduceId), dirs)
   }
 
   private def getMergedBlockMetaFile(
@@ -471,7 +470,7 @@ private[spark] class IndexShuffleBlockResolver(
       blockId: ShuffleMergedBlockId,
       dirs: Option[Array[String]]): Seq[ManagedBuffer] = {
     val indexFile =
-      getMergedBlockIndexFile(conf.getAppId, blockId.shuffleId, blockId.shuffleMergeId,
+      getMergedBlockIndexFile(blockId.shuffleId, blockId.shuffleMergeId,
         blockId.reduceId, dirs)
     val dataFile = getMergedBlockDataFile(blockId.shuffleId,
       blockId.shuffleMergeId, blockId.reduceId, dirs)
@@ -500,7 +499,7 @@ private[spark] class IndexShuffleBlockResolver(
       blockId: ShuffleMergedBlockId,
       dirs: Option[Array[String]]): MergedBlockMeta = {
     val indexFile =
-      getMergedBlockIndexFile(conf.getAppId, blockId.shuffleId,
+      getMergedBlockIndexFile(blockId.shuffleId,
         blockId.shuffleMergeId, blockId.reduceId, dirs)
     val size = indexFile.length.toInt
     val numChunks = (size / 8) - 1

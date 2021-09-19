@@ -124,7 +124,6 @@ case class ShuffleMergedBlockId(
 @Since("3.2.0")
 @DeveloperApi
 case class ShuffleMergedDataBlockId(
-    appId: String,
     shuffleId: Int,
     shuffleMergeId: Int,
     reduceId: Int) extends BlockId {
@@ -135,12 +134,11 @@ case class ShuffleMergedDataBlockId(
 @Since("3.2.0")
 @DeveloperApi
 case class ShuffleMergedIndexBlockId(
-    appId: String,
     shuffleId: Int,
     shuffleMergeId: Int,
     reduceId: Int) extends BlockId {
   override def name: String = RemoteBlockPushResolver.MERGED_SHUFFLE_FILE_NAME_PREFIX + "_" +
-    appId + "_" + shuffleId + "_" + shuffleMergeId + "_" + reduceId + ".index"
+    shuffleId + "_" + shuffleMergeId + "_" + reduceId + ".index"
 }
 
 @Since("3.2.0")

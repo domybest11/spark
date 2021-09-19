@@ -105,12 +105,11 @@ class BlockIdSuite extends SparkFunSuite {
   }
 
   test("shuffle merged data") {
-    val id = ShuffleMergedDataBlockId("app_000", 8, 0, 9)
-    assertSame(id, ShuffleMergedDataBlockId("app_000", 8, 0, 9))
-    assertDifferent(id, ShuffleMergedDataBlockId("app_000", 9, 0, 9))
-    assert(id.name === "shuffleMerged_app_000_8_0_9.data")
+    val id = ShuffleMergedDataBlockId(8, 0, 9)
+    assertSame(id, ShuffleMergedDataBlockId(8, 0, 9))
+    assertDifferent(id, ShuffleMergedDataBlockId(9, 0, 9))
+    assert(id.name === "shuffleMerged_8_0_9.data")
     assert(id.asRDDId === None)
-    assert(id.appId === "app_000")
     assert(id.shuffleMergeId == 0)
     assert(id.shuffleId=== 8)
     assert(id.reduceId === 9)
@@ -118,12 +117,11 @@ class BlockIdSuite extends SparkFunSuite {
   }
 
   test("shuffle merged index") {
-    val id = ShuffleMergedIndexBlockId("app_000", 8, 0, 9)
-    assertSame(id, ShuffleMergedIndexBlockId("app_000", 8, 0, 9))
-    assertDifferent(id, ShuffleMergedIndexBlockId("app_000", 9, 0, 9))
-    assert(id.name === "shuffleMerged_app_000_8_0_9.index")
+    val id = ShuffleMergedIndexBlockId(8, 0, 9)
+    assertSame(id, ShuffleMergedIndexBlockId(8, 0, 9))
+    assertDifferent(id, ShuffleMergedIndexBlockId(9, 0, 9))
+    assert(id.name === "shuffleMerged_8_0_9.index")
     assert(id.asRDDId === None)
-    assert(id.appId === "app_000")
     assert(id.shuffleId=== 8)
     assert(id.shuffleMergeId == 0)
     assert(id.reduceId === 9)
