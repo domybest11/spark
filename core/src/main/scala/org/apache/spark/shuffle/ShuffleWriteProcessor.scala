@@ -67,7 +67,7 @@ private[spark] class ShuffleWriteProcessor extends Serializable with Logging {
           manager.shuffleBlockResolver match {
             case resolver: IndexShuffleBlockResolver =>
               val dataFile = resolver.getDataFile(dep.shuffleId, mapId)
-              new ShuffleBlockPusher(SparkEnv.get.conf)
+              new ShuffleBlockPusher(SparkEnv.get.conf, context.taskMetrics().shuffleWriteMetrics)
                 .initiateBlockPush(dataFile, writer.getPartitionLengths(), dep, partition.index,
                   dep.shuffleId)
             case _ =>

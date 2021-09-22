@@ -237,7 +237,7 @@ class ShuffleBlockPusherSuite extends SparkFunSuite with BeforeAndAfterEach {
   }
 
   test("Error retries") {
-    val pusher = new ShuffleBlockPusher(conf)
+    val pusher = new ShuffleBlockPusher(conf, null)
     val errorHandler = pusher.createErrorHandler()
     assert(
       !errorHandler.shouldRetryError(new BlockPushNonFatalFailure(
@@ -256,7 +256,7 @@ class ShuffleBlockPusherSuite extends SparkFunSuite with BeforeAndAfterEach {
   }
 
   test("Error logging") {
-    val pusher = new ShuffleBlockPusher(conf)
+    val pusher = new ShuffleBlockPusher(conf, null)
     val errorHandler = pusher.createErrorHandler()
     assert(
       !errorHandler.shouldLogError(new BlockPushNonFatalFailure(
@@ -382,7 +382,7 @@ class ShuffleBlockPusherSuite extends SparkFunSuite with BeforeAndAfterEach {
     ShuffleBlockPusher.stop()
   }
 
-  private class TestShuffleBlockPusher(conf: SparkConf) extends ShuffleBlockPusher(conf) {
+  private class TestShuffleBlockPusher(conf: SparkConf) extends ShuffleBlockPusher(conf, null) {
     val tasks = new LinkedBlockingQueue[Runnable]
 
     override protected def submitTask(task: Runnable): Unit = {

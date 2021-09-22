@@ -233,14 +233,24 @@ final class ShuffleBlockFetcherIterator(
         case SuccessFetchResult(blockId, mapIndex, address, _, buf, _) =>
           if (address != blockManager.blockManagerId) {
             if (hostLocalBlocks.contains(blockId -> mapIndex)) {
-              shuffleMetrics.incLocalBlocksFetched(1)
-              shuffleMetrics.incLocalBytesRead(buf.size)
-            } else {
-              shuffleMetrics.incRemoteBytesRead(buf.size)
-              if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
-                shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+              if (pushBasedFetchHelper.isLocalPushMergedBlockAddress(address)) {
+                shuffleMetrics.incLocalMergedBlocksBytesRead(buf.size())
+                shuffleMetrics.incLocalMergedBlocksFetched(1)
+              } else {
+                shuffleMetrics.incLocalBlocksFetched(1)
+                shuffleMetrics.incLocalBytesRead(buf.size)
               }
-              shuffleMetrics.incRemoteBlocksFetched(1)
+            } else {
+              if (pushBasedFetchHelper.isRemotePushMergedBlockAddress(address)) {
+                shuffleMetrics.incRemoteMergedBlocksBytesRead(buf.size)
+                shuffleMetrics.incRemoteMergedBlocksFetched(1)
+              } else {
+                shuffleMetrics.incRemoteBytesRead(buf.size)
+                if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
+                  shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+                }
+                shuffleMetrics.incRemoteBlocksFetched(1)
+              }
             }
           }
           buf.release()
@@ -295,6 +305,7 @@ final class ShuffleBlockFetcherIterator(
               address, infoMap(blockId)._1, buf, remainingBlocks.isEmpty))
             logDebug("remainingBlocks: " + remainingBlocks)
             enqueueDeferredFetchRequestIfNecessary()
+            shuffleMetrics.incRemoteMergedChunksFetched(1)
           }
         }
         logTrace(s"Got remote block $blockId after ${Utils.getUsedTimeNs(startTimeNs)}")
@@ -756,19 +767,28 @@ final class ShuffleBlockFetcherIterator(
       result match {
         case r @ SuccessFetchResult(blockId, mapIndex, address, size, buf, isNetworkReqDone) =>
           if (address != blockManager.blockManagerId) {
-            if (hostLocalBlocks.contains(blockId -> mapIndex) ||
-              pushBasedFetchHelper.isLocalPushMergedBlockAddress(address)) {
-              // It is a host local block or a local shuffle chunk
-              shuffleMetrics.incLocalBlocksFetched(1)
-              shuffleMetrics.incLocalBytesRead(buf.size)
-            } else {
-              numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
-              shuffleMetrics.incRemoteBytesRead(buf.size)
-              if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
-                shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+            if (hostLocalBlocks.contains(blockId -> mapIndex)) {
+              if (pushBasedFetchHelper.isLocalPushMergedBlockAddress(address)) {
+                shuffleMetrics.incLocalMergedBlocksBytesRead(buf.size())
+                shuffleMetrics.incLocalMergedBlocksFetched(1)
+              } else {
+                // It is a host local block or a local shuffle chunk
+                shuffleMetrics.incLocalBlocksFetched(1)
+                shuffleMetrics.incLocalBytesRead(buf.size)
               }
-              shuffleMetrics.incRemoteBlocksFetched(1)
-              bytesInFlight -= size
+            } else {
+              if (pushBasedFetchHelper.isRemotePushMergedBlockAddress(address)) {
+                shuffleMetrics.incRemoteMergedBlocksBytesRead(buf.size)
+                shuffleMetrics.incRemoteMergedBlocksFetched(1)
+              } else {
+                numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
+                shuffleMetrics.incRemoteBytesRead(buf.size)
+                if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
+                  shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+                }
+                shuffleMetrics.incRemoteBlocksFetched(1)
+                bytesInFlight -= size
+              }
             }
           }
           if (isNetworkReqDone) {
@@ -817,7 +837,8 @@ final class ShuffleBlockFetcherIterator(
               }
               buf.release()
               if (blockId.isShuffleChunk) {
-                pushBasedFetchHelper.initiateFallbackFetchForPushMergedBlock(blockId, address)
+                pushBasedFetchHelper.initiateFallbackFetchForPushMergedBlock(blockId, address,
+                  shuffleMetrics)
                 // Set result to null to trigger another iteration of the while loop to get either.
                 result = null
                 null
@@ -855,7 +876,8 @@ final class ShuffleBlockFetcherIterator(
                   // a shuffle chunk is always removed from chunksMetaMap whenever a shuffle chunk
                   // gets processed. If we try to re-fetch a corrupt shuffle chunk, then it has to
                   // be added back to the chunksMetaMap.
-                  pushBasedFetchHelper.initiateFallbackFetchForPushMergedBlock(blockId, address)
+                  pushBasedFetchHelper.initiateFallbackFetchForPushMergedBlock(blockId, address,
+                    shuffleMetrics)
                   // Set result to null to trigger another iteration of the while loop.
                   result = null
                 } else if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
@@ -930,7 +952,8 @@ final class ShuffleBlockFetcherIterator(
             reqsInFlight -= 1
             logDebug("Number of requests in flight " + reqsInFlight)
           }
-          pushBasedFetchHelper.initiateFallbackFetchForPushMergedBlock(blockId, address)
+          pushBasedFetchHelper.initiateFallbackFetchForPushMergedBlock(blockId, address,
+            shuffleMetrics)
           // Set result to null to trigger another iteration of the while loop to get either
           // a SuccessFetchResult or a FailureFetchResult.
           result = null
@@ -956,6 +979,7 @@ final class ShuffleBlockFetcherIterator(
                 results.put(SuccessFetchResult(shuffleChunkId, SHUFFLE_PUSH_MAP_ID,
                   pushBasedFetchHelper.localShuffleMergerBlockMgrId, buf.size(), buf,
                   isNetworkReqDone = false))
+                shuffleMetrics.incLocalMergedChunksFetched(1)
               }
             } catch {
               case e: Exception =>
@@ -965,7 +989,8 @@ final class ShuffleBlockFetcherIterator(
                 logWarning(s"Error occurred while reading push-merged-local index, " +
                   s"prepare to fetch the original blocks", e)
                 pushBasedFetchHelper.initiateFallbackFetchForPushMergedBlock(
-                  shuffleBlockId, pushBasedFetchHelper.localShuffleMergerBlockMgrId)
+                  shuffleBlockId, pushBasedFetchHelper.localShuffleMergerBlockMgrId,
+                  shuffleMetrics)
             }
             result = null
 
@@ -991,7 +1016,7 @@ final class ShuffleBlockFetcherIterator(
           // If we fail to fetch the meta of a push-merged block, we fall back to fetching the
           // original blocks.
           pushBasedFetchHelper.initiateFallbackFetchForPushMergedBlock(
-            ShuffleMergedBlockId(shuffleId, shuffleMergeId, reduceId), address)
+            ShuffleMergedBlockId(shuffleId, shuffleMergeId, reduceId), address, shuffleMetrics)
           // Set result to null to force another iteration.
           result = null
       }

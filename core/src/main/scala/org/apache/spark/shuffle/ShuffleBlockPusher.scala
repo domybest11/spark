@@ -23,15 +23,16 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ExecutorService
 
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
-
 import org.apache.spark.{ShuffleDependency, SparkConf, SparkEnv}
 import org.apache.spark.annotation.Since
+import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.launcher.SparkLauncher
 import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer, NioManagedBuffer}
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.server.BlockPushNonFatalFailure
+import org.apache.spark.network.server.BlockPushNonFatalFailure.ReturnCode
 import org.apache.spark.network.shuffle.BlockPushingListener
 import org.apache.spark.network.shuffle.ErrorHandler.BlockPushErrorHandler
 import org.apache.spark.network.util.TransportConf
@@ -48,7 +49,8 @@ import org.apache.spark.util.{ThreadUtils, Utils}
  * @param conf spark configuration
  */
 @Since("3.2.0")
-private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
+private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: ShuffleWriteMetrics)
+  extends Logging {
   private[this] val maxBlockSizeToPush = conf.get(SHUFFLE_MAX_BLOCK_SIZE_TO_PUSH)
   private[this] val maxBlockBatchSize = conf.get(SHUFFLE_MAX_BLOCK_BATCH_SIZE_FOR_PUSH)
   private[this] val maxBytesInFlight =
@@ -327,14 +329,28 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
       if (!unreachableBlockMgrs.contains(address)) {
         var removed = 0
         unreachableBlockMgrs.add(address)
-        removed += pushRequests.dequeueAll(req => req.address == address).length
-        removed += deferredPushRequests.remove(address).map(_.length).getOrElse(0)
+       val unPushRequests = pushRequests.dequeueAll(req => req.address == address).length
+       val unDeferredPushRequests = deferredPushRequests.remove(address).map(_.length).getOrElse(0)
+        removed += unPushRequests
+        removed += unDeferredPushRequests
         logWarning(s"Received a ConnectException from $address. " +
           s"Dropping $removed push-requests and " +
           s"not pushing any more blocks to this address.")
+        shuffleWriteMetrics.incBlocksNotPushed(unPushRequests + unDeferredPushRequests)
       }
     }
-    if (pushResult.failure != null && !errorHandler.shouldRetryError(pushResult.failure)) {
+    val shouldRetryError = errorHandler.shouldRetryError(pushResult.failure)
+    if (shouldRetryError) {
+      shuffleWriteMetrics.incBlocksTooLate(1)
+    }
+    pushResult.failure match {
+      case failure: BlockPushNonFatalFailure =>
+        if (failure.getReturnCode == ReturnCode.BLOCK_APPEND_COLLISION_DETECTED) {
+          shuffleWriteMetrics.incBlocksCollided(1)
+        }
+      case _ =>
+    }
+    if (pushResult.failure != null && !shouldRetryError) {
       logDebug(s"Encountered an exception from $address which indicates that push needs to " +
         s"stop.")
       return false
@@ -447,6 +463,10 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf) extends Logging {
           if (currentReqSize == 0) {
             currentReqSize += blockSizeInt
           }
+        } else {
+          logInfo(s"give up pushing (${ShufflePushBlockId(shuffleId, shuffleMergeId, partitionId,
+            reduceId)}) because of beyond the size limit (${maxBlockSizeToPush}).")
+          shuffleWriteMetrics.incBlocksNotPushed(1)
         }
       }
       offset += blockSize

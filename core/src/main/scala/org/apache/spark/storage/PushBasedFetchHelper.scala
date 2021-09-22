@@ -22,13 +22,12 @@ import java.util.concurrent.TimeUnit
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success}
-
 import org.roaringbitmap.RoaringBitmap
-
 import org.apache.spark.MapOutputTracker
 import org.apache.spark.MapOutputTracker.SHUFFLE_PUSH_MAP_ID
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.shuffle.{BlockStoreClient, MergedBlockMeta, MergedBlocksMetaListener}
+import org.apache.spark.shuffle.ShuffleReadMetricsReporter
 import org.apache.spark.storage.BlockManagerId.SHUFFLE_MERGER_IDENTIFIER
 import org.apache.spark.storage.ShuffleBlockFetcherIterator._
 
@@ -203,15 +202,15 @@ private class PushBasedFetchHelper(
       }
     } else {
       logDebug(s"Asynchronous fetch the push-merged-local blocks without cached merged dirs")
-      hostLocalDirManager.getHostLocalDirs(localShuffleMergerBlockMgrId.host,
-        localShuffleMergerBlockMgrId.port, Array(SHUFFLE_MERGER_IDENTIFIER)) {
+      hostLocalDirManager.getHostLocalDirs(blockManager.blockManagerId.host,
+        blockManager.externalShuffleServicePort, Array(SHUFFLE_MERGER_IDENTIFIER)) {
         case Success(dirs) =>
           logInfo(s"Fetched merged dirs in " +
             s"${TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTimeNs)} ms")
           pushMergedLocalBlocks.foreach {
             blockId =>
               logInfo(s"Successfully fetched local dirs: " +
-                s"${dirs.get(SHUFFLE_MERGER_IDENTIFIER).mkString(", ")}")
+                s"${dirs.get(SHUFFLE_MERGER_IDENTIFIER).get.mkString(", ")}")
               fetchPushMergedLocalBlock(blockId, dirs(SHUFFLE_MERGER_IDENTIFIER),
                 localShuffleMergerBlockMgrId)
           }
@@ -283,9 +282,11 @@ private class PushBasedFetchHelper(
    */
   def initiateFallbackFetchForPushMergedBlock(
       blockId: BlockId,
-      address: BlockManagerId): Unit = {
+      address: BlockManagerId,
+      shuffleMetrics: ShuffleReadMetricsReporter): Unit = {
     assert(blockId.isInstanceOf[ShuffleMergedBlockId] || blockId.isInstanceOf[ShuffleBlockChunkId])
     logWarning(s"Falling back to fetch the original blocks for push-merged block $blockId")
+    shuffleMetrics.incFallbackCount(1)
     // Increase the blocks processed since we will process another block in the next iteration of
     // the while loop in ShuffleBlockFetcherIterator.next().
     val fallbackBlocksByAddr: Iterator[(BlockManagerId, Seq[(BlockId, Long, Int)])] =
