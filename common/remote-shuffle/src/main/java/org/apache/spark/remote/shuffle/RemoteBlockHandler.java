@@ -72,8 +72,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                             .build());
 
 
-
-
     public RemoteBlockHandler(TransportConf conf, File registeredExecutorFile) throws IOException {
         super(conf, registeredExecutorFile);
         transportConf = conf;

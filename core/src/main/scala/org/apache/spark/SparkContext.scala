@@ -221,6 +221,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _applicationAttemptId: Option[String] = None
   private var _eventLogger: Option[EventLoggingListener] = None
   private var _driverLogger: Option[DriverLogger] = None
+  private var _remoteShuffle: Option[RemoteShuffleListener] = None
   private var _executorAllocationManager: Option[ExecutorAllocationManager] = None
   private var _cleaner: Option[ContextCleaner] = None
   private var _listenerBusStarted: Boolean = false
@@ -263,6 +264,8 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def isEventLogEnabled: Boolean = _conf.get(EVENT_LOG_ENABLED)
   private[spark] def eventLogDir: Option[URI] = _eventLogDir
   private[spark] def eventLogCodec: Option[String] = _eventLogCodec
+
+  private[spark] def isRemoteShuffleEnabled: Boolean = _conf.get(REMOTE_SHUFFLE_SERVICE_ENABLED)
 
   def isLocal: Boolean = Utils.isLocalMaster(_conf)
 
@@ -659,6 +662,15 @@ class SparkContext(config: SparkConf) extends Logging {
 
     if (conf.get(SQL_APP_LISTENER_ENABLED)) {
       listenerBus.addToStatusQueue(new AppListener(_applicationId, _applicationAttemptId, _conf))
+    }
+
+    _remoteShuffle = if (isRemoteShuffleEnabled) {
+      val remoteListener = new RemoteShuffleListener(_applicationId, _applicationAttemptId, _conf)
+      remoteListener.start()
+      listenerBus.addToSharedQueue(remoteListener)
+      Some(remoteListener)
+    } else {
+      None
     }
 
     _cleaner =
@@ -2232,6 +2244,9 @@ class SparkContext(config: SparkConf) extends Logging {
     }
     Utils.tryLogNonFatalError {
       _eventLogger.foreach(_.stop())
+    }
+    Utils.tryLogNonFatalError {
+      _remoteShuffle.foreach(_.stop())
     }
     if (_heartbeater != null) {
       Utils.tryLogNonFatalError {

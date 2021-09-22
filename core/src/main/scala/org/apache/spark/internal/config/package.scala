@@ -690,6 +690,25 @@ package object config {
       .timeConf(TimeUnit.SECONDS)
       .createWithDefaultString("1h")
 
+  private[spark] val REMOTE_SHUFFLE_SERVICE_ENABLED =
+    ConfigBuilder("spark.remote.shuffle.service.enabled")
+      .version("3.2.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val REMOTE_SHUFFLE_SERVICE_MASTER =
+    ConfigBuilder("spark.remote.shuffle.service.master")
+      .version("3.2.0")
+      .stringConf
+      .createOptional
+
+  private[spark] val REMOTE_SHUFFLE_REPORT_INTERVAL =
+    ConfigBuilder("spark.remote.shuffle.report.interval")
+      .version("3.2.0")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .checkValue(_ >= 0L, "Timeout must be >= 0.")
+      .createWithDefaultString("60s")
+
   private[spark] val SHUFFLE_SERVICE_FETCH_RDD_ENABLED =
     ConfigBuilder(Constants.SHUFFLE_SERVICE_FETCH_RDD_ENABLED)
       .doc("Whether to use the ExternalShuffleService for fetching disk persisted RDD blocks. " +
