@@ -12,6 +12,14 @@ public class UnregisteredApplication extends BlockTransferMessage {
         this.attempt = attempt;
     }
 
+    public String getAppId() {
+        return appId;
+    }
+
+    public int getAttempt() {
+        return attempt;
+    }
+
     @Override
     public int encodedLength() {
         return 0;

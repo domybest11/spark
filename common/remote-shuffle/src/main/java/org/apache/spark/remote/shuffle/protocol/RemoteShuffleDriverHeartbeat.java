@@ -14,6 +14,18 @@ public class RemoteShuffleDriverHeartbeat  extends BlockTransferMessage {
         this.heartbeatTimeoutMs = heartbeatTimeoutMs;
     }
 
+    public String getAppId() {
+        return appId;
+    }
+
+    public int getAttempt() {
+        return attempt;
+    }
+
+    public long getHeartbeatTimeoutMs() {
+        return heartbeatTimeoutMs;
+    }
+
     @Override
     public int encodedLength() {
         return 0;

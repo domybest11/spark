@@ -12,19 +12,21 @@ import org.apache.spark.network.server.TransportServer;
 import org.apache.spark.network.server.TransportServerBootstrap;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.util.TransportConf;
-import org.apache.spark.remote.shuffle.protocol.CleanApplication;
-import org.apache.spark.remote.shuffle.protocol.RegisterWorker;
-import org.apache.spark.remote.shuffle.protocol.RemoteShuffleServiceHeartbeat;
+import org.apache.spark.remote.shuffle.protocol.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RemoteMaster {
+    private static final Logger logger = LoggerFactory.getLogger(RemoteMaster.class);
+
     private static RemoteMaster master;
     private static final CountDownLatch barrier = new CountDownLatch(1);
 
@@ -47,6 +49,8 @@ public class RemoteMaster {
     public final ArrayList<WorkerInfo> blackWorkers = new ArrayList<>();
     public final ArrayList<WorkerInfo> busyWorkers = new ArrayList<>();
 
+    public final ConcurrentHashMap<String, RunningApplication> runningApplicationMap = new ConcurrentHashMap<>();
+
 
 
 
@@ -57,6 +61,8 @@ public class RemoteMaster {
             server = transportContext.createServer(port, bootstraps);
             clientFactory = transportContext.createClientFactory(Lists.newArrayList());
         }
+        // application 超时检查
+        cleanThread.scheduleAtFixedRate(new ApplicationExpire(), 0, 10, TimeUnit.SECONDS);
     }
 
     private void stop() {
@@ -69,10 +75,6 @@ public class RemoteMaster {
             transportContext = null;
         }
     }
-
-
-
-
 
 
 
@@ -96,24 +98,27 @@ public class RemoteMaster {
 
     private class ApplicationExpire implements Runnable {
 
-        private ApplicationExpire() {
-        }
-
         @Override
         public void run() {
-            try {
-                TransportClient client = clientFactory.createClient("host", port);
-                client.send(new CleanApplication().toByteBuffer());
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            Iterator<RunningApplication> it = runningApplicationMap.values().iterator();
+            while (it.hasNext()){
+                RunningApplication runningApplication = it.next();
+                // TODO: 2021/9/22 超时时间
+                if (runningApplication.latestHeartbeatTime + 1000L > System.currentTimeMillis()) {
+                    it.remove();
+                    runningApplication.alive.compareAndSet(true, false);
+                    synchronized (runningApplication) {
+                        runningApplication.workerInfos.forEach(workerInfo ->
+                                workerInfo.cleanApplication(runningApplication.appId,runningApplication.attemptId)
+                        );
+                    }
+                }
             }
         }
     }
 
 
-    private static class MasterRpcHandler extends RpcHandler {
+    private class MasterRpcHandler extends RpcHandler {
 
         @Override
         public void receive(TransportClient client, ByteBuffer message, RpcResponseCallback callback) {
@@ -126,6 +131,37 @@ public class RemoteMaster {
 
             } else if (msgObj instanceof RemoteShuffleServiceHeartbeat) {
 
+            } else if (msgObj instanceof RegisteredApplication) {
+                RegisteredApplication application = (RegisteredApplication) msgObj;
+                String appId = application.getAppId();
+                int attemptId = application.getAttempt();
+                String key = appId + "_" + attemptId;
+                RunningApplication runningApplication = runningApplicationMap.computeIfAbsent(key, f -> new RunningApplication(appId,attemptId));
+                logger.info("application: {}_{} register success", runningApplication.appId, runningApplication.attemptId);
+            } else if (msgObj instanceof UnregisteredApplication) {
+                UnregisteredApplication application = (UnregisteredApplication) msgObj;
+                String appId = application.getAppId();
+                int attemptId = application.getAttempt();
+                String key = appId + "_" + attemptId;
+                RunningApplication runningApplication = runningApplicationMap.remove(key);
+                if (runningApplication != null) {
+                    runningApplication.alive.compareAndSet(true, false);
+                    runningApplication.workerInfos.forEach(
+                            workerInfo -> workerInfo.cleanApplication(appId,attemptId)
+                    );
+                }
+            } else if (msgObj instanceof RemoteShuffleDriverHeartbeat) {
+                RemoteShuffleDriverHeartbeat application = (RemoteShuffleDriverHeartbeat) msgObj;
+                String appId = application.getAppId();
+                int attemptId = application.getAttempt();
+                long heartbeatTimeoutMs = application.getHeartbeatTimeoutMs();
+                String key = appId + "_" + attemptId;
+                RunningApplication runningApplication = runningApplicationMap.get(key);
+                if (runningApplication != null) {
+                    runningApplication.setLatestHeartbeatTime(heartbeatTimeoutMs);
+                } else {
+                    logger.warn("application: {}_{} not exist in master", runningApplication.appId, runningApplication.attemptId);
+                }
             } else {
                 throw new UnsupportedOperationException("Unexpected message: " + msgObj);
             }
@@ -135,6 +171,59 @@ public class RemoteMaster {
         public StreamManager getStreamManager() {
             return null;
         }
+
+    }
+
+    private static class RunningApplication {
+        private String appId;
+        private int attemptId;
+        private List<WorkerInfo> workerInfos = new ArrayList<>();
+        private long latestHeartbeatTime;
+        private AtomicBoolean alive;
+
+        public RunningApplication(String appId, int attemptId) {
+            this.appId = appId;
+            this.attemptId = attemptId;
+            alive = new AtomicBoolean(true);
+            latestHeartbeatTime = System.currentTimeMillis();
+        }
+
+        public String getAppId() {
+            return appId;
+        }
+
+        public void setAppId(String appId) {
+            this.appId = appId;
+        }
+
+        public int getAttemptId() {
+            return attemptId;
+        }
+
+        public void setAttemptId(int attemptId) {
+            this.attemptId = attemptId;
+        }
+
+        public List<WorkerInfo> getWorkerInfos() {
+            return workerInfos;
+        }
+
+        public void setWorkerInfos(List<WorkerInfo> workerInfos) {
+            this.workerInfos = workerInfos;
+        }
+
+        public long getLatestHeartbeatTime() {
+            return latestHeartbeatTime;
+        }
+
+        public void setLatestHeartbeatTime(long latestHeartbeatTime) {
+            if(latestHeartbeatTime > this.latestHeartbeatTime) {
+                this.latestHeartbeatTime = latestHeartbeatTime;
+            }
+        }
+    }
+
+    private static class RunningStage {
 
     }
 }

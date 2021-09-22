@@ -12,6 +12,10 @@ public class WorkerInfo {
         this.port = port;
     }
 
+    public void cleanApplication(String applicationId, int attemptId){
+
+    }
+
     public String getHost() {
         return host;
     }
