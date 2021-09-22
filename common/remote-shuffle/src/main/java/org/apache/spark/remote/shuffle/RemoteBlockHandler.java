@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -54,7 +55,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
     //meta
     private ConcurrentHashMap<ShuffleDir,List<RunningStage>> dirInfo;
-
 
 
     private final ScheduledExecutorService heartbeatThread =
@@ -153,7 +153,17 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
         @Override
         public void run() {
-            client.send(new RemoteShuffleServiceHeartbeat("host", 0,  1L, null, null).toByteBuffer());
+            List<RunningStage> currentRunningStages = new ArrayList<>();
+            dirInfo.values().forEach(currentRunningStages::addAll);
+            // TODO: 2021/9/22 pressure相关
+            client.send(
+                    new RemoteShuffleServiceHeartbeat(
+                            "host",
+                            0,
+                            System.currentTimeMillis(),
+                            null,
+                            currentRunningStages.toArray(new RunningStage[0])).toByteBuffer()
+            );
         }
     }
 

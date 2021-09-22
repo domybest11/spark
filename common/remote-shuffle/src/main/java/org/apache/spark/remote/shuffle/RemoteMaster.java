@@ -16,11 +16,8 @@ import org.apache.spark.remote.shuffle.protocol.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -45,11 +42,12 @@ public class RemoteMaster {
 
 
     //meta
-    public final ArrayList<WorkerInfo> workers = new ArrayList<>();
+    public final ConcurrentHashMap<String, WorkerInfo> workersMap = new ConcurrentHashMap<>();
     public final ArrayList<WorkerInfo> blackWorkers = new ArrayList<>();
     public final ArrayList<WorkerInfo> busyWorkers = new ArrayList<>();
 
     public final ConcurrentHashMap<String, RunningApplication> runningApplicationMap = new ConcurrentHashMap<>();
+
 
 
 
@@ -130,7 +128,30 @@ public class RemoteMaster {
             if (msgObj instanceof RegisterWorker) {
 
             } else if (msgObj instanceof RemoteShuffleServiceHeartbeat) {
+                long start = System.currentTimeMillis();
+                RemoteShuffleServiceHeartbeat workHeartbeat = (RemoteShuffleServiceHeartbeat) msgObj;
+                String host = workHeartbeat.getHost();
+                int port = workHeartbeat.getPort();
+                String address = host + ":" + port;
+                org.apache.spark.remote.shuffle.RunningStage[] runningStages = workHeartbeat.getRunningStages();
+                WorkerPressure pressure = workHeartbeat.getPressure();
+                WorkerInfo workerInfo = workersMap.computeIfAbsent(address, w -> new WorkerInfo(host, port));
+                workerInfo.setLatestHeartbeatTime(workHeartbeat.getHeartbeatTimeMs());
+                workerInfo.setPressure(pressure);
+                // TODO: 2021/9/22 根据pressure维护work列表
+                if ( pressure != null) {
 
+                }
+                Arrays.stream(runningStages).forEach(runningStage -> {
+                    String appId = runningStage.getApplicationId();
+                    int attemptId = runningStage.getAttemptId();
+                    String key = appId + "_" + attemptId;
+                    RunningApplication runningApplication = runningApplicationMap.computeIfAbsent(key, f -> new RunningApplication(appId,attemptId));
+                    synchronized (runningApplication) {
+                        runningApplication.getWorkerInfos().add(workerInfo);
+                    }
+                });
+                logger.info("handle RemoteShuffleServiceHeartbeat time: {}ms", System.currentTimeMillis() - start);
             } else if (msgObj instanceof RegisteredApplication) {
                 RegisteredApplication application = (RegisteredApplication) msgObj;
                 String appId = application.getAppId();
@@ -147,7 +168,7 @@ public class RemoteMaster {
                 if (runningApplication != null) {
                     runningApplication.alive.compareAndSet(true, false);
                     runningApplication.workerInfos.forEach(
-                            workerInfo -> workerInfo.cleanApplication(appId,attemptId)
+                            workerInfo -> workerInfo.cleanApplication(appId, attemptId)
                     );
                 }
             } else if (msgObj instanceof RemoteShuffleDriverHeartbeat) {
@@ -160,7 +181,8 @@ public class RemoteMaster {
                 if (runningApplication != null) {
                     runningApplication.setLatestHeartbeatTime(heartbeatTimeoutMs);
                 } else {
-                    logger.warn("application: {}_{} not exist in master", runningApplication.appId, runningApplication.attemptId);
+                    logger.warn("application: {}_{} not exist in master, restore from driverHeartbeat", appId, attemptId);
+                    runningApplicationMap.putIfAbsent(key, new RunningApplication(appId, attemptId));
                 }
             } else {
                 throw new UnsupportedOperationException("Unexpected message: " + msgObj);
@@ -177,7 +199,7 @@ public class RemoteMaster {
     private static class RunningApplication {
         private String appId;
         private int attemptId;
-        private List<WorkerInfo> workerInfos = new ArrayList<>();
+        private Set<WorkerInfo> workerInfos = new HashSet<>();
         private long latestHeartbeatTime;
         private AtomicBoolean alive;
 
@@ -204,11 +226,11 @@ public class RemoteMaster {
             this.attemptId = attemptId;
         }
 
-        public List<WorkerInfo> getWorkerInfos() {
+        public Set<WorkerInfo> getWorkerInfos() {
             return workerInfos;
         }
 
-        public void setWorkerInfos(List<WorkerInfo> workerInfos) {
+        public void setWorkerInfos(Set<WorkerInfo> workerInfos) {
             this.workerInfos = workerInfos;
         }
 
@@ -223,9 +245,6 @@ public class RemoteMaster {
         }
     }
 
-    private static class RunningStage {
-
-    }
 }
 
 

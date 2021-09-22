@@ -31,4 +31,32 @@ public class RunningStage implements Encodable {
     public void encode(ByteBuf buf) {
 
     }
+
+    public String getApplicationId() {
+        return applicationId;
+    }
+
+    public int getAttemptId() {
+        return attemptId;
+    }
+
+    public int getShuffleId() {
+        return shuffleId;
+    }
+
+    public int getShuffleMergeId() {
+        return shuffleMergeId;
+    }
+
+    public int getNumMappers() {
+        return numMappers;
+    }
+
+    public int getNumPartitions() {
+        return numPartitions;
+    }
+
+    public int getMergePartitions() {
+        return mergePartitions;
+    }
 }

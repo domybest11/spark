@@ -10,14 +10,14 @@ public class RemoteShuffleServiceHeartbeat extends BlockTransferMessage {
 
     private final String host;
     private final int port;
-    private final long heartbeatTimeoutMs;
+    private final long heartbeatTimeMs;
     private final WorkerPressure pressure;
     private final RunningStage[] runningStages;
 
-    public RemoteShuffleServiceHeartbeat(String host, int port,  long heartbeatTimeoutMs, WorkerPressure pressure, RunningStage[] runningStages) {
+    public RemoteShuffleServiceHeartbeat(String host, int port, long heartbeatTimeMs, WorkerPressure pressure, RunningStage[] runningStages) {
         this.host = host;
         this.port = port;
-        this.heartbeatTimeoutMs = heartbeatTimeoutMs;
+        this.heartbeatTimeMs = heartbeatTimeMs;
         this.pressure = pressure;
         this.runningStages = runningStages;
     }
@@ -34,8 +34,8 @@ public class RemoteShuffleServiceHeartbeat extends BlockTransferMessage {
         return pressure;
     }
 
-    public long getHeartbeatTimeoutMs() {
-        return heartbeatTimeoutMs;
+    public long getHeartbeatTimeMs() {
+        return heartbeatTimeMs;
     }
 
     public RunningStage[] getRunningStages() {
