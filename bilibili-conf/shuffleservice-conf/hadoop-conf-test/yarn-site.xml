@@ -28,47 +28,47 @@
   </property>
   <property>
     <name>yarn.resourcemanager.ha.rm-ids</name>
-    <value>jssz-rm1,jssz-rm2</value>
+    <value>jssz-bigdata-test-19,jssz-bigdata-test-20</value>
   </property>
   <property>
-    <name>yarn.resourcemanager.hostname.jssz-rm1</name>
-    <value>10.69.1.33</value>
+    <name>yarn.resourcemanager.hostname.jssz-bigdata-test-19</name>
+    <value>10.71.53.23</value>
   </property>
   <property>
-    <name>yarn.resourcemanager.hostname.jssz-rm2</name>
-    <value>10.69.1.34</value>
+    <name>yarn.resourcemanager.hostname.jssz-bigdata-test-20</name>
+    <value>10.71.53.24</value>
   </property>
   <property>
   <property>
-    <name>yarn.resourcemanager.webapp.address.jssz-rm1</name>
+    <name>yarn.resourcemanager.webapp.address.jssz-bigdata-test-19</name>
     <value>127.0.0.1:8088</value>
   </property>
   <property>
-    <name>yarn.resourcemanager.webapp.address.jssz-rm2</name>
+    <name>yarn.resourcemanager.webapp.address.jssz-bigdata-test-20</name>
     <value>127.0.0.1:8088</value>
   </property>
   <property>
-    <name>yarn.resourcemanager.address.jssz-rm1</name>
-    <value>10.69.1.33:8032</value>
+    <name>yarn.resourcemanager.address.jssz-bigdata-test-19</name>
+    <value>10.71.53.23:8032</value>
   </property>
   <property>
-    <name>yarn.resourcemanager.address.jssz-rm2</name>
-    <value>10.69.1.34:8032</value>
+    <name>yarn.resourcemanager.address.jssz-bigdata-test-20</name>
+    <value>10.71.53.24:8032</value>
   </property>
   <property>
-    <name>yarn.resourcemanager.scheduler.address.jssz-rm1</name>
-    <value>10.69.1.33:8030</value>
+    <name>yarn.resourcemanager.scheduler.address.jssz-bigdata-test-19</name>
+    <value>10.71.53.23:8030</value>
   </property>
   <property>
-    <name>yarn.resourcemanager.scheduler.address.jssz-rm2</name>
-    <value>10.69.1.34:8030</value>
+    <name>yarn.resourcemanager.scheduler.address.jssz-bigdata-test-20</name>
+    <value>10.71.53.24:8030</value>
   </property>
   <property>
-    <name>yarn.resourcemanager.resource-tracker.address.jssz-rm1</name>
-    <value>10.69.1.33:8031</value>
+    <name>yarn.resourcemanager.resource-tracker.address.jssz-bigdata-test-19</name>
+    <value>10.71.53.23:8031</value>
   </property>
-    <name>yarn.resourcemanager.resource-tracker.address.jssz-rm2</name>
-    <value>10.69.1.34:8031</value>
+    <name>yarn.resourcemanager.resource-tracker.address.jssz-bigdata-test-20</name>
+    <value>10.71.53.24:8031</value>
   </property>
 
   <!-- scheduler configuration -->
@@ -78,7 +78,7 @@
   </property>
   <property>
     <name>yarn.resourcemanager.zk-address</name>
-    <value>10.69.8.34:2181,10.69.1.30:2181,10.69.1.31:2181</value>
+    <value>10.70.81.42:2181,10.70.81.43:2181,10.70.81.44:2181</value>
     <description>For multiple zk services, separate them with comma</description>
   </property>
   <property>

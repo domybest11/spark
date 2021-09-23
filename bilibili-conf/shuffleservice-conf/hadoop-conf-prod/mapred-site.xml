@@ -61,22 +61,6 @@
     <value>30000</value>
   </property>
   <property>
-    <name>mapreduce.shuffle.listen.queue.size</name>
-    <value>256</value>
-  </property>
-  <property>
-    <name>mapreduce.shuffle.transfer.buffer.size</name>
-    <value>524288</value>
-  </property>
-  <property>
-    <name>mapreduce.shuffle.readahead.bytes</name>
-    <value>8388608</value>
-  </property>
-  <property>
-  <name>mapreduce.shuffle.max.connections</name>
-  <value>10000</value>
-  </property>
-  <property>
     <name>mapreduce.task.io.sort.mb</name>
     <value>1638</value>
   </property>
@@ -144,27 +128,5 @@
   <property>
     <name>mapreduce.jobhistory.principal</name>
     <value>jhs/_HOST@BILIBILI.CO</value>
-  </property>
-
-  <property>
-    <name>mapreduce.job.counters.max</name>
-    <value>256</value>
-  </property>
-
-  <property>
-    <name>mapreduce.job.counters.max.resource.enable</name>
-    <value>true</value>
-  </property>
-  <property>
-    <name>yarn.app.mapreduce.am.metric.enable</name>
-    <value>true</value>
-  </property>
-  <property>
-    <name>yarn.app.mapreduce.used.max.resource.collection.enable</name>
-    <value>true</value>
-  </property>
-  <property>
-    <name>mapreduce.task.metrics.gc.collection.enable</name>
-    <value>true</value>
   </property>
 </configuration>
