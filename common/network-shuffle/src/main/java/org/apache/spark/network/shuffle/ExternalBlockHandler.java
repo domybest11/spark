@@ -84,6 +84,7 @@ public class ExternalBlockHandler extends RpcHandler
   private static ShuffleMetrics metrics = new ShuffleMetrics();
   private final MergedShuffleFileManager mergeManager;
 
+
   public ExternalBlockHandler(TransportConf conf, File registeredExecutorFile)
     throws IOException {
     this(new OneForOneStreamManager(),
@@ -351,7 +352,7 @@ public class ExternalBlockHandler extends RpcHandler
     blockManager.close();
   }
 
-  private void checkAuth(TransportClient client, String appId) {
+  protected void checkAuth(TransportClient client, String appId) {
     if (client.getClientId() != null && !client.getClientId().equals(appId)) {
       throw new SecurityException(String.format(
         "Client for %s not authorized for application %s.", client.getClientId(), appId));
@@ -365,16 +366,16 @@ public class ExternalBlockHandler extends RpcHandler
   public static class ShuffleMetrics implements MetricSet {
     private final Map<String, Metric> allMetrics;
     // Time latency for open block request in ms
-    private final Timer openBlockRequestLatencyMillis =
+    public final Timer openBlockRequestLatencyMillis =
         new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for executor registration latency in ms
-    private final Timer registerExecutorRequestLatencyMillis =
+    public final Timer registerExecutorRequestLatencyMillis =
         new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for processing fetch merged blocks meta request latency in ms
-    private final Timer fetchMergedBlocksMetaLatencyMillis =
+    public final Timer fetchMergedBlocksMetaLatencyMillis =
         new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for processing finalize shuffle merge request latency in ms
-    private final Timer finalizeShuffleMergeLatencyMillis =
+    public final Timer finalizeShuffleMergeLatencyMillis =
         new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for pushing block request latency in ms
     private final Timer pushBlockRequestLatencyMillis =

@@ -107,7 +107,7 @@ public class RemoteMaster {
                     runningApplication.alive.compareAndSet(true, false);
                     synchronized (runningApplication) {
                         runningApplication.workerInfos.forEach(workerInfo ->
-                                workerInfo.cleanApplication(runningApplication.appId,runningApplication.attemptId)
+                                workerInfo.cleanApplication(runningApplication.appId, runningApplication.attemptId)
                         );
                     }
                 }
@@ -126,7 +126,14 @@ public class RemoteMaster {
 
         private void handleMessage(BlockTransferMessage msgObj, TransportClient client, RpcResponseCallback callback) {
             if (msgObj instanceof RegisterWorker) {
-
+                long start = System.currentTimeMillis();
+                RegisterWorker registerWorker = (RegisterWorker) msgObj;
+                String host = registerWorker.getHost();
+                int port = registerWorker.getPort();
+                String address = host + ":" + port;
+                workersMap.computeIfAbsent(address, w -> new WorkerInfo(clientFactory, host, port));
+                callback.onSuccess(ByteBuffer.allocate(0));
+                logger.info("handle RegisterWorker time: {}ms", System.currentTimeMillis() - start);
             } else if (msgObj instanceof RemoteShuffleServiceHeartbeat) {
                 long start = System.currentTimeMillis();
                 RemoteShuffleServiceHeartbeat workHeartbeat = (RemoteShuffleServiceHeartbeat) msgObj;
@@ -135,7 +142,7 @@ public class RemoteMaster {
                 String address = host + ":" + port;
                 org.apache.spark.remote.shuffle.RunningStage[] runningStages = workHeartbeat.getRunningStages();
                 WorkerPressure pressure = workHeartbeat.getPressure();
-                WorkerInfo workerInfo = workersMap.computeIfAbsent(address, w -> new WorkerInfo(host, port));
+                WorkerInfo workerInfo = workersMap.computeIfAbsent(address, w -> new WorkerInfo(clientFactory, host, port));
                 workerInfo.setLatestHeartbeatTime(workHeartbeat.getHeartbeatTimeMs());
                 workerInfo.setPressure(pressure);
                 // TODO: 2021/9/22 根据pressure维护work列表

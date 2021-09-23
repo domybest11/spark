@@ -1,5 +1,15 @@
 package org.apache.spark.remote.shuffle;
 
+import java.util.Locale;
+
 public enum DiskType {
-    SSD,HDD,NVME
+    SSD,HDD,NVME;
+
+    public static DiskType toDiskType(String type) {
+        switch (type.toUpperCase(Locale.ROOT)) {
+            case "SSD" : return SSD;
+            case "NVME" : return NVME;
+            default: return HDD;
+        }
+    }
 }

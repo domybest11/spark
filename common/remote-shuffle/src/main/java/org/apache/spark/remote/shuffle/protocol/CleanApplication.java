@@ -4,6 +4,21 @@ import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 
 public class CleanApplication extends BlockTransferMessage {
+    private String appId;
+    private int attempt;
+
+    public CleanApplication(String appId, int attempt) {
+        this.appId = appId;
+        this.attempt = attempt;
+    }
+
+    public String getAppId() {
+        return appId;
+    }
+
+    public int getAttempt() {
+        return attempt;
+    }
 
     @Override
     public int encodedLength() {

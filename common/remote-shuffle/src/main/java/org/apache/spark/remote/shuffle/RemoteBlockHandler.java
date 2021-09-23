@@ -19,16 +19,15 @@ package org.apache.spark.remote.shuffle;
 
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.spark.network.TransportContext;
-import org.apache.spark.network.client.RpcResponseCallback;
-import org.apache.spark.network.client.TransportClient;
-import org.apache.spark.network.client.TransportClientBootstrap;
-import org.apache.spark.network.client.TransportClientFactory;
+import org.apache.spark.network.client.*;
 import org.apache.spark.network.server.NoOpRpcHandler;
 import org.apache.spark.network.shuffle.ExternalBlockHandler;
-import org.apache.spark.network.shuffle.protocol.AbstractFetchShuffleBlocks;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
+import org.apache.spark.network.shuffle.protocol.PushBlockStream;
 import org.apache.spark.network.util.TransportConf;
+import org.apache.spark.remote.shuffle.protocol.CleanApplication;
 import org.apache.spark.remote.shuffle.protocol.RegisterWorker;
 import org.apache.spark.remote.shuffle.protocol.RemoteShuffleServiceHeartbeat;
 import org.slf4j.Logger;
@@ -38,6 +37,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -54,7 +54,10 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
 
     //meta
-    private ConcurrentHashMap<ShuffleDir,List<RunningStage>> dirInfo;
+    private ConcurrentHashMap<String, ShuffleDir> workDirs = new ConcurrentHashMap<>();
+    // key: appid_attempt  value: runningStage
+    private ConcurrentHashMap<String, List<RunningStage>> appStageMap = new ConcurrentHashMap<>();
+//    private ConcurrentHashMap<ShuffleDir,List<RunningStage>> dirInfo = new ConcurrentHashMap<>();
 
 
     private final ScheduledExecutorService heartbeatThread =
@@ -75,11 +78,11 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     public RemoteBlockHandler(TransportConf conf, File registeredExecutorFile) throws IOException {
         super(conf, registeredExecutorFile);
         transportConf = conf;
-        init();
+        init(conf);
     }
 
 
-    private void init() {
+    private void init(TransportConf conf) throws IOException {
         TransportContext context = new TransportContext(
                 transportConf, new NoOpRpcHandler(), true, true);
         List<TransportClientBootstrap> bootstraps = Lists.newArrayList();
@@ -87,9 +90,20 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         try {
             String masterHost = "";
             int masterPort = 0;
-            registerRemoteShuffleWorker(masterHost,masterPort);
-        } catch (IOException e) {
-            e.printStackTrace();
+            String dirsConfig = conf.get("shuffle.worker.dirs", "");
+            if (StringUtils.isBlank(dirsConfig)) {
+                throw new IOException("");
+            } else {
+                Arrays.stream(dirsConfig.split(",")).forEach(dir -> {
+                    if (dir.contains(":")) {
+                        String[] arr = dir.split(":");
+                        workDirs.put(dir, new ShuffleDir(arr[0], DiskType.toDiskType(arr[1])));
+                    } else {
+                        workDirs.put(dir, new ShuffleDir(dir, DiskType.HDD));
+                    }
+                });
+                registerRemoteShuffleWorker(masterHost, masterPort);
+            }
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -99,15 +113,38 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             String host,
             int port) throws IOException, InterruptedException {
         TransportClient client = clientFactory.createClient(host, port);
-        ByteBuffer registerWorker = new RegisterWorker("",0).toByteBuffer();
+        ByteBuffer registerWorker = new RegisterWorker("", 0).toByteBuffer();
         client.sendRpc(registerWorker, new RegisterWorkerCallback(client));
     }
 
+    @Override
+    public StreamCallbackWithID receiveStream(
+            TransportClient client,
+            ByteBuffer messageHeader,
+            RpcResponseCallback callback) {
+        BlockTransferMessage msgObj = BlockTransferMessage.Decoder.fromByteBuffer(messageHeader);
+        if (msgObj instanceof PushBlockStream) {
+            PushBlockStream message = (PushBlockStream) msgObj;
+            checkAuth(client, message.appId);
+            // TODO: 2021/9/23 如果是第一次push构建这个app 的数据结构
+            String key = message.appId + "_" + message.appAttemptId;
+            appStageMap.computeIfAbsent(key, v -> {
+                return null;
+            });
+            return mergeManager.receiveBlockDataAsStream(message);
+        } else {
+            throw new UnsupportedOperationException("Unexpected message with #receiveStream: " + msgObj);
+        }
+    }
 
     @Override
     protected void handleMessage(BlockTransferMessage msgObj, TransportClient client, RpcResponseCallback callback) {
-        if (msgObj instanceof AbstractFetchShuffleBlocks){
-
+        if (msgObj instanceof CleanApplication) {
+            CleanApplication cleanApplication = (CleanApplication) msgObj;
+            // TODO: 2021/9/23 这里有个问题，这种直接删除会影响到application attempt
+            applicationRemoved(cleanApplication.getAppId(), true);
+            String key = cleanApplication.getAppId() + "_" + cleanApplication.getAttempt();
+            List<RunningStage> stages = appStageMap.remove(key);
         } else {
             super.handleMessage(msgObj, client, callback);
         }
@@ -129,7 +166,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
         @Override
         public void onFailure(Throwable e) {
-
+            logger.warn("Unable to registered remote shuffle worker");
         }
 
         @Override
@@ -154,7 +191,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         @Override
         public void run() {
             List<RunningStage> currentRunningStages = new ArrayList<>();
-            dirInfo.values().forEach(currentRunningStages::addAll);
+            appStageMap.values().forEach(currentRunningStages::addAll);
             // TODO: 2021/9/22 pressure相关
             client.send(
                     new RemoteShuffleServiceHeartbeat(
