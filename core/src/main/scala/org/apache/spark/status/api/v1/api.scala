@@ -275,6 +275,7 @@ class StageData private[spark](
     val shuffleWriteBytes: Long,
     val shuffleWriteTime: Long,
     val shuffleWriteRecords: Long,
+    val shuffleBlocksPushed: Long,
     val shuffleBlocksNotPushed: Long,
     val shuffleBlocksCollided: Long,
     val shuffleBlocksTooLate: Long,
@@ -363,6 +364,7 @@ class ShuffleReadMetrics private[spark](
     val pushBased: ShufflePushReadMetrics)
 
 class ShufflePushWriteMetrics private[spark](
+    val blocksPushed: Long,
     val blocksNotPushed: Long,
     val blocksCollided: Long,
     val blocksTooLate: Long)
@@ -433,6 +435,7 @@ class ShufflePushReadMetricDistributions private[spark](
      val remoteMergedReqsDuration: IndexedSeq[Double])
 
 class ShufflePushWriteMetricDistributions private[spark](
+     val blocksPushed: IndexedSeq[Double],
      val blocksNotPushed: IndexedSeq[Double],
      val blocksCollided: IndexedSeq[Double],
      val blocksTooLate: IndexedSeq[Double])

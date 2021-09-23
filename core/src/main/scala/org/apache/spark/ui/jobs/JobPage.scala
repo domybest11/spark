@@ -255,6 +255,7 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
           shuffleWriteBytes = 0L,
           shuffleWriteTime = 0L,
           shuffleWriteRecords = 0L,
+          shuffleBlocksPushed = 0L,
           shuffleBlocksNotPushed = 0L,
           shuffleBlocksCollided = 0L,
           shuffleBlocksTooLate = 0L,

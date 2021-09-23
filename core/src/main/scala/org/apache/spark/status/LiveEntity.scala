@@ -23,10 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.JavaConverters._
 import scala.collection.immutable.{HashSet, TreeSet}
 import scala.collection.mutable.HashMap
-
 import com.google.common.collect.Interners
-
-import org.apache.spark.JobExecutionStatus
+import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.apache.spark.executor.{ExecutorMetrics, TaskMetrics}
 import org.apache.spark.resource.{ExecutorResourceRequest, ResourceInformation, ResourceProfile, TaskResourceRequest}
 import org.apache.spark.scheduler.{AccumulableInfo, StageInfo, TaskInfo}
@@ -173,6 +171,7 @@ private class LiveTask(
         metrics.shuffleWriteMetrics.bytesWritten,
         metrics.shuffleWriteMetrics.writeTime,
         metrics.shuffleWriteMetrics.recordsWritten,
+        metrics.shuffleWriteMetrics.blocksPushed,
         metrics.shuffleWriteMetrics.blocksNotPushed,
         metrics.shuffleWriteMetrics.blocksCollided,
         metrics.shuffleWriteMetrics.blocksTooLate)
@@ -261,6 +260,7 @@ private class LiveTask(
       taskMetrics.shuffleWriteMetrics.bytesWritten,
       taskMetrics.shuffleWriteMetrics.writeTime,
       taskMetrics.shuffleWriteMetrics.recordsWritten,
+      taskMetrics.shuffleWriteMetrics.pushBased.blocksPushed,
       taskMetrics.shuffleWriteMetrics.pushBased.blocksNotPushed,
       taskMetrics.shuffleWriteMetrics.pushBased.blocksCollided,
       taskMetrics.shuffleWriteMetrics.pushBased.blocksTooLate,
@@ -525,6 +525,7 @@ private class LiveStage extends LiveEntity {
       shuffleWriteBytes = metrics.shuffleWriteMetrics.bytesWritten,
       shuffleWriteTime = metrics.shuffleWriteMetrics.writeTime,
       shuffleWriteRecords = metrics.shuffleWriteMetrics.recordsWritten,
+      shuffleBlocksPushed = metrics.shuffleWriteMetrics.pushBased.blocksPushed,
       shuffleBlocksNotPushed = metrics.shuffleWriteMetrics.pushBased.blocksNotPushed,
       shuffleBlocksCollided = metrics.shuffleWriteMetrics.pushBased.blocksCollided,
       shuffleBlocksTooLate = metrics.shuffleWriteMetrics.pushBased.blocksTooLate,
@@ -541,7 +542,7 @@ private class LiveStage extends LiveEntity {
       killedTasksSummary = killedSummary,
       resourceProfileId = info.resourceProfileId,
       Some(peakExecutorMetrics).filter(_.isSet),
-      isPushBasedShuffleEnabled = info.isPushBasedShuffleEnabled,
+      isPushBasedShuffleEnabled = Utils.isPushBasedShuffleEnabled(sparkConf),
       shuffleMergersCount = info.shuffleMergerCount)
   }
 
@@ -705,6 +706,9 @@ private class SchedulerPool(name: String) extends LiveEntity {
 
 private[spark] object LiveEntityHelpers {
 
+  val sparkConf = new SparkConf
+  Utils.loadDefaultSparkProperties(sparkConf)
+
   private val stringInterner = Interners.newWeakInterner[String]()
 
   private def accuValuetoString(value: Any): String = value match {
@@ -778,6 +782,7 @@ private[spark] object LiveEntityHelpers {
       shuffleBytesWritten: Long,
       shuffleWriteTime: Long,
       shuffleRecordsWritten: Long,
+      shuffleBlocksPushed: Long,
       shuffleBlocksNotPushed: Long,
       shuffleBlocksCollided: Long,
       shuffleBlocksTooLate: Long): v1.TaskMetrics = {
@@ -823,6 +828,7 @@ private[spark] object LiveEntityHelpers {
         shuffleWriteTime,
         shuffleRecordsWritten,
         new v1.ShufflePushWriteMetrics(
+          shuffleBlocksPushed,
           shuffleBlocksNotPushed,
           shuffleBlocksCollided,
           shuffleBlocksTooLate
@@ -835,7 +841,7 @@ private[spark] object LiveEntityHelpers {
       default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default,
-      default, default, default, default, default)
+      default, default, default, default, default, default)
   }
 
   /** Add m2 values to m1. */
@@ -894,6 +900,7 @@ private[spark] object LiveEntityHelpers {
       updateMetricValue(m.shuffleWriteMetrics.bytesWritten),
       updateMetricValue(m.shuffleWriteMetrics.writeTime),
       updateMetricValue(m.shuffleWriteMetrics.recordsWritten),
+      updateMetricValue(m.shuffleWriteMetrics.pushBased.blocksPushed),
       updateMetricValue(m.shuffleWriteMetrics.pushBased.blocksNotPushed),
       updateMetricValue(m.shuffleWriteMetrics.pushBased.blocksCollided),
       updateMetricValue(m.shuffleWriteMetrics.pushBased.blocksTooLate))
@@ -946,6 +953,8 @@ private[spark] object LiveEntityHelpers {
       m1.shuffleWriteMetrics.bytesWritten + m2.shuffleWriteMetrics.bytesWritten * mult,
       m1.shuffleWriteMetrics.writeTime + m2.shuffleWriteMetrics.writeTime * mult,
       m1.shuffleWriteMetrics.recordsWritten + m2.shuffleWriteMetrics.recordsWritten * mult,
+      m1.shuffleWriteMetrics.pushBased.blocksPushed +
+        m2.shuffleWriteMetrics.pushBased.blocksPushed * mult,
       m1.shuffleWriteMetrics.pushBased.blocksNotPushed +
         m2.shuffleWriteMetrics.pushBased.blocksNotPushed * mult,
       m1.shuffleWriteMetrics.pushBased.blocksCollided +

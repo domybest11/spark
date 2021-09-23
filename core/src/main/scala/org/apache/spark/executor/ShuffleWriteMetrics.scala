@@ -32,6 +32,7 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
   private[executor] val _bytesWritten = new LongAccumulator
   private[executor] val _recordsWritten = new LongAccumulator
   private[executor] val _writeTime = new LongAccumulator
+  private[executor] val _blocksPushed = new LongAccumulator
   private[executor] val _blocksNotPushed = new LongAccumulator
   private[executor] val _blocksTooLate = new LongAccumulator
   private[executor] val _blocksCollided = new LongAccumulator
@@ -44,6 +45,8 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
    * Number of large blocks that are not pushed to be merged at the remote shuffle service.
    */
   def blocksNotPushed: Long = _blocksNotPushed.sum
+
+  def blocksPushed: Long = _blocksPushed.sum
 
   /**
    * Number of blocks that didn't get merged because the shuffle merge was already finalized.
@@ -72,6 +75,8 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
   private[spark] override def decBytesWritten(v: Long): Unit = {
     _bytesWritten.setValue(bytesWritten - v)
   }
+
+  private[spark] override def incBlocksPushed(v: Long): Unit = _blocksPushed.add(v)
 
   private[spark] override def incBlocksNotPushed(v: Long): Unit = _blocksNotPushed.add(v)
 

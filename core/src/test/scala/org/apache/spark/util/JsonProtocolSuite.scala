@@ -1103,6 +1103,7 @@ private[spark] object JsonProtocolSuite extends Assertions {
       sw.incBytesWritten(a + b + c)
       sw.incWriteTime(b + c + d)
       sw.incRecordsWritten(if (hasRecords) (a + b + c) / 100 else -1)
+      sw.incBlocksPushed(if (b > a) b - a else a - b)
       sw.incBlocksNotPushed(if (b > a) b - a else a - b)
       sw.incBlocksCollided(if (b > a) b - a else a - b)
       sw.incBlocksTooLate(if (b > a) b - a else a - b)

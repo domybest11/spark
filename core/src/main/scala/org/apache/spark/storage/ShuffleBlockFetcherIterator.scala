@@ -767,28 +767,28 @@ final class ShuffleBlockFetcherIterator(
       result match {
         case r @ SuccessFetchResult(blockId, mapIndex, address, size, buf, isNetworkReqDone) =>
           if (address != blockManager.blockManagerId) {
-            if (hostLocalBlocks.contains(blockId -> mapIndex)) {
-              if (pushBasedFetchHelper.isLocalPushMergedBlockAddress(address)) {
+            val isLocalPushMergedBlockAddress =
+              pushBasedFetchHelper.isLocalPushMergedBlockAddress(address)
+            if (hostLocalBlocks.contains(blockId -> mapIndex) || isLocalPushMergedBlockAddress) {
+              if (isLocalPushMergedBlockAddress) {
                 shuffleMetrics.incLocalMergedBlocksBytesRead(buf.size())
                 shuffleMetrics.incLocalMergedBlocksFetched(1)
-              } else {
+              }
                 // It is a host local block or a local shuffle chunk
                 shuffleMetrics.incLocalBlocksFetched(1)
                 shuffleMetrics.incLocalBytesRead(buf.size)
-              }
             } else {
               if (pushBasedFetchHelper.isRemotePushMergedBlockAddress(address)) {
                 shuffleMetrics.incRemoteMergedBlocksBytesRead(buf.size)
                 shuffleMetrics.incRemoteMergedBlocksFetched(1)
-              } else {
-                numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
-                shuffleMetrics.incRemoteBytesRead(buf.size)
-                if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
+              }
+              numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
+              shuffleMetrics.incRemoteBytesRead(buf.size)
+              if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
                   shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
                 }
-                shuffleMetrics.incRemoteBlocksFetched(1)
-                bytesInFlight -= size
-              }
+              shuffleMetrics.incRemoteBlocksFetched(1)
+              bytesInFlight -= size
             }
           }
           if (isNetworkReqDone) {

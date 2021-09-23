@@ -242,6 +242,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
 
       override def onBlockPushSuccess(blockId: String, data: ManagedBuffer): Unit = {
         logInfo(s"Push for block $blockId (size:${data.size()}) to $address successful.")
+        shuffleWriteMetrics.incBlocksPushed(1)
         handleResult(PushResult(blockId, null))
       }
 
@@ -339,18 +340,16 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
         shuffleWriteMetrics.incBlocksNotPushed(unPushRequests + unDeferredPushRequests)
       }
     }
-    val shouldRetryError = errorHandler.shouldRetryError(pushResult.failure)
-    if (shouldRetryError) {
-      shuffleWriteMetrics.incBlocksTooLate(1)
-    }
-    pushResult.failure match {
-      case failure: BlockPushNonFatalFailure =>
-        if (failure.getReturnCode == ReturnCode.BLOCK_APPEND_COLLISION_DETECTED) {
-          shuffleWriteMetrics.incBlocksCollided(1)
-        }
-      case _ =>
-    }
-    if (pushResult.failure != null && !shouldRetryError) {
+
+    if (pushResult.failure != null && !errorHandler.shouldRetryError(pushResult.failure)) {
+        shuffleWriteMetrics.incBlocksTooLate(1)
+        pushResult.failure match {
+          case failure: BlockPushNonFatalFailure =>
+            if (failure.getReturnCode == ReturnCode.BLOCK_APPEND_COLLISION_DETECTED) {
+               shuffleWriteMetrics.incBlocksCollided(1)
+            }
+           case _ =>
+      }
       logDebug(s"Encountered an exception from $address which indicates that push needs to " +
         s"stop.")
       return false

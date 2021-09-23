@@ -662,6 +662,8 @@ private[spark] class Executor(
           .inc(task.metrics.shuffleWriteMetrics.bytesWritten)
         executorSource.METRIC_SHUFFLE_RECORDS_WRITTEN
           .inc(task.metrics.shuffleWriteMetrics.recordsWritten)
+        executorSource.METRIC_SHUFFLE_BLOCKS_PUSHED
+          .inc(task.metrics.shuffleWriteMetrics.blocksPushed)
         executorSource.METRIC_SHUFFLE_BLOCKS_NOT_PUSHED
           .inc(task.metrics.shuffleWriteMetrics.blocksNotPushed)
         executorSource.METRIC_SHUFFLE_BLOCKS_COLLIDED

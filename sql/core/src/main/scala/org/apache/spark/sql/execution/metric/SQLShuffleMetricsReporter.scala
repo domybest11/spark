@@ -45,6 +45,56 @@ class SQLShuffleReadMetricsReporter(
   private[this] val _recordsRead =
     metrics(SQLShuffleReadMetricsReporter.RECORDS_READ)
 
+  private[this] val _fallbackCount =
+    metrics(SQLShuffleReadMetricsReporter.FALL_BACK_COUNT)
+  private[this] val _remoteMergedBlocksFetched =
+    metrics(SQLShuffleReadMetricsReporter.REMOTE_MERGED_BLOCKS_FETCHED)
+  private[this] val _remoteMergedBlocksBytesRead =
+    metrics(SQLShuffleReadMetricsReporter.REMOTE_MERGED_BLOCKS_BYTES_READ)
+  private[this] val _localMergedBlocksFetched =
+    metrics(SQLShuffleReadMetricsReporter.LOCAL_MERGED_BLOCKS_FETCHED)
+  private[this] val _localMergedBlocksBytesRead =
+    metrics(SQLShuffleReadMetricsReporter.LOCAL_MERGED_BLOCKS_BYTES_READ)
+  private[this] val _remoteMergedChunksFetched =
+    metrics(SQLShuffleReadMetricsReporter.REMOTE_MERGED_CHUNKS_FETCHED)
+  private[this] val _localMergedChunksFetched =
+    metrics(SQLShuffleReadMetricsReporter.LOCAL_MERGED_CHUNKS_FETCHED)
+
+  override def incFallbackCount (v: Long): Unit = {
+    _fallbackCount.add(v)
+    tempMetrics.incFallbackCount(v)
+  }
+
+  override def incRemoteMergedBlocksFetched (v: Long): Unit = {
+    _remoteMergedBlocksFetched.add(v)
+    tempMetrics.incRemoteMergedBlocksFetched(v)
+  }
+
+  override def incRemoteMergedBlocksBytesRead (v: Long): Unit = {
+    _remoteMergedBlocksBytesRead.add(v)
+    tempMetrics.incRemoteMergedBlocksBytesRead(v)
+  }
+
+  override def incLocalMergedBlocksFetched (v: Long): Unit = {
+    _localMergedBlocksFetched.add(v)
+    tempMetrics.incLocalMergedBlocksFetched(v)
+  }
+
+  override def incLocalMergedBlocksBytesRead (v: Long): Unit = {
+    _localMergedBlocksBytesRead.add(v)
+    tempMetrics.incLocalMergedBlocksBytesRead(v)
+  }
+
+  override def incRemoteMergedChunksFetched (v: Long): Unit = {
+    _remoteMergedChunksFetched.add(v)
+    tempMetrics.incRemoteMergedChunksFetched(v)
+  }
+
+  override def incLocalMergedChunksFetched (v: Long): Unit = {
+    _localMergedChunksFetched.add(v)
+    tempMetrics.incLocalMergedChunksFetched(v)
+  }
+
   override def incRemoteBlocksFetched(v: Long): Unit = {
     _remoteBlocksFetched.add(v)
     tempMetrics.incRemoteBlocksFetched(v)
@@ -83,7 +133,13 @@ object SQLShuffleReadMetricsReporter {
   val LOCAL_BYTES_READ = "localBytesRead"
   val FETCH_WAIT_TIME = "fetchWaitTime"
   val RECORDS_READ = "recordsRead"
-
+  val FALL_BACK_COUNT = "fallbackCount"
+  val REMOTE_MERGED_BLOCKS_FETCHED = "remoteMergedBlocksFetched"
+  val REMOTE_MERGED_BLOCKS_BYTES_READ = "remoteMergedBlocksBytesRead"
+  val LOCAL_MERGED_BLOCKS_FETCHED = "localMergedBlocksFetched"
+  val LOCAL_MERGED_BLOCKS_BYTES_READ = "localMergedBlocksBytesRead"
+  val REMOTE_MERGED_CHUNKS_FETCHED = "remoteMergedChunksFetched"
+  val LOCAL_MERGED_CHUNKS_FETCHED = "LocalMergedChunksFetched"
   /**
    * Create all shuffle read relative metrics and return the Map.
    */
@@ -94,7 +150,15 @@ object SQLShuffleReadMetricsReporter {
     REMOTE_BYTES_READ_TO_DISK -> SQLMetrics.createSizeMetric(sc, "remote bytes read to disk"),
     LOCAL_BYTES_READ -> SQLMetrics.createSizeMetric(sc, "local bytes read"),
     FETCH_WAIT_TIME -> SQLMetrics.createTimingMetric(sc, "fetch wait time"),
-    RECORDS_READ -> SQLMetrics.createMetric(sc, "records read"))
+    RECORDS_READ -> SQLMetrics.createMetric(sc, "records read"),
+    FALL_BACK_COUNT -> SQLMetrics.createMetric(sc, "fall back count"),
+    REMOTE_MERGED_BLOCKS_FETCHED -> SQLMetrics.createMetric(sc, "remote merged blocks fetched"),
+    REMOTE_MERGED_BLOCKS_BYTES_READ -> SQLMetrics.createMetric(sc, "remote merged blocks bytes read"),
+    LOCAL_MERGED_BLOCKS_FETCHED -> SQLMetrics.createMetric(sc, "local merged blocks fetched"),
+    LOCAL_MERGED_BLOCKS_BYTES_READ -> SQLMetrics.createMetric(sc, "local merged blocks bytes read"),
+    REMOTE_MERGED_CHUNKS_FETCHED -> SQLMetrics.createMetric(sc, "remote merged chunks fetched"),
+    LOCAL_MERGED_CHUNKS_FETCHED -> SQLMetrics.createMetric(sc, "Local merged chunks fetched"),
+  )
 }
 
 /**
@@ -111,6 +175,8 @@ class SQLShuffleWriteMetricsReporter(
     metrics(SQLShuffleWriteMetricsReporter.SHUFFLE_RECORDS_WRITTEN)
   private[this] val _writeTime =
     metrics(SQLShuffleWriteMetricsReporter.SHUFFLE_WRITE_TIME)
+  private[this] val _blocksPushed =
+    metrics(SQLShuffleWriteMetricsReporter.BLOCKS_PUSHED)
   private[this] val _blocksNotPushed =
     metrics(SQLShuffleWriteMetricsReporter.BLOCKS_NOT_PUSHED)
   private[this] val _blocksTooLate =
@@ -139,6 +205,11 @@ class SQLShuffleWriteMetricsReporter(
     _bytesWritten.set(_bytesWritten.value - v)
   }
 
+  override def incBlocksPushed(v: Long): Unit = {
+    metricsReporter.incBlocksPushed(v)
+    _blocksPushed.add(v)
+  }
+
   override def incBlocksNotPushed(v: Long): Unit = {
     metricsReporter.incBlocksNotPushed(v)
     _blocksNotPushed.add(v)
@@ -159,6 +230,7 @@ object SQLShuffleWriteMetricsReporter {
   val SHUFFLE_BYTES_WRITTEN = "shuffleBytesWritten"
   val SHUFFLE_RECORDS_WRITTEN = "shuffleRecordsWritten"
   val SHUFFLE_WRITE_TIME = "shuffleWriteTime"
+  val BLOCKS_PUSHED = "blocksPushed"
   val BLOCKS_NOT_PUSHED = "blocksNotPushed"
   val BLOCKS_TOO_LATE = "blocksTooLate"
   val BLOCKS_COLLIDED = "blocksCollided"
@@ -173,6 +245,8 @@ object SQLShuffleWriteMetricsReporter {
       SQLMetrics.createMetric(sc, "shuffle records written"),
     SHUFFLE_WRITE_TIME ->
       SQLMetrics.createNanoTimingMetric(sc, "shuffle write time"),
+    BLOCKS_PUSHED ->
+      SQLMetrics.createMetric(sc, "blocks pushed"),
     BLOCKS_NOT_PUSHED ->
       SQLMetrics.createMetric(sc, "blocks not pushed"),
     BLOCKS_TOO_LATE ->

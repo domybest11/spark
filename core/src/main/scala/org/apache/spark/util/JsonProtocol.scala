@@ -418,6 +418,7 @@ private[spark] object JsonProtocol {
         ("Remote Requests Duration" -> taskMetrics.shuffleReadMetrics.remoteReqsDuration) ~
         ("Push Based" -> shufflePushReadMetrics)
     val shufflePushWriteMetrics: JValue =
+      ("Shuffle Blocks Pushed" -> taskMetrics.shuffleWriteMetrics.blocksPushed)
       ("Shuffle Blocks Not Pushed" -> taskMetrics.shuffleWriteMetrics.blocksNotPushed) ~
         ("Shuffle Blocks Collided" -> taskMetrics.shuffleWriteMetrics.blocksCollided) ~
         ("Shuffle Blocks Too Late" -> taskMetrics.shuffleWriteMetrics.blocksTooLate)
@@ -1085,6 +1086,8 @@ private[spark] object JsonProtocol {
       writeMetrics.incWriteTime((writeJson \ "Shuffle Write Time").extract[Long])
       // Push-based write metrics
       jsonOption(writeJson \ "Push Based").foreach { v =>
+        writeMetrics.incBlocksPushed(jsonOption(v \ "Shuffle Blocks Pushed")
+          .map(_.extract[Long]).getOrElse(0L))
         writeMetrics.incBlocksNotPushed(jsonOption(v \ "Shuffle Blocks Not Pushed")
           .map(_.extract[Long]).getOrElse(0L))
         writeMetrics.incBlocksCollided(jsonOption(v \ "Shuffle Blocks Collided")

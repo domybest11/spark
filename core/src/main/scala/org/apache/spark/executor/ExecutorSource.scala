@@ -115,6 +115,8 @@ class ExecutorSource(
     metricRegistry.counter(MetricRegistry.name("shuffleBytesWritten"))
   val METRIC_SHUFFLE_RECORDS_WRITTEN =
     metricRegistry.counter(MetricRegistry.name("shuffleRecordsWritten"))
+  val METRIC_SHUFFLE_BLOCKS_PUSHED =
+    metricRegistry.counter(MetricRegistry.name("shuffleBlocksPushed"))
   val METRIC_SHUFFLE_BLOCKS_NOT_PUSHED =
     metricRegistry.counter(MetricRegistry.name("shuffleBlocksNotPushed"))
   val METRIC_SHUFFLE_BLOCKS_TOO_LATE =
