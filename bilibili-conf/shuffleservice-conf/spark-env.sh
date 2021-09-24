@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 export SPARK_HOME=/data/service/spark3.1
-export HADOOP_CONF_DIR=/etc/hadoop/
+export HADOOP_CONF_DIR=/etc/hadoop-shuffle-service/
 export SPARK_YARN_MODE=true
 export PATH=$PATH:$SPARK_HOME/bin
 export HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-/etc/hadoop/}

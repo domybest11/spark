@@ -1,7 +1,0 @@
----
-startDelaySeconds: 0
-jmxUrl: service:jmx:rmi:///jndi/rmi://10.69.32.13:7090/jmxrmi
-username:
-password:
-ssl: false
-whitelistObjectNames: ["Hadoop:*"]
