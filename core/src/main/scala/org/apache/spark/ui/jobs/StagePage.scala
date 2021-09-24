@@ -201,14 +201,14 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
             </li>
           }}
           {if (hasShuffleRead(stageData)) {
-          <li>
-            <strong>Push Based Shuffle Enabled: </strong>
-            {s"${stageData.isPushBasedShuffleEnabled}"}
-          </li>
+            <li>
+              <strong>Push Based Shuffle Enabled: </strong>
+              {s"${stageData.isPushBasedShuffleEnabled}"}
+            </li>
             if (stageData.isPushBasedShuffleEnabled)
               {
                 <li>
-                  <strong>Fall back Count: </strong>
+                  <strong>Fall Back Count: </strong>
                   {s"${stageData.shuffleFallbackCount}"}
                 </li>
                 <li>
@@ -221,19 +221,19 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
                 </li>
                 <li>
                   <strong>Remote Merged Blocks Fetched: </strong>
-                  {s"${stageData.shuffleRemoteBlocksFetched}"}
-                </li>
-                <li>
-                  <strong>Remote Merged Blocks Bytes Read: </strong>
-                  {Utils.bytesToString(stageData.shuffleRemoteBytesRead)}
-                </li>
-                <li>
-                  <strong>Remote Merged Chunks Fetched: </strong>
                   {s"${stageData.shuffleMergedRemoteBlocksFetched}"}
                 </li>
                 <li>
+                  <strong>Remote Merged Blocks Bytes Read: </strong>
+                  {Utils.bytesToString(stageData.shuffleMergedRemoteBytesRead)}
+                </li>
+                <li>
+                  <strong>Remote Merged Chunks Fetched: </strong>
+                  {s"${stageData.shuffleMergedRemoteChunksFetched}"}
+                </li>
+                <li>
                   <strong>Local Merged Chunks Fetched: </strong>
-                  {s"${stageData.shuffleMergedLocalBlocksFetched}"}
+                  {s"${stageData.shuffleMergedLocalChunksFetched}"}
                 </li>
               }
         }}

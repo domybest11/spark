@@ -236,21 +236,19 @@ final class ShuffleBlockFetcherIterator(
               if (pushBasedFetchHelper.isLocalPushMergedBlockAddress(address)) {
                 shuffleMetrics.incLocalMergedBlocksBytesRead(buf.size())
                 shuffleMetrics.incLocalMergedBlocksFetched(1)
-              } else {
-                shuffleMetrics.incLocalBlocksFetched(1)
-                shuffleMetrics.incLocalBytesRead(buf.size)
               }
+              shuffleMetrics.incLocalBlocksFetched(1)
+              shuffleMetrics.incLocalBytesRead(buf.size)
             } else {
               if (pushBasedFetchHelper.isRemotePushMergedBlockAddress(address)) {
                 shuffleMetrics.incRemoteMergedBlocksBytesRead(buf.size)
                 shuffleMetrics.incRemoteMergedBlocksFetched(1)
-              } else {
-                shuffleMetrics.incRemoteBytesRead(buf.size)
-                if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
-                  shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
-                }
-                shuffleMetrics.incRemoteBlocksFetched(1)
               }
+              shuffleMetrics.incRemoteBytesRead(buf.size)
+              if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
+                  shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+              }
+              shuffleMetrics.incRemoteBlocksFetched(1)
             }
           }
           buf.release()

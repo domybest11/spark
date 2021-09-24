@@ -26,6 +26,7 @@ import scala.collection.mutable.HashMap
 import com.google.common.collect.Interners
 import org.apache.spark.{JobExecutionStatus, SparkConf}
 import org.apache.spark.executor.{ExecutorMetrics, TaskMetrics}
+import org.apache.spark.internal.config.PUSH_BASED_SHUFFLE_ENABLED
 import org.apache.spark.resource.{ExecutorResourceRequest, ResourceInformation, ResourceProfile, TaskResourceRequest}
 import org.apache.spark.scheduler.{AccumulableInfo, StageInfo, TaskInfo}
 import org.apache.spark.status.api.v1
@@ -542,7 +543,7 @@ private class LiveStage extends LiveEntity {
       killedTasksSummary = killedSummary,
       resourceProfileId = info.resourceProfileId,
       Some(peakExecutorMetrics).filter(_.isSet),
-      isPushBasedShuffleEnabled = Utils.isPushBasedShuffleEnabled(sparkConf),
+      isPushBasedShuffleEnabled = sparkConf.get(PUSH_BASED_SHUFFLE_ENABLED),
       shuffleMergersCount = info.shuffleMergerCount)
   }
 

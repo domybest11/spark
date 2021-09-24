@@ -18,10 +18,12 @@
 package org.apache.spark.scheduler
 
 import scala.collection.mutable.HashMap
-
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.internal.config.PUSH_BASED_SHUFFLE_ENABLED
+import org.apache.spark.status.LiveEntityHelpers.sparkConf
 import org.apache.spark.storage.RDDInfo
+
 
 /**
  * :: DeveloperApi ::
@@ -111,7 +113,7 @@ private[spark] object StageInfo {
       taskLocalityPreferences,
       shuffleDepId,
       resourceProfileId,
-      false,
+      sparkConf.get(PUSH_BASED_SHUFFLE_ENABLED),
       0)
   }
 }
