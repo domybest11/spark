@@ -30,7 +30,7 @@ import org.apache.spark.status.api.v1.JacksonMessageWriter
 
 private[spark] class KafkaProducerUtil(conf: SparkConf) extends Logging {
 //  conf.get("spark.topic", "lancer_bigdata_spark_spark")
-  val METRIC_TOPIC: String = "lancer_bigdata_spark_job"
+  val METRIC_TOPIC: String = "r_bdp_lancer.lancer_bigdata_spark_job"
   val producer: org.apache.kafka.clients.producer.KafkaProducer[String, Array[Byte]] = {
     val kafkaProps = new Properties
     kafkaProps.put(
