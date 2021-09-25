@@ -76,7 +76,7 @@ public class ExternalBlockHandler extends RpcHandler
   @VisibleForTesting
   final ExternalShuffleBlockResolver blockManager;
   private final OneForOneStreamManager streamManager;
-  private final ShuffleMetrics metrics;
+  private static ShuffleMetrics metrics;
   private final MergedShuffleFileManager mergeManager;
 
   public ExternalBlockHandler(TransportConf conf, File registeredExecutorFile)
@@ -85,7 +85,7 @@ public class ExternalBlockHandler extends RpcHandler
             new ExternalShuffleBlockResolver(conf, registeredExecutorFile),
             conf.get("spark.shuffle.push.enabled",
                     "false").equals("true") ?
-      new RemoteBlockPushResolver(conf) :
+      new RemoteBlockPushResolver(conf, metrics) :
       new NoOpMergedShuffleFileManager(conf)) ;
     }
 
@@ -135,9 +135,15 @@ public class ExternalBlockHandler extends RpcHandler
       RpcResponseCallback callback) {
     BlockTransferMessage msgObj = BlockTransferMessage.Decoder.fromByteBuffer(messageHeader);
     if (msgObj instanceof PushBlockStream) {
-      PushBlockStream message = (PushBlockStream) msgObj;
-      checkAuth(client, message.appId);
-      return mergeManager.receiveBlockDataAsStream(message);
+      final Timer.Context responseDelayContext =
+              metrics.pushBlockRequestLatencyMillis.time();
+      try {
+        PushBlockStream message = (PushBlockStream) msgObj;
+        checkAuth(client, message.appId);
+        return mergeManager.receiveBlockDataAsStream(message);
+      } finally {
+        responseDelayContext.stop();
+    }
     } else {
       throw new UnsupportedOperationException("Unexpected message with #receiveStream: " + msgObj);
     }
@@ -362,6 +368,13 @@ public class ExternalBlockHandler extends RpcHandler
     // Time latency for processing finalize shuffle merge request latency in ms
     private final Timer finalizeShuffleMergeLatencyMillis =
         new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    // Time latency for pushing block request latency in ms
+    private final Timer pushBlockRequestLatencyMillis =
+            new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    // Time latency for processing fetch merged blocks data request latency in ms
+    private final Timer getBlocksDataLatencyMillis =
+            new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+
     // Block transfer rate in blocks per second
     private final Meter blockTransferRate = new Meter();
     // Block fetch message rate per second. When using non-batch fetches
@@ -376,6 +389,12 @@ public class ExternalBlockHandler extends RpcHandler
     private Counter activeConnections = new Counter();
     // Number of exceptions caught in connections to the shuffle service
     private Counter caughtExceptions = new Counter();
+    // Number of blocks which merged arrives too late to shuffle service
+    public Counter pushBlocksTooLates = new Counter();
+    // Number of collision with other blocks on shuffle service
+    public Counter pushBlocksCollideds = new Counter();
+    // Number of stale block push on shuffle service
+    public Counter pushBlocksStales = new Counter();
 
     public ShuffleMetrics() {
       allMetrics = new HashMap<>();
@@ -397,10 +416,17 @@ public class ExternalBlockHandler extends RpcHandler
               blockTransferMessageRate.getOneMinuteRate());
         }
       });
+
+      allMetrics.put("pushBlockRequestLatencyMillis", pushBlockRequestLatencyMillis);
+      allMetrics.put("getBlocksDataLatencyMillis", getBlocksDataLatencyMillis);
+
       allMetrics.put("registeredExecutorsSize",
                      (Gauge<Integer>) () -> blockManager.getRegisteredExecutorsSize());
       allMetrics.put("numActiveConnections", activeConnections);
       allMetrics.put("numCaughtExceptions", caughtExceptions);
+      allMetrics.put("pushBlocksTooLates", pushBlocksTooLates);
+      allMetrics.put("pushBlocksCollideds", pushBlocksCollideds);
+      allMetrics.put("pushBlocksStales", pushBlocksStales);
     }
 
     @Override
@@ -622,16 +648,21 @@ public class ExternalBlockHandler extends RpcHandler
 
     @Override
     public ManagedBuffer next() {
-      ManagedBuffer block = Preconditions.checkNotNull(mergeManager.getMergedBlockData(
-        appId, shuffleId, shuffleMergeId, reduceIds[reduceIdx], chunkIds[reduceIdx][chunkIdx]));
-      if (chunkIdx < chunkIds[reduceIdx].length - 1) {
-        chunkIdx += 1;
-      } else {
-        chunkIdx = 0;
-        reduceIdx += 1;
+      final Timer.Context responseDelayContext = metrics.getBlocksDataLatencyMillis.time();
+      try {
+        ManagedBuffer block = Preconditions.checkNotNull(mergeManager.getMergedBlockData(
+                appId, shuffleId, shuffleMergeId, reduceIds[reduceIdx], chunkIds[reduceIdx][chunkIdx]));
+        if (chunkIdx < chunkIds[reduceIdx].length - 1) {
+          chunkIdx += 1;
+        } else {
+          chunkIdx = 0;
+          reduceIdx += 1;
+        }
+        metrics.blockTransferRateBytes.mark(block.size());
+        return block;
+      } finally {
+        responseDelayContext.close();
       }
-      metrics.blockTransferRateBytes.mark(block.size());
-      return block;
     }
   }
 
