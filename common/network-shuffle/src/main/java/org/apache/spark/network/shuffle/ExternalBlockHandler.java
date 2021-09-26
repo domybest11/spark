@@ -75,6 +75,11 @@ public class ExternalBlockHandler extends RpcHandler
 
   @VisibleForTesting
   private static ExternalShuffleBlockResolver blockManager;
+
+  public ExternalShuffleBlockResolver getBlockManager() {
+    return blockManager;
+  }
+
   private final OneForOneStreamManager streamManager;
   private static ShuffleMetrics metrics = new ShuffleMetrics();
   private final MergedShuffleFileManager mergeManager;

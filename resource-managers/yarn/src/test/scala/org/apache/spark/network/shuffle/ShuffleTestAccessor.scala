@@ -32,7 +32,7 @@ import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo
 object ShuffleTestAccessor {
 
   def getBlockResolver(handler: ExternalBlockHandler): ExternalShuffleBlockResolver = {
-    handler.blockManager
+    handler.getBlockManager
   }
 
   def getExecutorInfo(
