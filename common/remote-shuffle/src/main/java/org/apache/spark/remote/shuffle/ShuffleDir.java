@@ -10,4 +10,20 @@ public class ShuffleDir {
         this.path = path;
         this.type = type;
     }
+
+    public String getPath() {
+        return path;
+    }
+
+    public DiskType getType() {
+        return type;
+    }
+
+    public int getIo() {
+        return io;
+    }
+
+    public long getSampleTime() {
+        return sampleTime;
+    }
 }

@@ -25,6 +25,7 @@ import org.apache.spark.network.client.*;
 import org.apache.spark.network.server.NoOpRpcHandler;
 import org.apache.spark.network.shuffle.ExternalBlockHandler;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
+import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.PushBlockStream;
 import org.apache.spark.network.util.TransportConf;
 import org.apache.spark.remote.shuffle.protocol.CleanApplication;
@@ -54,9 +55,10 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
 
     //meta
-    private ConcurrentHashMap<String, ShuffleDir> workDirs = new ConcurrentHashMap<>();
-    // key: appid_attempt  value: runningStage
-    private ConcurrentHashMap<String, List<RunningStage>> appStageMap = new ConcurrentHashMap<>();
+//    private ConcurrentHashMap<String, ShuffleDir> workDirs = new ConcurrentHashMap<>();
+    private List<ShuffleDir> workDirs = new ArrayList<>();
+    // key: appid_attempt  value: v-key: shuffle_key v-value: runningStage
+    private ConcurrentHashMap<String, ConcurrentHashMap<String, RunningStage>> appStageMap = new ConcurrentHashMap<>();
 //    private ConcurrentHashMap<ShuffleDir,List<RunningStage>> dirInfo = new ConcurrentHashMap<>();
 
 
@@ -81,8 +83,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         init(conf);
     }
 
-
     private void init(TransportConf conf) throws IOException {
+        // TODO: 2021/9/26 初始化worker 从配置中获取可用的工作目录
         TransportContext context = new TransportContext(
                 transportConf, new NoOpRpcHandler(), true, true);
         List<TransportClientBootstrap> bootstraps = Lists.newArrayList();
@@ -97,11 +99,12 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 Arrays.stream(dirsConfig.split(",")).forEach(dir -> {
                     if (dir.contains(":")) {
                         String[] arr = dir.split(":");
-                        workDirs.put(dir, new ShuffleDir(arr[0], DiskType.toDiskType(arr[1])));
+                        workDirs.add(new ShuffleDir(arr[0], DiskType.toDiskType(arr[1])));
                     } else {
-                        workDirs.put(dir, new ShuffleDir(dir, DiskType.HDD));
+                        workDirs.add(new ShuffleDir(dir, DiskType.HDD));
                     }
                 });
+                // TODO: 2021/9/26 配置初始化完成后向master发送注册节点请求
                 registerRemoteShuffleWorker(masterHost, masterPort);
             }
         } catch (InterruptedException e) {
@@ -126,11 +129,26 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         if (msgObj instanceof PushBlockStream) {
             PushBlockStream message = (PushBlockStream) msgObj;
             checkAuth(client, message.appId);
-            // TODO: 2021/9/23 如果是第一次push构建这个app 的数据结构
-            String key = message.appId + "_" + message.appAttemptId;
-            appStageMap.computeIfAbsent(key, v -> {
-                return null;
+            String appKey = message.appId + "_" + message.appAttemptId;
+            String shuffleKey = message.appId + "_" + message.appAttemptId + "_" + message.shuffleId + "_";
+            // TODO: 2021/9/26 第一次push数据,需要构建相关的数据结构, 构建过程最好可以提前, push开始后性能非常重要
+            //  原实现时工作目录通过RegisterExecutor注册, rss无法这样注册
+            //  个人想法
+            //  1：registerShuffle的时候就开始location获取，同时相关worker就开始构造相关的工作目录
+            //  2.driver在DagScheduler.prepareShuffleServicesForShuffleMapStage 获取到目标worker后，这
+            //  时候driver开始向worker申请工作目录
+            
+            ConcurrentHashMap<String, RunningStage> appRunningStageMap = appStageMap.computeIfAbsent(appKey, v -> {
+                prepareAppWorkDir(message.appId, message.appAttemptId);
+                return new ConcurrentHashMap<>();
             });
+            RunningStage runningStage = appRunningStageMap.computeIfAbsent(shuffleKey, v -> 
+                 new RunningStage(
+                        message.appId,
+                        message.appAttemptId,
+                        message.shuffleId
+                )
+            );
             return mergeManager.receiveBlockDataAsStream(message);
         } else {
             throw new UnsupportedOperationException("Unexpected message with #receiveStream: " + msgObj);
@@ -143,8 +161,11 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             CleanApplication cleanApplication = (CleanApplication) msgObj;
             // TODO: 2021/9/23 这里有个问题，这种直接删除会影响到application attempt
             applicationRemoved(cleanApplication.getAppId(), true);
-            String key = cleanApplication.getAppId() + "_" + cleanApplication.getAttempt();
-            List<RunningStage> stages = appStageMap.remove(key);
+            String appKey = cleanApplication.getAppId() + "_" + cleanApplication.getAttempt();
+            ConcurrentHashMap<String, RunningStage> map =  appStageMap.remove(appKey);
+            if (map != null) {
+                RunningStage[] stages = map.values().toArray(new RunningStage[0]);
+            }
         } else {
             super.handleMessage(msgObj, client, callback);
         }
@@ -154,6 +175,55 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     public void close() {
         super.close();
         heartbeatThread.shutdownNow();
+    }
+
+
+    private void prepareAppWorkDir(String appId, int attemptId) {
+        // TODO: 2021/9/26 兼容调社区版本注册app工作目录
+        workDirs.forEach(shuffleDir -> {
+            String rootDir = shuffleDir.getPath();
+            File mergeDir = new File(rootDir, appId+"/_"+attemptId+"/merge_manager");
+            if (!mergeDir.exists()) {
+                for(int dirNum=0; dirNum<64; dirNum++){
+                    File subDir = new File(mergeDir, String.format("%02x", dirNum));
+                    try {
+                        if (!subDir.exists()) {
+                            // Only one container will create this directory. The filesystem will handle
+                            // any race conditions.
+                            createDirWithPermission770(subDir);
+                        }
+                    } catch (IOException | InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+            mergeManager.registerExecutor(appId,new ExecutorShuffleInfo(null,64,null));
+        });
+    }
+
+    private void createDirWithPermission770(File dirToCreate) throws IOException, InterruptedException {
+        int attempts = 0;
+        int maxAttempts = 10;
+        File created = null;
+        while (created == null) {
+            attempts += 1;
+            if (attempts > maxAttempts) {
+                throw new IOException(
+                        "Failed to create directory "+ dirToCreate.getAbsolutePath() +" with permission 770 after $maxAttempts attempts!");
+            }
+            try {
+                ProcessBuilder builder = new ProcessBuilder().command(
+                        "mkdir", "-p", "-m770", dirToCreate.getAbsolutePath());
+                Process proc = builder.start();
+                int exitCode = proc.waitFor();
+                if (dirToCreate.exists()) {
+                    created = dirToCreate;
+                }
+            } catch (SecurityException e) {
+                logger.warn("Failed to create directory " + dirToCreate.getAbsolutePath() + " with permission 770", e);
+                created = null;
+            }
+        }
     }
 
 
@@ -171,6 +241,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
         @Override
         public void onSuccess(ByteBuffer response) {
+            // TODO: 2021/9/26 注册成功开始定时调度心跳和磁盘压力监控
             heartbeatThread.scheduleAtFixedRate(
                     new Heartbeat(client), 0, heartbeatIntervalMs, TimeUnit.MILLISECONDS);
 
@@ -191,8 +262,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         @Override
         public void run() {
             List<RunningStage> currentRunningStages = new ArrayList<>();
-            appStageMap.values().forEach(currentRunningStages::addAll);
-            // TODO: 2021/9/22 pressure相关
+            appStageMap.values().forEach(stageMap-> currentRunningStages.addAll(stageMap.values()));
+            // TODO: 2021/9/22 心跳上报
             client.send(
                     new RemoteShuffleServiceHeartbeat(
                             "host",
@@ -211,6 +282,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
         @Override
         public void run() {
+            // TODO: 2021/9/26 监控磁盘压力
         }
     }
 

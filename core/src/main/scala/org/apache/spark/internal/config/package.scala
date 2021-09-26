@@ -690,20 +690,20 @@ package object config {
       .timeConf(TimeUnit.SECONDS)
       .createWithDefaultString("1h")
 
-  private[spark] val REMOTE_SHUFFLE_SERVICE_ENABLED =
-    ConfigBuilder("spark.remote.shuffle.service.enabled")
+  private[spark] val SHUFFLE_REMOTE_SERVICE_ENABLED =
+    ConfigBuilder("spark.shuffle.remote.service.enabled")
       .version("3.2.0")
       .booleanConf
       .createWithDefault(false)
 
-  private[spark] val REMOTE_SHUFFLE_SERVICE_MASTER =
-    ConfigBuilder("spark.remote.shuffle.service.master")
+  private[spark] val SHUFFLE_REMOTE_SERVICE_MASTER =
+    ConfigBuilder("spark.shuffle.remote.service.master")
       .version("3.2.0")
       .stringConf
       .createOptional
 
-  private[spark] val REMOTE_SHUFFLE_REPORT_INTERVAL =
-    ConfigBuilder("spark.remote.shuffle.report.interval")
+  private[spark] val SHUFFLE_REMOTE_REPORT_INTERVAL =
+    ConfigBuilder("spark.shuffle.remote.report.interval")
       .version("3.2.0")
       .timeConf(TimeUnit.MILLISECONDS)
       .checkValue(_ >= 0L, "Timeout must be >= 0.")

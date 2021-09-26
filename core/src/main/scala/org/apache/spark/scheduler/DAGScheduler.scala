@@ -1358,10 +1358,24 @@ private[spark] class DAGScheduler(
   private def prepareShuffleServicesForShuffleMapStage(stage: ShuffleMapStage): Unit = {
     assert(stage.shuffleDep.shuffleMergeEnabled && !stage.shuffleDep.shuffleMergeFinalized)
     if (stage.shuffleDep.getMergerLocs.isEmpty) {
-      val mergerLocs = sc.schedulerBackend.getShufflePushMergerLocations(
-        stage.shuffleDep.partitioner.numPartitions, stage.resourceProfileId)
-      if (mergerLocs.nonEmpty) {
-        stage.shuffleDep.setMergerLocs(mergerLocs)
+      val mergerLocs = if (sc.getConf.get(config.SHUFFLE_REMOTE_SERVICE_ENABLED)) {
+        // TODO: 从master申请可用的location
+        sc.remoteShuffleClient.map(client => {
+          client.getShufflePushMergerLocations(
+            sc.applicationId,
+            sc.applicationAttemptId,
+            stage.id,
+            stage.shuffleDep.partitioner.numPartitions,
+            stage.resourceProfileId)
+        }).map(workers => workers.map(
+          work => new BlockManagerId(work.getHost, work.getHost, work.getPort, None)
+        ))
+      } else {
+        Some(sc.schedulerBackend.getShufflePushMergerLocations(
+          stage.shuffleDep.partitioner.numPartitions, stage.resourceProfileId))
+      }
+      if (mergerLocs.isDefined && mergerLocs.nonEmpty) {
+        stage.shuffleDep.setMergerLocs(mergerLocs.get)
         logInfo(s"Push-based shuffle enabled for $stage (${stage.name}) with" +
           s" ${stage.shuffleDep.getMergerLocs.size} merger locations")
 

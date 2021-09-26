@@ -53,6 +53,7 @@ public class RemoteMaster {
 
 
     private void start() {
+        // TODO: 2021/9/26 从配置中获取基本信息启动
         if (server == null) {
             transportContext = new TransportContext(transportConf, new MasterRpcHandler(), true);
             List<TransportServerBootstrap> bootstraps = Lists.newArrayList();
@@ -101,7 +102,7 @@ public class RemoteMaster {
             Iterator<RunningApplication> it = runningApplicationMap.values().iterator();
             while (it.hasNext()){
                 RunningApplication runningApplication = it.next();
-                // TODO: 2021/9/22 超时时间
+                // TODO: 2021/9/22 application 超时过期回收
                 if (runningApplication.latestHeartbeatTime + 1000L > System.currentTimeMillis()) {
                     it.remove();
                     runningApplication.alive.compareAndSet(true, false);
@@ -126,6 +127,7 @@ public class RemoteMaster {
 
         private void handleMessage(BlockTransferMessage msgObj, TransportClient client, RpcResponseCallback callback) {
             if (msgObj instanceof RegisterWorker) {
+                // TODO: 2021/9/26 注册worker
                 long start = System.currentTimeMillis();
                 RegisterWorker registerWorker = (RegisterWorker) msgObj;
                 String host = registerWorker.getHost();
@@ -135,6 +137,7 @@ public class RemoteMaster {
                 callback.onSuccess(ByteBuffer.allocate(0));
                 logger.info("handle RegisterWorker time: {}ms", System.currentTimeMillis() - start);
             } else if (msgObj instanceof RemoteShuffleServiceHeartbeat) {
+                // TODO: 2021/9/26 worker 心跳处理
                 long start = System.currentTimeMillis();
                 RemoteShuffleServiceHeartbeat workHeartbeat = (RemoteShuffleServiceHeartbeat) msgObj;
                 String host = workHeartbeat.getHost();
@@ -145,7 +148,7 @@ public class RemoteMaster {
                 WorkerInfo workerInfo = workersMap.computeIfAbsent(address, w -> new WorkerInfo(clientFactory, host, port));
                 workerInfo.setLatestHeartbeatTime(workHeartbeat.getHeartbeatTimeMs());
                 workerInfo.setPressure(pressure);
-                // TODO: 2021/9/22 根据pressure维护work列表
+                // TODO: 2021/9/22 根据pressure维护work列, 部分不健康的节点从可用节点
                 if ( pressure != null) {
 
                 }
@@ -160,6 +163,7 @@ public class RemoteMaster {
                 });
                 logger.info("handle RemoteShuffleServiceHeartbeat time: {}ms", System.currentTimeMillis() - start);
             } else if (msgObj instanceof RegisteredApplication) {
+                // TODO: 2021/9/26 注册application
                 RegisteredApplication application = (RegisteredApplication) msgObj;
                 String appId = application.getAppId();
                 int attemptId = application.getAttempt();
@@ -167,6 +171,7 @@ public class RemoteMaster {
                 RunningApplication runningApplication = runningApplicationMap.computeIfAbsent(key, f -> new RunningApplication(appId,attemptId));
                 logger.info("application: {}_{} register success", runningApplication.appId, runningApplication.attemptId);
             } else if (msgObj instanceof UnregisteredApplication) {
+                // TODO: 2021/9/26 卸载application
                 UnregisteredApplication application = (UnregisteredApplication) msgObj;
                 String appId = application.getAppId();
                 int attemptId = application.getAttempt();
@@ -179,6 +184,7 @@ public class RemoteMaster {
                     );
                 }
             } else if (msgObj instanceof RemoteShuffleDriverHeartbeat) {
+                // TODO: 2021/9/26 application心跳
                 RemoteShuffleDriverHeartbeat application = (RemoteShuffleDriverHeartbeat) msgObj;
                 String appId = application.getAppId();
                 int attemptId = application.getAttempt();
@@ -191,6 +197,10 @@ public class RemoteMaster {
                     logger.warn("application: {}_{} not exist in master, restore from driverHeartbeat", appId, attemptId);
                     runningApplicationMap.putIfAbsent(key, new RunningApplication(appId, attemptId));
                 }
+            }  else if (msgObj instanceof GetPushMergerLocations) {
+                // TODO: 2021/9/26 根据pushMergeLocations请求获取具体的可用worker返回
+                GetPushMergerLocations msg = (GetPushMergerLocations) msgObj;
+                callback.onSuccess(new MergerWorkers(getMergerWorkers()).toByteBuffer());
             } else {
                 throw new UnsupportedOperationException("Unexpected message: " + msgObj);
             }
@@ -198,6 +208,11 @@ public class RemoteMaster {
 
         @Override
         public StreamManager getStreamManager() {
+            return null;
+        }
+
+        private WorkerInfo[] getMergerWorkers() {
+            // TODO: 2021/9/26 根据pushMergeLocations请求获取具体的可用worker返回
             return null;
         }
 

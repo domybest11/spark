@@ -35,7 +35,7 @@ import org.apache.spark.util.Utils
  * modified from outside this class.
  */
 @DeveloperApi
-class BlockManagerId private (
+class BlockManagerId private[spark] (
     private var executorId_ : String,
     private var host_ : String,
     private var port_ : Int,

@@ -1,12 +1,8 @@
 package org.apache.spark.remote.shuffle;
 
-import com.google.common.collect.Lists;
-import org.apache.spark.network.TransportContext;
 import org.apache.spark.network.client.RpcResponseCallback;
 import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.client.TransportClientFactory;
-import org.apache.spark.network.server.NoOpRpcHandler;
-import org.apache.spark.network.util.TransportConf;
 import org.apache.spark.remote.shuffle.protocol.CleanApplication;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

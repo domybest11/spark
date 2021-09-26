@@ -55,8 +55,10 @@ import org.apache.spark.io.CompressionCodec
 import org.apache.spark.metrics.ExecutorMetricType
 import org.apache.spark.metrics.sink.KafkaHttpSink
 import org.apache.spark.metrics.source.JVMCPUSource
+import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.partial.{ApproximateEvaluator, PartialResult}
 import org.apache.spark.rdd._
+import org.apache.spark.remote.shuffle.RemoteShuffleClient
 import org.apache.spark.resource._
 import org.apache.spark.resource.ResourceUtils._
 import org.apache.spark.rpc.RpcEndpointRef
@@ -221,7 +223,8 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _applicationAttemptId: Option[String] = None
   private var _eventLogger: Option[EventLoggingListener] = None
   private var _driverLogger: Option[DriverLogger] = None
-  private var _remoteShuffle: Option[RemoteShuffleListener] = None
+  private var _remoteShuffle: Option[RemoteShuffleClient] = None
+  private var _remoteShuffleListener: Option[RemoteShuffleListener] = None
   private var _executorAllocationManager: Option[ExecutorAllocationManager] = None
   private var _cleaner: Option[ContextCleaner] = None
   private var _listenerBusStarted: Boolean = false
@@ -265,7 +268,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def eventLogDir: Option[URI] = _eventLogDir
   private[spark] def eventLogCodec: Option[String] = _eventLogCodec
 
-  private[spark] def isRemoteShuffleEnabled: Boolean = _conf.get(REMOTE_SHUFFLE_SERVICE_ENABLED)
+  private[spark] def isRemoteShuffleEnabled: Boolean = _conf.get(SHUFFLE_REMOTE_SERVICE_ENABLED)
 
   def isLocal: Boolean = Utils.isLocalMaster(_conf)
 
@@ -340,6 +343,9 @@ class SparkContext(config: SparkConf) extends Logging {
   var sparkUser = Utils.getCurrentUserName()
 
   private[spark] def schedulerBackend: SchedulerBackend = _schedulerBackend
+
+  private[spark] def remoteShuffleClient: Option[RemoteShuffleClient] = _remoteShuffle
+
 
   private[spark] def taskScheduler: TaskScheduler = _taskScheduler
   private[spark] def taskScheduler_=(ts: TaskScheduler): Unit = {
@@ -664,13 +670,33 @@ class SparkContext(config: SparkConf) extends Logging {
       listenerBus.addToStatusQueue(new AppListener(_applicationId, _applicationAttemptId, _conf))
     }
 
-    _remoteShuffle = if (isRemoteShuffleEnabled) {
-      val remoteListener = new RemoteShuffleListener(_applicationId, _applicationAttemptId, _conf)
+    if (isRemoteShuffleEnabled) {
+       val transportConf =
+        SparkTransportConf.fromSparkConf(_conf, "shuffle", numUsableCores = 0)
+       val (shuffleMasterHost, shuffleMasterPort) = {
+         _conf.get(SHUFFLE_REMOTE_SERVICE_MASTER).get.split(":") match {
+          case Seq(host: String, port: String) =>
+            logInfo(s"remote shuffle service enable, master ${host}:${port}")
+            (host, Integer.valueOf(port))
+          case _ => throw new SparkException(s"remote shuffle service master format error")
+        }
+      }
+      val remoteClient = new RemoteShuffleClient(
+        transportConf,
+        shuffleMasterHost,
+        shuffleMasterPort)
+      val remoteListener = new RemoteShuffleListener(
+        _applicationId,
+        _applicationAttemptId,
+        _conf,
+        remoteClient)
       remoteListener.start()
       listenerBus.addToSharedQueue(remoteListener)
-      Some(remoteListener)
+      _remoteShuffle = Some(remoteClient)
+      _remoteShuffleListener = Some(remoteListener)
     } else {
-      None
+      _remoteShuffle = None
+      _remoteShuffleListener = None
     }
 
     _cleaner =
@@ -2247,6 +2273,9 @@ class SparkContext(config: SparkConf) extends Logging {
     }
     Utils.tryLogNonFatalError {
       _remoteShuffle.foreach(_.stop())
+    }
+    Utils.tryLogNonFatalError {
+      _remoteShuffleListener.foreach(_.stop())
     }
     if (_heartbeater != null) {
       Utils.tryLogNonFatalError {
