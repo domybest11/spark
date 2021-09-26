@@ -374,11 +374,11 @@ public class ExternalBlockHandlerSuite {
     RoaringBitmap bitmap = RoaringBitmap.bitmapOf(0, 1, 2);
     MergeStatuses statuses = new MergeStatuses(0, 0, new RoaringBitmap[]{bitmap},
       new int[]{3}, new long[]{30});
-    when(mergedShuffleManager.finalizeShuffleMerge(req)).thenReturn(statuses);
+    when(mergedShuffleManager.finalizeShuffleMerge(req, null)).thenReturn(statuses);
 
     ByteBuffer reqBuf = req.toByteBuffer();
     handler.receive(client, reqBuf, callback);
-    verify(mergedShuffleManager, times(1)).finalizeShuffleMerge(req);
+    verify(mergedShuffleManager, times(1)).finalizeShuffleMerge(req, null);
     ArgumentCaptor<ByteBuffer> response = ArgumentCaptor.forClass(ByteBuffer.class);
     verify(callback, times(1)).onSuccess(response.capture());
     verify(callback, never()).onFailure(any());
@@ -396,11 +396,14 @@ public class ExternalBlockHandlerSuite {
 
   @Test
   public void testFetchMergedBlocksMeta() {
-    when(mergedShuffleManager.getMergedBlockMeta("app0", 0, 0, 0)).thenReturn(
+    when(mergedShuffleManager.getMergedBlockMeta("app0", 0, 0, 0,
+            null)).thenReturn(
       new MergedBlockMeta(1, mock(ManagedBuffer.class)));
-    when(mergedShuffleManager.getMergedBlockMeta("app0", 0, 0, 1)).thenReturn(
+    when(mergedShuffleManager.getMergedBlockMeta("app0", 0, 0, 1,
+            null)).thenReturn(
       new MergedBlockMeta(3, mock(ManagedBuffer.class)));
-    when(mergedShuffleManager.getMergedBlockMeta("app0", 0, 0, 2)).thenReturn(
+    when(mergedShuffleManager.getMergedBlockMeta("app0", 0, 0, 2,
+            null)).thenReturn(
       new MergedBlockMeta(5, mock(ManagedBuffer.class)));
 
     int[] expectedCount = new int[]{1, 3, 5};
@@ -411,7 +414,8 @@ public class ExternalBlockHandlerSuite {
       MergedBlockMetaResponseCallback callback = mock(MergedBlockMetaResponseCallback.class);
       handler.getMergedBlockMetaReqHandler()
         .receiveMergeBlockMetaReq(client, req, callback);
-      verify(mergedShuffleManager, times(1)).getMergedBlockMeta("app0", 0, 0, reduceId);
+      verify(mergedShuffleManager, times(1))
+              .getMergedBlockMeta("app0", 0, 0, reduceId, null);
 
       ArgumentCaptor<Integer> numChunksResponse = ArgumentCaptor.forClass(Integer.class);
       ArgumentCaptor<ManagedBuffer> chunkBitmapResponse =
@@ -460,8 +464,8 @@ public class ExternalBlockHandlerSuite {
     };
     for (int reduceId = 0; reduceId < 2; reduceId++) {
       for (int chunkId = 0; chunkId < 2; chunkId++) {
-        when(mergedShuffleManager.getMergedBlockData(
-          "app0", 0, 0, reduceId, chunkId)).thenReturn(buffers[reduceId][chunkId]);
+        when(mergedShuffleManager.getMergedBlockData("app0", 0, 0, reduceId, chunkId, null))
+                .thenReturn(buffers[reduceId][chunkId]);
       }
     }
     handler.receive(client, buffer, callback);
@@ -484,11 +488,13 @@ public class ExternalBlockHandlerSuite {
     }
     assertFalse(bufferIter.hasNext());
     verify(mergedShuffleManager, never()).getMergedBlockMeta(anyString(), anyInt(), anyInt(),
-        anyInt());
+        anyInt(), null);
     verify(blockResolver, never()).getBlockData(
       anyString(), anyString(), anyInt(), anyInt(), anyInt());
-    verify(mergedShuffleManager, times(1)).getMergedBlockData("app0", 0, 0, 0, 0);
-    verify(mergedShuffleManager, times(1)).getMergedBlockData("app0", 0, 0, 0, 1);
+    verify(mergedShuffleManager, times(1))
+            .getMergedBlockData("app0", 0, 0, 0, 0, null);
+    verify(mergedShuffleManager, times(1))
+            .getMergedBlockData("app0", 0, 0, 0, 1, null);
 
     // Verify open block request latency metrics
     Timer openBlockRequestLatencyMillis = (Timer) ((ExternalBlockHandler) handler)

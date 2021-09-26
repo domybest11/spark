@@ -34,6 +34,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -49,6 +50,7 @@ import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
+import org.apache.spark.network.client.TransportClient;
 import org.roaringbitmap.RoaringBitmap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,6 +68,8 @@ import org.apache.spark.network.shuffle.protocol.PushBlockStream;
 import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.NettyUtils;
 import org.apache.spark.network.util.TransportConf;
+
+import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
 
 /**
@@ -109,7 +113,7 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
   private final TransportConf conf;
   private final int minChunkSize;
   private final int ioExceptionsThresholdDuringMerge;
-  private static ExternalBlockHandler.ShuffleMetrics shuffleMetrics;
+  public static ExternalBlockHandler.ShuffleMetrics shuffleMetrics;
 
   @SuppressWarnings("UnstableApiUsage")
   private final LoadingCache<File, ShuffleIndexInformation> indexCache;
@@ -270,7 +274,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
       String appId,
       int shuffleId,
       int shuffleMergeId,
-      int reduceId) {
+      int reduceId,
+      TransportClient client) {
     AppShuffleInfo appShuffleInfo = validateAndGetAppShuffleInfo(appId);
     AppShuffleMergePartitionsInfo partitionsInfo = appShuffleInfo.shuffles.get(shuffleId);
     if (null != partitionsInfo && partitionsInfo.shuffleMergeId > shuffleMergeId) {
@@ -296,15 +301,15 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
     FileSegmentManagedBuffer chunkBitMaps =
       new FileSegmentManagedBuffer(conf, metaFile, 0L, metaFile.length());
     logger.info(
-      "{} shuffleId {} shuffleMergeId {} reduceId {} num chunks {}",
-      appId, shuffleId, shuffleMergeId, reduceId, numChunks);
+      "{} shuffleId {} shuffleMergeId {} reduceId {} num chunks {} for host {}",
+      appId, shuffleId, shuffleMergeId, reduceId, numChunks, getRemoteAddress(client.getChannel()));
     return new MergedBlockMeta(numChunks, chunkBitMaps);
   }
 
   @SuppressWarnings("UnstableApiUsage")
   @Override
   public ManagedBuffer getMergedBlockData(
-      String appId, int shuffleId, int shuffleMergeId, int reduceId, int chunkId) {
+      String appId, int shuffleId, int shuffleMergeId, int reduceId, int chunkId, TransportClient client) {
     AppShuffleInfo appShuffleInfo = validateAndGetAppShuffleInfo(appId);
     AppShuffleMergePartitionsInfo partitionsInfo = appShuffleInfo.shuffles.get(shuffleId);
     if (null != partitionsInfo && partitionsInfo.shuffleMergeId > shuffleMergeId) {
@@ -325,8 +330,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
       // use the file length to determine the size of the merged shuffle block.
       ShuffleIndexInformation shuffleIndexInformation = indexCache.get(indexFile);
       ShuffleIndexRecord shuffleIndexRecord = shuffleIndexInformation.getIndex(chunkId);
-      logger.info("geted merged block for {} shuffleId {} shuffleMergeId {} reduceId {} chunkId {}",
-              appId, shuffleId, shuffleMergeId, reduceId, chunkId);
+      logger.info("geted merged block for {} shuffleId {} shuffleMergeId {} reduceId {} chunkId {} from host {}",
+              appId, shuffleId, shuffleMergeId, reduceId, chunkId, getRemoteAddress(client.getChannel()));
       return new FileSegmentManagedBuffer(
         conf, dataFile, shuffleIndexRecord.getOffset(), shuffleIndexRecord.getLength());
     } catch (ExecutionException e) {
@@ -520,9 +525,9 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
   }
 
   @Override
-  public MergeStatuses finalizeShuffleMerge(FinalizeShuffleMerge msg) {
-    logger.info("Finalizing shuffle {} with shuffleMergeId {} from Application {}_{}.",
-      msg.shuffleId, msg.shuffleMergeId, msg.appId, msg.appAttemptId);
+  public MergeStatuses finalizeShuffleMerge(FinalizeShuffleMerge msg, TransportClient client) {
+    logger.info("Finalizing shuffle {} with shuffleMergeId {} from Application {}_{} from host {}.",
+      msg.shuffleId, msg.shuffleMergeId, msg.appId, msg.appAttemptId, getRemoteAddress(client.getChannel()));
     AppShuffleInfo appShuffleInfo = validateAndGetAppShuffleInfo(msg.appId);
     if (appShuffleInfo.attemptId != msg.appAttemptId) {
       // If finalizeShuffleMerge from a former application attempt, it is considered late,
@@ -589,8 +594,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
             reduceIds.add(partition.reduceId);
             sizes.add(partition.getLastChunkOffset());
           } catch (IOException ioe) {
-            logger.warn("Exception while finalizing shuffle partition {}_{} {} {}", msg.appId,
-              msg.appAttemptId, msg.shuffleId, partition.reduceId, ioe);
+            logger.warn("Exception while finalizing shuffle partition {}_{} {} {} from host {}", msg.appId,
+              msg.appAttemptId, msg.shuffleId, partition.reduceId, ioe, getRemoteAddress(client.getChannel()));
           } finally {
             partition.closeAllFilesAndDeleteIfNeeded(false);
           }
@@ -600,8 +605,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
         bitmaps.toArray(new RoaringBitmap[bitmaps.size()]), Ints.toArray(reduceIds),
         Longs.toArray(sizes));
     }
-    logger.info("Finalized shuffle {} with shuffleMergeId {} from Application {}_{}.",
-      msg.shuffleId, msg.shuffleMergeId, msg.appId, msg.appAttemptId);
+    logger.info("Finalized shuffle {} with shuffleMergeId {} from Application {}_{} from host {}.",
+      msg.shuffleId, msg.shuffleMergeId, msg.appId, msg.appAttemptId, getRemoteAddress(client.getChannel()));
     return mergeStatuses;
   }
 
@@ -691,6 +696,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
     private boolean isWriting = false;
     // Use on-heap instead of direct ByteBuffer since these buffers will be GC'ed very quickly
     private List<ByteBuffer> deferredBufs;
+    private Timer.Context responseDelayContext;
+
 
     private PushBlockStreamCallback(
         RemoteBlockPushResolver mergeManager,
@@ -706,6 +713,7 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
       Preconditions.checkArgument(partitionInfo != null);
       this.partitionInfo = partitionInfo;
       this.mapIndex = mapIndex;
+      this.responseDelayContext = shuffleMetrics.mergedPushedBlockTimeMillis.time();
       abortIfNecessary();
     }
 
@@ -770,6 +778,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
      */
     private void writeDeferredBufs() throws IOException {
       for (ByteBuffer deferredBuf : deferredBufs) {
+        shuffleMetrics.mergedPushedBlockRateBytes
+                .mark(deferredBuf  != null ? deferredBuf.array().length : 0);
         writeBuf(deferredBuf);
       }
       deferredBufs = null;
@@ -909,84 +919,88 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
     @Override
     public void onComplete(String streamId) throws IOException {
       synchronized (partitionInfo) {
-        logger.info("{} shuffleId {} shuffleMergeId {} reduceId {} onComplete invoked",
-          partitionInfo.appId, partitionInfo.shuffleId, partitionInfo.shuffleMergeId,
-          partitionInfo.reduceId);
-        // Initially when this request got to the server, the shuffle merge finalize request
-        // was not received yet or this was the latest stage attempt (or latest shuffleMergeId)
-        // generating shuffle output for the shuffle ID. By the time we finish reading this
-        // message, the block request is either stale or too late. We should thus respond
-        // the error code to the client.
-        AppShuffleMergePartitionsInfo info = appShuffleInfo.shuffles.get(partitionInfo.shuffleId);
-        if (isTooLate(info, partitionInfo.reduceId)) {
-          deferredBufs = null;
-          shuffleMetrics.pushBlocksTooLates.inc();
-          throw new BlockPushNonFatalFailure(
-            new BlockPushReturnCode(ReturnCode.TOO_LATE_BLOCK_PUSH.id(), streamId).toByteBuffer(),
-            BlockPushNonFatalFailure.getErrorMsg(streamId, ReturnCode.TOO_LATE_BLOCK_PUSH));
-        }
-        if (isStale(info, partitionInfo.shuffleMergeId)) {
-          deferredBufs = null;
-          shuffleMetrics.pushBlocksStales.inc();
-          throw new BlockPushNonFatalFailure(
-            new BlockPushReturnCode(ReturnCode.STALE_BLOCK_PUSH.id(), streamId).toByteBuffer(),
-            BlockPushNonFatalFailure.getErrorMsg(streamId, ReturnCode.STALE_BLOCK_PUSH));
-        }
-
-        // Check if we can commit this block
-        if (allowedToWrite()) {
-          // Identify duplicate block generated by speculative tasks. We respond success to
-          // the client in cases of duplicate even though no data is written.
-          if (isDuplicateBlock()) {
+        try {
+          logger.info("{} shuffleId {} shuffleMergeId {} reduceId {} onComplete invoked",
+                  partitionInfo.appId, partitionInfo.shuffleId, partitionInfo.shuffleMergeId,
+                  partitionInfo.reduceId);
+          // Initially when this request got to the server, the shuffle merge finalize request
+          // was not received yet or this was the latest stage attempt (or latest shuffleMergeId)
+          // generating shuffle output for the shuffle ID. By the time we finish reading this
+          // message, the block request is either stale or too late. We should thus respond
+          // the error code to the client.
+          AppShuffleMergePartitionsInfo info = appShuffleInfo.shuffles.get(partitionInfo.shuffleId);
+          if (isTooLate(info, partitionInfo.reduceId)) {
             deferredBufs = null;
-            return;
+            shuffleMetrics.pushBlocksTooLates.inc();
+            throw new BlockPushNonFatalFailure(
+                    new BlockPushReturnCode(ReturnCode.TOO_LATE_BLOCK_PUSH.id(), streamId).toByteBuffer(),
+                    BlockPushNonFatalFailure.getErrorMsg(streamId, ReturnCode.TOO_LATE_BLOCK_PUSH));
           }
-          if (partitionInfo.getCurrentMapIndex() < 0) {
-            try {
-              if (deferredBufs != null && !deferredBufs.isEmpty()) {
-                abortIfNecessary();
-                isWriting = true;
-                writeDeferredBufs();
-              }
-            } catch (IOException ioe) {
-              incrementIOExceptionsAndAbortIfNecessary();
-              // If the above doesn't throw a RuntimeException, then we propagate the IOException
-              // back to the client so the block could be retried.
-              throw ioe;
-            }
+          if (isStale(info, partitionInfo.shuffleMergeId)) {
+            deferredBufs = null;
+            shuffleMetrics.pushBlocksStales.inc();
+            throw new BlockPushNonFatalFailure(
+                    new BlockPushReturnCode(ReturnCode.STALE_BLOCK_PUSH.id(), streamId).toByteBuffer(),
+                    BlockPushNonFatalFailure.getErrorMsg(streamId, ReturnCode.STALE_BLOCK_PUSH));
           }
-          long updatedPos = partitionInfo.getDataFilePos() + length;
-          boolean indexUpdated = false;
-          if (updatedPos - partitionInfo.getLastChunkOffset() >= mergeManager.minChunkSize) {
-            try {
-              partitionInfo.updateChunkInfo(updatedPos, mapIndex);
-              indexUpdated = true;
-            } catch (IOException ioe) {
-              incrementIOExceptionsAndAbortIfNecessary();
-              // If the above doesn't throw a RuntimeException, then we do not propagate the
-              // IOException to the client. This may increase the chunk size however the increase is
-              // still limited because of the limit on the number of IOExceptions for a
-              // particular shuffle partition.
-            }
-          }
-          partitionInfo.setDataFilePos(updatedPos);
-          partitionInfo.setCurrentMapIndex(-1);
 
-          // update merged results
-          partitionInfo.blockMerged(mapIndex);
-          if (indexUpdated) {
-            partitionInfo.resetChunkTracker();
+          // Check if we can commit this block
+          if (allowedToWrite()) {
+            // Identify duplicate block generated by speculative tasks. We respond success to
+            // the client in cases of duplicate even though no data is written.
+            if (isDuplicateBlock()) {
+              deferredBufs = null;
+              return;
+            }
+            if (partitionInfo.getCurrentMapIndex() < 0) {
+              try {
+                if (deferredBufs != null && !deferredBufs.isEmpty()) {
+                  abortIfNecessary();
+                  isWriting = true;
+                  writeDeferredBufs();
+                }
+              } catch (IOException ioe) {
+                incrementIOExceptionsAndAbortIfNecessary();
+                // If the above doesn't throw a RuntimeException, then we propagate the IOException
+                // back to the client so the block could be retried.
+                throw ioe;
+              }
+            }
+            long updatedPos = partitionInfo.getDataFilePos() + length;
+            boolean indexUpdated = false;
+            if (updatedPos - partitionInfo.getLastChunkOffset() >= mergeManager.minChunkSize) {
+              try {
+                partitionInfo.updateChunkInfo(updatedPos, mapIndex);
+                indexUpdated = true;
+              } catch (IOException ioe) {
+                incrementIOExceptionsAndAbortIfNecessary();
+                // If the above doesn't throw a RuntimeException, then we do not propagate the
+                // IOException to the client. This may increase the chunk size however the increase is
+                // still limited because of the limit on the number of IOExceptions for a
+                // particular shuffle partition.
+              }
+            }
+            partitionInfo.setDataFilePos(updatedPos);
+            partitionInfo.setCurrentMapIndex(-1);
+
+            // update merged results
+            partitionInfo.blockMerged(mapIndex);
+            if (indexUpdated) {
+              partitionInfo.resetChunkTracker();
+            }
+          } else {
+            deferredBufs = null;
+            shuffleMetrics.pushBlocksCollideds.inc();
+            logger.info("giving up merging {} block for appId {} shuffleId {} shuffleMergeId {} mapIndex {}" +
+                            ", because of pushing blocks Collided.", streamId, partitionInfo.appId,
+                    partitionInfo.shuffleId, partitionInfo.shuffleMergeId, mapIndex);
+            throw new BlockPushNonFatalFailure(
+                    new BlockPushReturnCode(ReturnCode.BLOCK_APPEND_COLLISION_DETECTED.id(), streamId)
+                            .toByteBuffer(), BlockPushNonFatalFailure.getErrorMsg(
+                    streamId, ReturnCode.BLOCK_APPEND_COLLISION_DETECTED));
           }
-        } else {
-          deferredBufs = null;
-          shuffleMetrics.pushBlocksCollideds.inc();
-          logger.info("giving up merging {} block for appId {} shuffleId {} shuffleMergeId {} mapIndex {}" +
-                          ", because of pushing blocks Collided.", streamId, partitionInfo.appId,
-                  partitionInfo.shuffleId, partitionInfo.shuffleMergeId, mapIndex);
-          throw new BlockPushNonFatalFailure(
-            new BlockPushReturnCode(ReturnCode.BLOCK_APPEND_COLLISION_DETECTED.id(), streamId)
-              .toByteBuffer(), BlockPushNonFatalFailure.getErrorMsg(
-                streamId, ReturnCode.BLOCK_APPEND_COLLISION_DETECTED));
+        } finally {
+          responseDelayContext.stop();
         }
       }
       isWriting = false;

@@ -74,9 +74,9 @@ public class ExternalBlockHandler extends RpcHandler
   private static final String SHUFFLE_CHUNK_ID = "shuffleChunk";
 
   @VisibleForTesting
-  final ExternalShuffleBlockResolver blockManager;
+  private static ExternalShuffleBlockResolver blockManager;
   private final OneForOneStreamManager streamManager;
-  private static ShuffleMetrics metrics;
+  private static ShuffleMetrics metrics = new ShuffleMetrics();
   private final MergedShuffleFileManager mergeManager;
 
   public ExternalBlockHandler(TransportConf conf, File registeredExecutorFile)
@@ -116,7 +116,6 @@ public class ExternalBlockHandler extends RpcHandler
       OneForOneStreamManager streamManager,
       ExternalShuffleBlockResolver blockManager,
       MergedShuffleFileManager mergeManager) {
-    this.metrics = new ShuffleMetrics();
     this.streamManager = streamManager;
     this.blockManager = blockManager;
     this.mergeManager = mergeManager;
@@ -166,7 +165,7 @@ public class ExternalBlockHandler extends RpcHandler
           if (msgObj instanceof  FetchShuffleBlocks) {
             iterator = new ShuffleManagedBufferIterator((FetchShuffleBlocks)msgObj);
           } else {
-            iterator = new ShuffleChunkManagedBufferIterator((FetchShuffleBlockChunks) msgObj);
+            iterator = new ShuffleChunkManagedBufferIterator((FetchShuffleBlockChunks) msgObj, client);
           }
           streamId = streamManager.registerStream(client.getClientId(), iterator,
             client.getChannel());
@@ -176,7 +175,7 @@ public class ExternalBlockHandler extends RpcHandler
           numBlockIds = msg.blockIds.length;
           checkAuth(client, msg.appId);
           streamId = streamManager.registerStream(client.getClientId(),
-            new ManagedBufferIterator(msg), client.getChannel());
+            new ManagedBufferIterator(msg, client), client.getChannel());
         }
         if (logger.isTraceEnabled()) {
           logger.trace(
@@ -239,7 +238,7 @@ public class ExternalBlockHandler extends RpcHandler
       FinalizeShuffleMerge msg = (FinalizeShuffleMerge) msgObj;
       try {
         checkAuth(client, msg.appId);
-        MergeStatuses statuses = mergeManager.finalizeShuffleMerge(msg);
+        MergeStatuses statuses = mergeManager.finalizeShuffleMerge(msg, client);
         callback.onSuccess(statuses.toByteBuffer());
         logger.info( "Finalize shuffleId {} merge of app {} from host {}",
             msg.shuffleId,
@@ -275,7 +274,7 @@ public class ExternalBlockHandler extends RpcHandler
       checkAuth(client, metaRequest.appId);
       MergedBlockMeta mergedMeta =
         mergeManager.getMergedBlockMeta(metaRequest.appId, metaRequest.shuffleId,
-          metaRequest.shuffleMergeId, metaRequest.reduceId);
+          metaRequest.shuffleMergeId, metaRequest.reduceId, client);
       logger.debug(
         "Merged block chunks appId {} shuffleId {} reduceId {} num-chunks : {} ",
           metaRequest.appId, metaRequest.shuffleId, metaRequest.reduceId,
@@ -354,7 +353,7 @@ public class ExternalBlockHandler extends RpcHandler
    * A simple class to wrap all shuffle service wrapper metrics
    */
   @VisibleForTesting
-  public class ShuffleMetrics implements MetricSet {
+  public static class ShuffleMetrics implements MetricSet {
     private final Map<String, Metric> allMetrics;
     // Time latency for open block request in ms
     private final Timer openBlockRequestLatencyMillis =
@@ -374,6 +373,9 @@ public class ExternalBlockHandler extends RpcHandler
     // Time latency for processing fetch merged blocks data request latency in ms
     private final Timer getBlocksDataLatencyMillis =
             new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    // Time for merging pushed block for mapIndex and reduceId in ms
+    public final Timer mergedPushedBlockTimeMillis =
+            new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
 
     // Block transfer rate in blocks per second
     private final Meter blockTransferRate = new Meter();
@@ -385,6 +387,8 @@ public class ExternalBlockHandler extends RpcHandler
     private final Meter blockTransferMessageRate = new Meter();
     // Block transfer rate in byte per second
     private final Meter blockTransferRateBytes = new Meter();
+    // Merged pushed block in byte per second
+    public final Meter mergedPushedBlockRateBytes = new Meter();
     // Number of active connections to the shuffle service
     private Counter activeConnections = new Counter();
     // Number of exceptions caught in connections to the shuffle service
@@ -402,8 +406,10 @@ public class ExternalBlockHandler extends RpcHandler
       allMetrics.put("registerExecutorRequestLatencyMillis", registerExecutorRequestLatencyMillis);
       allMetrics.put("fetchMergedBlocksMetaLatencyMillis", fetchMergedBlocksMetaLatencyMillis);
       allMetrics.put("finalizeShuffleMergeLatencyMillis", finalizeShuffleMergeLatencyMillis);
+      allMetrics.put("mergedPushedBlockTimeMillis", mergedPushedBlockTimeMillis);
       allMetrics.put("blockTransferRate", blockTransferRate);
       allMetrics.put("blockTransferMessageRate", blockTransferMessageRate);
+      allMetrics.put("mergedPushedBlockRateBytes", mergedPushedBlockRateBytes);
       allMetrics.put("blockTransferRateBytes", blockTransferRateBytes);
       allMetrics.put("blockTransferAvgSize_1min", new RatioGauge() {
         @Override
@@ -442,7 +448,7 @@ public class ExternalBlockHandler extends RpcHandler
     private final int size;
     private boolean requestForMergedBlockChunks;
 
-    ManagedBufferIterator(OpenBlocks msg) {
+    ManagedBufferIterator(OpenBlocks msg, TransportClient client) {
       String appId = msg.appId;
       String execId = msg.execId;
       String[] blockIds = msg.blockIds;
@@ -460,7 +466,7 @@ public class ExternalBlockHandler extends RpcHandler
           shuffleMergeId);
         size = reduceIdAndChunkIds.length;
         blockDataForIndexFn = index -> mergeManager.getMergedBlockData(msg.appId, shuffleId,
-          shuffleMergeId, reduceIdAndChunkIds[index], reduceIdAndChunkIds[index + 1]);
+          shuffleMergeId, reduceIdAndChunkIds[index], reduceIdAndChunkIds[index + 1], client);
       } else if (blockId0Parts.length == 3 && blockId0Parts[0].equals("rdd")) {
         final int[] rddAndSplitIds = rddAndSplitIds(blockIds);
         size = rddAndSplitIds.length;
@@ -628,13 +634,15 @@ public class ExternalBlockHandler extends RpcHandler
     private final int shuffleMergeId;
     private final int[] reduceIds;
     private final int[][] chunkIds;
+    private TransportClient client;
 
-    ShuffleChunkManagedBufferIterator(FetchShuffleBlockChunks msg) {
+    ShuffleChunkManagedBufferIterator(FetchShuffleBlockChunks msg, TransportClient client) {
       appId = msg.appId;
       shuffleId = msg.shuffleId;
       shuffleMergeId = msg.shuffleMergeId;
       reduceIds = msg.reduceIds;
       chunkIds = msg.chunkIds;
+      this.client =  client;
       // reduceIds.length must equal to chunkIds.length, and the passed in FetchShuffleBlockChunks
       // must have non-empty reduceIds and chunkIds, see the checking logic in
       // OneForOneBlockFetcher.
@@ -651,7 +659,7 @@ public class ExternalBlockHandler extends RpcHandler
       final Timer.Context responseDelayContext = metrics.getBlocksDataLatencyMillis.time();
       try {
         ManagedBuffer block = Preconditions.checkNotNull(mergeManager.getMergedBlockData(
-                appId, shuffleId, shuffleMergeId, reduceIds[reduceIdx], chunkIds[reduceIdx][chunkIdx]));
+                appId, shuffleId, shuffleMergeId, reduceIds[reduceIdx], chunkIds[reduceIdx][chunkIdx], client));
         if (chunkIdx < chunkIds[reduceIdx].length - 1) {
           chunkIdx += 1;
         } else {
@@ -685,7 +693,7 @@ public class ExternalBlockHandler extends RpcHandler
     }
 
     @Override
-    public MergeStatuses finalizeShuffleMerge(FinalizeShuffleMerge msg) throws IOException {
+    public MergeStatuses finalizeShuffleMerge(FinalizeShuffleMerge msg, TransportClient client) throws IOException {
       throw new UnsupportedOperationException("Cannot handle shuffle block merge");
     }
 
@@ -705,7 +713,8 @@ public class ExternalBlockHandler extends RpcHandler
         int shuffleId,
         int shuffleMergeId,
         int reduceId,
-        int chunkId) {
+        int chunkId,
+        TransportClient client) {
       throw new UnsupportedOperationException("Cannot handle shuffle block merge");
     }
 
@@ -714,7 +723,8 @@ public class ExternalBlockHandler extends RpcHandler
         String appId,
         int shuffleId,
         int shuffleMergeId,
-        int reduceId) {
+        int reduceId,
+        TransportClient client) {
       throw new UnsupportedOperationException("Cannot handle shuffle block merge");
     }
 
