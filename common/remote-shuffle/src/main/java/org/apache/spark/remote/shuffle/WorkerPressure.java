@@ -5,6 +5,10 @@ import org.apache.spark.network.protocol.Encodable;
 import org.apache.spark.network.protocol.Encoders;
 
 public class WorkerPressure implements Comparable, Encodable {
+
+    public WorkerPressure(String xx) {
+    }
+
     @Override
     public int compareTo(Object o) {
         return 0;

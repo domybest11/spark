@@ -1,15 +1,17 @@
-package org.apache.spark.remote.shuffle.protocol;
+package org.apache.spark.network.shuffle.protocol.remote;
 
 import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 
-public class UnregisteredApplication extends BlockTransferMessage {
+public class RemoteShuffleDriverHeartbeat  extends BlockTransferMessage {
     private String appId;
     private int attempt;
+    private final long heartbeatTimeoutMs;
 
-    public UnregisteredApplication(String appId, int attempt) {
+    public RemoteShuffleDriverHeartbeat(String appId, int attempt, long heartbeatTimeoutMs) {
         this.appId = appId;
         this.attempt = attempt;
+        this.heartbeatTimeoutMs = heartbeatTimeoutMs;
     }
 
     public String getAppId() {
@@ -18,6 +20,10 @@ public class UnregisteredApplication extends BlockTransferMessage {
 
     public int getAttempt() {
         return attempt;
+    }
+
+    public long getHeartbeatTimeoutMs() {
+        return heartbeatTimeoutMs;
     }
 
     @Override

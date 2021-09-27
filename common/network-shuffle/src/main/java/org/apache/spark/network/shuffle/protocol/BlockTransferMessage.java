@@ -26,6 +26,8 @@ import org.apache.spark.network.protocol.Encodable;
 import org.apache.spark.network.shuffle.ExternalBlockHandler;
 import org.apache.spark.network.shuffle.protocol.mesos.RegisterDriver;
 import org.apache.spark.network.shuffle.protocol.mesos.ShuffleServiceHeartbeat;
+import org.apache.spark.network.shuffle.protocol.remote.GetPushMergerLocations;
+import org.apache.spark.network.shuffle.protocol.remote.MergerWorkers;
 
 /**
  * Messages handled by the {@link ExternalBlockHandler}, or
@@ -50,7 +52,8 @@ public abstract class BlockTransferMessage implements Encodable {
     FETCH_SHUFFLE_BLOCKS(9), GET_LOCAL_DIRS_FOR_EXECUTORS(10), LOCAL_DIRS_FOR_EXECUTORS(11),
     PUSH_BLOCK_STREAM(12), FINALIZE_SHUFFLE_MERGE(13), MERGE_STATUSES(14),
     FETCH_SHUFFLE_BLOCK_CHUNKS(15), DIAGNOSE_CORRUPTION(16), CORRUPTION_CAUSE(17),
-    PUSH_BLOCK_RETURN_CODE(18),SHUFFLE_HEARTBEAT(30);
+    PUSH_BLOCK_RETURN_CODE(18),SHUFFLE_HEARTBEAT(30),GET_PUSH_MERGER_LOCATIONS(31),
+    MERGER_WORKERS(32);
 
     private final byte id;
 
@@ -88,6 +91,8 @@ public abstract class BlockTransferMessage implements Encodable {
         case 16: return DiagnoseCorruption.decode(buf);
         case 17: return CorruptionCause.decode(buf);
         case 18: return BlockPushReturnCode.decode(buf);
+        case 31: return GetPushMergerLocations.decode(buf);
+        case 32: return MergerWorkers.decode(buf);
         default: throw new IllegalArgumentException("Unknown message type: " + type);
       }
     }

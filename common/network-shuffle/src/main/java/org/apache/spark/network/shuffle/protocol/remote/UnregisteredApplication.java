@@ -1,13 +1,13 @@
-package org.apache.spark.remote.shuffle.protocol;
+package org.apache.spark.network.shuffle.protocol.remote;
 
 import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 
-public class CleanApplication extends BlockTransferMessage {
+public class UnregisteredApplication extends BlockTransferMessage {
     private String appId;
     private int attempt;
 
-    public CleanApplication(String appId, int attempt) {
+    public UnregisteredApplication(String appId, int attempt) {
         this.appId = appId;
         this.attempt = attempt;
     }

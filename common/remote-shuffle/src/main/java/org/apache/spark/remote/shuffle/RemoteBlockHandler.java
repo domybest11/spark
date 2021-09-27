@@ -27,10 +27,11 @@ import org.apache.spark.network.shuffle.ExternalBlockHandler;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.PushBlockStream;
+import org.apache.spark.network.shuffle.protocol.remote.RunningStage;
 import org.apache.spark.network.util.TransportConf;
-import org.apache.spark.remote.shuffle.protocol.CleanApplication;
-import org.apache.spark.remote.shuffle.protocol.RegisterWorker;
-import org.apache.spark.remote.shuffle.protocol.RemoteShuffleServiceHeartbeat;
+import org.apache.spark.network.shuffle.protocol.remote.CleanApplication;
+import org.apache.spark.network.shuffle.protocol.remote.RegisterWorker;
+import org.apache.spark.network.shuffle.protocol.remote.RemoteShuffleServiceHeartbeat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -269,7 +270,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                             "host",
                             0,
                             System.currentTimeMillis(),
-                            null,
+                            "0.0",
                             currentRunningStages.toArray(new RunningStage[0])).toByteBuffer()
             );
         }

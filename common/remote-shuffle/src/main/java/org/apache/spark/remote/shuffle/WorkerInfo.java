@@ -3,7 +3,7 @@ package org.apache.spark.remote.shuffle;
 import org.apache.spark.network.client.RpcResponseCallback;
 import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.client.TransportClientFactory;
-import org.apache.spark.remote.shuffle.protocol.CleanApplication;
+import org.apache.spark.network.shuffle.protocol.remote.CleanApplication;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,6 +63,10 @@ public class WorkerInfo {
 
     public void setPressure(WorkerPressure pressure) {
         this.pressure = pressure;
+    }
+
+    public String address() {
+        return host+ ":" + port;
     }
 
 

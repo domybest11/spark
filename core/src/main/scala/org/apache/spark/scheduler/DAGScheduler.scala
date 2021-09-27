@@ -1361,14 +1361,28 @@ private[spark] class DAGScheduler(
       val mergerLocs = if (sc.getConf.get(config.SHUFFLE_REMOTE_SERVICE_ENABLED)) {
         // TODO: 从master申请可用的location
         sc.remoteShuffleClient.map(client => {
+          val tasksPerExecutor = sc.resourceProfileManager
+            .resourceProfileFromId(stage.resourceProfileId).maxTasksPerExecutor(sc.conf)
+          val maxExecutors = if (Utils.isDynamicAllocationEnabled(sc.getConf)) {
+            sc.getConf.get(config.DYN_ALLOCATION_MAX_EXECUTORS)
+          } else {
+            sc.getConf.get(config.EXECUTOR_INSTANCES).getOrElse(0)
+          }
           client.getShufflePushMergerLocations(
             sc.applicationId,
             sc.applicationAttemptId,
             stage.id,
             stage.shuffleDep.partitioner.numPartitions,
-            stage.resourceProfileId)
+            tasksPerExecutor,
+            maxExecutors
+          )
         }).map(workers => workers.map(
-          work => new BlockManagerId(work.getHost, work.getHost, work.getPort, None)
+          work => {
+            val array = work.split(":")
+            val host = array(0)
+            val port = array(1).toInt
+            new BlockManagerId(host, host, port, None)
+          }
         ))
       } else {
         Some(sc.schedulerBackend.getShufflePushMergerLocations(

@@ -18,15 +18,14 @@ package org.apache.spark.remote.shuffle
 
 import java.nio.ByteBuffer
 import java.util
-
 import com.google.common.collect.Lists
-
 import org.apache.spark.network.TransportContext
 import org.apache.spark.network.client.{RpcResponseCallback, TransportClient, TransportClientBootstrap}
 import org.apache.spark.network.server.NoOpRpcHandler
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage
+import org.apache.spark.network.shuffle.protocol.remote.{GetPushMergerLocations, MergerWorkers, RemoteShuffleDriverHeartbeat, UnregisteredApplication}
 import org.apache.spark.network.util.TransportConf
-import org.apache.spark.remote.shuffle.protocol.{GetPushMergerLocations, MergerWorkers, RemoteShuffleDriverHeartbeat, UnregisteredApplication}
+import org.apache.spark.remote.shuffle.protocol.UnregisteredApplication
 
 
 
@@ -82,15 +81,18 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
      appAttemptId: Option[String],
      shuffleId: Int,
      numPartitions: Int,
-     resourceProfileId: Int): Seq[WorkerInfo] = {
+     tasksPerExecutor: Int,
+     maxExecutors: Int): Seq[String] = {
+
     val getPushMergerLocations = new GetPushMergerLocations(
       appId,
       Integer.valueOf(appAttemptId.getOrElse("-1")),
       shuffleId,
       numPartitions,
-      resourceProfileId
+      tasksPerExecutor,
+      maxExecutors
     )
-    var result: Seq[WorkerInfo] = Nil
+    var result: Seq[String] = Nil
     client.sendRpc(getPushMergerLocations.toByteBuffer, new RpcResponseCallback {
       /**
        * Successful serialized result from server.

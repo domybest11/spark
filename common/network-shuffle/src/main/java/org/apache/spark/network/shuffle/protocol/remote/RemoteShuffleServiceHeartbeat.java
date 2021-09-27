@@ -1,20 +1,18 @@
-package org.apache.spark.remote.shuffle.protocol;
+package org.apache.spark.network.shuffle.protocol.remote;
 
 import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.protocol.Encoders;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
-import org.apache.spark.remote.shuffle.RunningStage;
-import org.apache.spark.remote.shuffle.WorkerPressure;
 
 public class RemoteShuffleServiceHeartbeat extends BlockTransferMessage {
 
     private final String host;
     private final int port;
     private final long heartbeatTimeMs;
-    private final WorkerPressure pressure;
+    private final String pressure;
     private final RunningStage[] runningStages;
 
-    public RemoteShuffleServiceHeartbeat(String host, int port, long heartbeatTimeMs, WorkerPressure pressure, RunningStage[] runningStages) {
+    public RemoteShuffleServiceHeartbeat(String host, int port, long heartbeatTimeMs, String pressure, RunningStage[] runningStages) {
         this.host = host;
         this.port = port;
         this.heartbeatTimeMs = heartbeatTimeMs;
@@ -30,7 +28,7 @@ public class RemoteShuffleServiceHeartbeat extends BlockTransferMessage {
         return port;
     }
 
-    public WorkerPressure getPressure() {
+    public String getPressure() {
         return pressure;
     }
 
@@ -56,7 +54,7 @@ public class RemoteShuffleServiceHeartbeat extends BlockTransferMessage {
         return Encoders.Strings.encodedLength(host)
                 + 4 // port
                 + 8 // heartbeatTimeoutMs
-                + pressure.encodedLength()
+                + Encoders.Strings.encodedLength(pressure)
                 + encodedLengthOfRunningStage;
     }
 

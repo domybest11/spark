@@ -1,4 +1,4 @@
-package org.apache.spark.remote.shuffle.protocol;
+package org.apache.spark.network.shuffle.protocol.remote;
 
 import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;

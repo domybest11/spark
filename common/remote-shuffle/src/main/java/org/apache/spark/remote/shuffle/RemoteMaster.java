@@ -11,8 +11,8 @@ import org.apache.spark.network.server.StreamManager;
 import org.apache.spark.network.server.TransportServer;
 import org.apache.spark.network.server.TransportServerBootstrap;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
+import org.apache.spark.network.shuffle.protocol.remote.*;
 import org.apache.spark.network.util.TransportConf;
-import org.apache.spark.remote.shuffle.protocol.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 public class RemoteMaster {
     private static final Logger logger = LoggerFactory.getLogger(RemoteMaster.class);
@@ -43,8 +44,8 @@ public class RemoteMaster {
 
     //meta
     public final ConcurrentHashMap<String, WorkerInfo> workersMap = new ConcurrentHashMap<>();
-    public final ArrayList<WorkerInfo> blackWorkers = new ArrayList<>();
-    public final ArrayList<WorkerInfo> busyWorkers = new ArrayList<>();
+    public final HashSet<WorkerInfo> blackWorkers = new HashSet<>();
+    public final HashSet<WorkerInfo> busyWorkers = new HashSet<>();
 
     public final ConcurrentHashMap<String, RunningApplication> runningApplicationMap = new ConcurrentHashMap<>();
 
@@ -143,8 +144,8 @@ public class RemoteMaster {
                 String host = workHeartbeat.getHost();
                 int port = workHeartbeat.getPort();
                 String address = host + ":" + port;
-                org.apache.spark.remote.shuffle.RunningStage[] runningStages = workHeartbeat.getRunningStages();
-                WorkerPressure pressure = workHeartbeat.getPressure();
+                RunningStage[] runningStages = workHeartbeat.getRunningStages();
+                WorkerPressure pressure = new WorkerPressure(workHeartbeat.getPressure());
                 WorkerInfo workerInfo = workersMap.computeIfAbsent(address, w -> new WorkerInfo(clientFactory, host, port));
                 workerInfo.setLatestHeartbeatTime(workHeartbeat.getHeartbeatTimeMs());
                 workerInfo.setPressure(pressure);
@@ -198,9 +199,20 @@ public class RemoteMaster {
                     runningApplicationMap.putIfAbsent(key, new RunningApplication(appId, attemptId));
                 }
             }  else if (msgObj instanceof GetPushMergerLocations) {
-                // TODO: 2021/9/26 根据pushMergeLocations请求获取具体的可用worker返回
                 GetPushMergerLocations msg = (GetPushMergerLocations) msgObj;
-                callback.onSuccess(new MergerWorkers(getMergerWorkers()).toByteBuffer());
+                String appId = msg.getAppId();
+                int attempt = msg.getAttempt();
+                int shuffleId = msg.getShuffleId();
+                int numPartitions = msg.getNumPartitions();
+                int tasksPerExecutor = msg.getTasksPerExecutor();
+                int maxExecutors = msg.getMaxExecutors();
+                List<WorkerInfo> workerInfos = getMergerWorkers(appId, attempt, shuffleId, numPartitions, tasksPerExecutor, maxExecutors);
+                String[] res = new String[workerInfos.size()];
+                for (int i=0; i<workerInfos.size(); i++) {
+                    res[i] = workerInfos.get(i).address();
+                }
+                callback.onSuccess(new MergerWorkers(res).toByteBuffer());
+                logger.info( "Get push merger locations for app {} shuffle {} ", appId, shuffleId);
             } else {
                 throw new UnsupportedOperationException("Unexpected message: " + msgObj);
             }
@@ -211,11 +223,24 @@ public class RemoteMaster {
             return null;
         }
 
-        private WorkerInfo[] getMergerWorkers() {
-            // TODO: 2021/9/26 根据pushMergeLocations请求获取具体的可用worker返回
-            return null;
+        private List<WorkerInfo> getMergerWorkers(String appId, int attempt, int shuffleId, int numPartitions, int tasksPerExecutor, int maxExecutors) {
+            int numMergersDesired = Math.min(Math.max(1, (int)Math.ceil(numPartitions * 1.0 / tasksPerExecutor)), maxExecutors);
+            // TODO: 2021/9/27 从配置中获取最少需要的节点
+            int minMergersDesired = 0;
+            List<WorkerInfo> workerInfos = workersMap.values().stream().filter(
+                    workerInfo ->
+                            !blackWorkers.contains(workerInfo) && !busyWorkers.contains(workerInfo)
+            ).collect(Collectors.toList());
+            int capacity = workerInfos.size();
+            Collections.shuffle(workerInfos);
+            if (capacity<=minMergersDesired) {
+                return new ArrayList<>();
+            } else if (numMergersDesired <= capacity) {
+                return workerInfos.subList(0,numMergersDesired);
+            } else {
+                return workerInfos;
+            }
         }
-
     }
 
     private static class RunningApplication {
