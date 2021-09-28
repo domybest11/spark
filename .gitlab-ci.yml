@@ -71,6 +71,26 @@ build:shuffleservice:
          "packType":"tgz"
        }'
 
+    - |
+      curl -X POST 'http://uat-alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata' \
+        --header 'Content-Type: application/json' \
+        --header 'Accept: application/json' \
+        --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
+        --data '{
+         "bossPath":"'"$DEST_FILE_REMOTE_PATH"'",
+         "ciBranch":"3.1",
+         "ciTag":"'"$CI_COMMIT_TAG"'",
+         "ciTime":"'"$START_BUILD_TIME"'",
+         "ciUser":"'"$GITLAB_USER_LOGIN"'",
+         "commitId":"'"$CI_COMMIT_SHA"'",
+         "commitMsg":"'"$CI_COMMIT_TITLE"'",
+         "gitGroup":"'"$CI_PROJECT_NAMESPACE"'",
+         "gitRepo":"'"$CI_PROJECT_NAME"'",
+         "packMd5":"'"$DEST_FILE_MD5"'",
+         "packName":"'"$DEST_FILE_NAME"'",
+         "packType":"tgz"
+       }'
+
 build:client:
   stage: build
   only:
