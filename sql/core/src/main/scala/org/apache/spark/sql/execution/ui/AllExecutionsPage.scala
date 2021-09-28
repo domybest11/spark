@@ -39,8 +39,7 @@ private[ui] class AllExecutionsPage(parent: SQLTab) extends WebUIPage("") with L
     val completed = new mutable.ArrayBuffer[SQLExecutionUIData]()
     val failed = new mutable.ArrayBuffer[SQLExecutionUIData]()
 
-    sqlStore.executionsList().filterNot(execution => execution.statement == null ||
-        execution.statement.equals("")).foreach { e =>
+    sqlStore.executionsList().foreach { e =>
       val isRunning = e.completionTime.isEmpty ||
         e.jobs.exists { case (_, status) => status == JobExecutionStatus.RUNNING }
       val isFailed = e.jobs.exists { case (_, status) => status == JobExecutionStatus.FAILED }
