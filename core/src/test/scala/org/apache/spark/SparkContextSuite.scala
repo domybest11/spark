@@ -1069,6 +1069,18 @@ class SparkContextSuite extends SparkFunSuite with LocalSparkContext with Eventu
     assert(sc.hadoopConfiguration.get(bufferKey).toInt === 65536,
       "spark configs have higher priority than spark.hadoop configs")
   }
+
+  test("SPARK-36772: Store application attemptId in BlockStoreClient for push based shuffle") {
+    val conf = new SparkConf().setAppName("testAppAttemptId")
+      .setMaster("pushbasedshuffleclustermanager")
+    conf.set(PUSH_BASED_SHUFFLE_ENABLED.key, "true")
+    conf.set(IS_TESTING.key, "true")
+    conf.set(SHUFFLE_SERVICE_ENABLED.key, "true")
+    sc = new SparkContext(conf)
+    val env = SparkEnv.get
+    assert(env.blockManager.blockStoreClient.getAppAttemptId.equals("1"))
+  }
+
 }
 
 object SparkContextSuite {
