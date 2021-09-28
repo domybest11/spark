@@ -54,8 +54,7 @@ object HiveResult {
    * Returns the result as a hive compatible sequence of strings. This is used in tests and
    * `SparkSQLDriver` for CLI applications.
    */
-  def hiveResultString(executedPlan: SparkPlan, queryExecution: QueryExecution): Seq[String] =
-    executedPlan match {
+  def hiveResultString(executedPlan: SparkPlan): Seq[String] = executedPlan match {
     case ExecutedCommandExec(_: DescribeCommandBase) =>
       formatDescribeTableOutput(executedPlan.executeCollectPublic())
     case _: DescribeTableExec =>
