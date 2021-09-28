@@ -22,6 +22,7 @@ import java.io.IOException;
 import org.apache.spark.annotation.Evolving;
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.client.StreamCallbackWithID;
+import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.FinalizeShuffleMerge;
 import org.apache.spark.network.shuffle.protocol.MergeStatuses;
@@ -57,7 +58,7 @@ public interface MergedShuffleFileManager {
    *         shuffle service
    * @throws IOException
    */
-  MergeStatuses finalizeShuffleMerge(FinalizeShuffleMerge msg) throws IOException;
+  MergeStatuses finalizeShuffleMerge(FinalizeShuffleMerge msg, TransportClient client) throws IOException;
 
   /**
    * Registers an executor with MergedShuffleFileManager. This executor-info provides
@@ -85,21 +86,36 @@ public interface MergedShuffleFileManager {
    *
    * @param appId application ID
    * @param shuffleId shuffle ID
+   * @param shuffleMergeId shuffleMergeId is used to uniquely identify merging process
+   *                       of shuffle by an indeterminate stage attempt.
    * @param reduceId reducer ID
    * @param chunkId merged shuffle file chunk ID
    * @return The {@link ManagedBuffer} for the given merged shuffle chunk
    */
-  ManagedBuffer getMergedBlockData(String appId, int shuffleId, int reduceId, int chunkId);
+  ManagedBuffer getMergedBlockData(
+      String appId,
+      int shuffleId,
+      int shuffleMergeId,
+      int reduceId,
+      int chunkId,
+      TransportClient client);
 
   /**
    * Get the meta information of a merged block.
    *
    * @param appId application ID
    * @param shuffleId shuffle ID
+   * @param shuffleMergeId shuffleMergeId is used to uniquely identify merging process
+   *                       of shuffle by an indeterminate stage attempt.
    * @param reduceId reducer ID
    * @return meta information of a merged block
    */
-  MergedBlockMeta getMergedBlockMeta(String appId, int shuffleId, int reduceId);
+  MergedBlockMeta getMergedBlockMeta(
+          String appId,
+          int shuffleId,
+          int shuffleMergeId,
+          int reduceId,
+          TransportClient client);
 
   /**
    * Get the local directories which stores the merged shuffle files.

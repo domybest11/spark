@@ -18,10 +18,12 @@
 package org.apache.spark.scheduler
 
 import scala.collection.mutable.HashMap
-
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.internal.config.PUSH_BASED_SHUFFLE_ENABLED
+import org.apache.spark.status.LiveEntityHelpers.sparkConf
 import org.apache.spark.storage.RDDInfo
+
 
 /**
  * :: DeveloperApi ::
@@ -39,10 +41,12 @@ class StageInfo(
     val taskMetrics: TaskMetrics = null,
     private[spark] val taskLocalityPreferences: Seq[Seq[TaskLocation]] = Seq.empty,
     private[spark] val shuffleDepId: Option[Int] = None,
-    val resourceProfileId: Int) {
+    val resourceProfileId: Int,
+    val isPushBasedShuffleEnabled: Boolean = false,
+    val shuffleMergerCount: Int = 0) {
   /** When this stage was submitted from the DAGScheduler to a TaskScheduler. */
   var submissionTime: Option[Long] = None
-  /** Time when all tasks in the stage completed or when the stage was cancelled. */
+  /** Time when the stage completed or when the stage was cancelled. */
   var completionTime: Option[Long] = None
   /** If the stage failed, the reason why. */
   var failureReason: Option[String] = None
@@ -108,6 +112,8 @@ private[spark] object StageInfo {
       taskMetrics,
       taskLocalityPreferences,
       shuffleDepId,
-      resourceProfileId)
+      resourceProfileId,
+      sparkConf.get(PUSH_BASED_SHUFFLE_ENABLED),
+      0)
   }
 }

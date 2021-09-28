@@ -410,8 +410,8 @@ private[ui] class AllJobsPage(parent: JobsTab, store: AppStatusStore) extends We
       </div>
 
     var content = summary
-    if (parent.sc.get.conf.getBoolean("spark.thriftserver.model.enabled", false) ||
-        parent.sc.get.conf.getBoolean("spark.kyuubi.model.enabled", false)) {
+    if (parent.conf.getBoolean("spark.thriftserver.model.enabled", false) ||
+        parent.conf.getBoolean("spark.kyuubi.model.enabled", false)) {
       val eventTimelineParameterJobsPage = request.getParameter("jobs.eventTimelinePageNumber")
       val eventTimelineParameterJobsPageSize = request.getParameter("jobs.eventTimelinePageSize")
       var eventTimelineJobsPage = Option(eventTimelineParameterJobsPage).map(_.toInt).getOrElse(1)

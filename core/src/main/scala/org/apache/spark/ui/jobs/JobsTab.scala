@@ -28,7 +28,7 @@ import org.apache.spark.ui._
 /** Web UI showing progress status of all jobs in the given SparkContext. */
 private[ui] class JobsTab(parent: SparkUI, store: AppStatusStore)
   extends SparkUITab(parent, "jobs") {
-
+  val conf = parent.conf
   val sc = parent.sc
   val killEnabled = parent.killEnabled
 

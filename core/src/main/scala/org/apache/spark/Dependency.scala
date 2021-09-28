@@ -17,13 +17,19 @@
 
 package org.apache.spark
 
+import java.util.concurrent.ScheduledFuture
+
 import scala.reflect.ClassTag
 
+import org.roaringbitmap.RoaringBitmap
+
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.shuffle.{ShuffleHandle, ShuffleWriteProcessor}
 import org.apache.spark.storage.BlockManagerId
+import org.apache.spark.util.Utils
 
 /**
  * :: DeveloperApi ::
@@ -77,7 +83,7 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
     val aggregator: Option[Aggregator[K, V, C]] = None,
     val mapSideCombine: Boolean = false,
     val shuffleWriterProcessor: ShuffleWriteProcessor = new ShuffleWriteProcessor)
-  extends Dependency[Product2[K, V]] {
+  extends Dependency[Product2[K, V]] with Logging {
 
   if (mapSideCombine) {
     require(aggregator.isDefined, "Map-side combine without Aggregator specified!")
@@ -96,19 +102,103 @@ class ShuffleDependency[K: ClassTag, V: ClassTag, C: ClassTag](
   val shuffleHandle: ShuffleHandle = _rdd.context.env.shuffleManager.registerShuffle(
     shuffleId, this)
 
+  private[this] val numPartitions = rdd.partitions.length
+
+  // By default, shuffle merge is enabled for ShuffleDependency if push based shuffle
+  // is enabled
+  private[this] var _shuffleMergeEnabled = canShuffleMergeBeEnabled()
+
+  private[spark] def setShuffleMergeEnabled(shuffleMergeEnabled: Boolean): Unit = {
+    _shuffleMergeEnabled = shuffleMergeEnabled
+  }
+
+  def shuffleMergeEnabled : Boolean = _shuffleMergeEnabled
+
   /**
    * Stores the location of the list of chosen external shuffle services for handling the
    * shuffle merge requests from mappers in this shuffle map stage.
    */
   private[spark] var mergerLocs: Seq[BlockManagerId] = Nil
 
+  /**
+   * Stores the information about whether the shuffle merge is finalized for the shuffle map stage
+   * associated with this shuffle dependency
+   */
+  private[this] var _shuffleMergedFinalized: Boolean = false
+
+  /**
+   * shuffleMergeId is used to uniquely identify merging process of shuffle
+   * by an indeterminate stage attempt.
+   */
+  private[this] var _shuffleMergeId: Int = 0
+
+  def shuffleMergeId: Int = _shuffleMergeId
+
   def setMergerLocs(mergerLocs: Seq[BlockManagerId]): Unit = {
-    if (mergerLocs != null) {
+    if (mergerLocs != null && mergerLocs.nonEmpty) {
       this.mergerLocs = mergerLocs
     }
   }
 
   def getMergerLocs: Seq[BlockManagerId] = mergerLocs
+
+  private[spark] def markShuffleMergeFinalized(): Unit = {
+    _shuffleMergedFinalized = true
+  }
+
+  /**
+   * Returns true if push-based shuffle is disabled for this stage or empty RDD,
+   * or if the shuffle merge for this stage is finalized, i.e. the shuffle merge
+   * results for all partitions are available.
+   */
+  def shuffleMergeFinalized: Boolean = {
+    // Empty RDD won't be computed therefore shuffle merge finalized should be true by default.
+    if (shuffleMergeEnabled && numPartitions > 0) {
+      _shuffleMergedFinalized
+    } else {
+      true
+    }
+  }
+
+  def newShuffleMergeState(): Unit = {
+    _shuffleMergedFinalized = false
+    mergerLocs = Nil
+    _shuffleMergeId += 1
+    finalizeTask = None
+  }
+
+  private def canShuffleMergeBeEnabled(): Boolean = {
+    val isPushShuffleEnabled = Utils.isPushBasedShuffleEnabled(rdd.sparkContext.getConf)
+    if (isPushShuffleEnabled && rdd.isBarrier()) {
+      logWarning("Push-based shuffle is currently not supported for barrier stages")
+    }
+    isPushShuffleEnabled &&
+      // TODO: SPARK-35547: Push based shuffle is currently unsupported for Barrier stages
+      !rdd.isBarrier()
+  }
+
+  @transient private[this] val shufflePushCompleted = new RoaringBitmap()
+
+  /**
+   * Mark a given map task as push completed in the tracking bitmap.
+   * Using the bitmap ensures that the same map task launched multiple times due to
+   * either speculation or stage retry is only counted once.
+   * @param mapIndex Map task index
+   * @return number of map tasks with block push completed
+   */
+  def incPushCompleted(mapIndex: Int): Int = {
+    shufflePushCompleted.add(mapIndex)
+    shufflePushCompleted.getCardinality
+  }
+
+  // Only used by DAGScheduler to coordinate shuffle merge finalization
+  @transient private[this] var finalizeTask: Option[ScheduledFuture[_]] = None
+
+  def getFinalizeTask: Option[ScheduledFuture[_]] = finalizeTask
+
+  def setFinalizeTask(task: ScheduledFuture[_]): Unit = {
+    finalizeTask = Some(task)
+  }
 
   _rdd.sparkContext.cleaner.foreach(_.registerShuffleForCleanup(this))
   _rdd.sparkContext.shuffleDriverComponents.registerShuffle(shuffleId)

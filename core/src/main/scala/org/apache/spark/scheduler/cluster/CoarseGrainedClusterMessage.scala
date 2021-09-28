@@ -82,6 +82,9 @@ private[spark] object CoarseGrainedClusterMessages {
     }
   }
 
+  case class ShufflePushCompletion(shuffleId: Int, mapIndex: Int)
+    extends CoarseGrainedClusterMessage
+
   // Internal messages in driver
   case object ReviveOffers extends CoarseGrainedClusterMessage
 

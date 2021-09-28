@@ -262,9 +262,23 @@ class StageData private[spark](
     val shuffleLocalBytesRead: Long,
     val shuffleReadBytes: Long,
     val shuffleReadRecords: Long,
+    val shuffleCorruptMergedBlockChunks: Long,
+    val shuffleFallbackCount: Long,
+    val shuffleMergedRemoteBlocksFetched: Long,
+    val shuffleMergedLocalBlocksFetched: Long,
+    val shuffleMergedRemoteChunksFetched: Long,
+    val shuffleMergedLocalChunksFetched: Long,
+    val shuffleMergedRemoteBytesRead: Long,
+    val shuffleMergedLocalBytesRead: Long,
+    val shuffleRemoteReqsDuration: Long,
+    val shuffleMergedRemoteReqsDuration: Long,
     val shuffleWriteBytes: Long,
     val shuffleWriteTime: Long,
     val shuffleWriteRecords: Long,
+    val shuffleBlocksPushed: Long,
+    val shuffleBlocksNotPushed: Long,
+    val shuffleBlocksCollided: Long,
+    val shuffleBlocksTooLate: Long,
 
     val name: String,
     val description: Option[String],
@@ -279,7 +293,9 @@ class StageData private[spark](
     val resourceProfileId: Int,
     @JsonSerialize(using = classOf[ExecutorMetricsJsonSerializer])
     @JsonDeserialize(using = classOf[ExecutorMetricsJsonDeserializer])
-    val peakExecutorMetrics: Option[ExecutorMetrics])
+    val peakExecutorMetrics: Option[ExecutorMetrics],
+    val isPushBasedShuffleEnabled: Boolean,
+    val shuffleMergersCount: Int)
 
 class TaskData private[spark](
     val taskId: Long,
@@ -325,6 +341,17 @@ class OutputMetrics private[spark](
     val bytesWritten: Long,
     val recordsWritten: Long)
 
+class ShufflePushReadMetrics private[spark](
+    val corruptMergedBlockChunks: Long,
+    val fallbackCount: Long,
+    val remoteMergedBlocksFetched: Long,
+    val localMergedBlocksFetched: Long,
+    val remoteMergedChunksFetched: Long,
+    val localMergedChunksFetched: Long,
+    val remoteMergedBlocksBytesRead: Long,
+    val localMergedBlocksBytesRead: Long,
+    val remoteMergedReqsDuration: Long)
+
 class ShuffleReadMetrics private[spark](
     val remoteBlocksFetched: Long,
     val localBlocksFetched: Long,
@@ -332,12 +359,22 @@ class ShuffleReadMetrics private[spark](
     val remoteBytesRead: Long,
     val remoteBytesReadToDisk: Long,
     val localBytesRead: Long,
-    val recordsRead: Long)
+    val recordsRead: Long,
+    val remoteReqsDuration: Long,
+    val pushBased: ShufflePushReadMetrics)
+
+class ShufflePushWriteMetrics private[spark](
+    val blocksPushed: Long,
+    val blocksNotPushed: Long,
+    val blocksCollided: Long,
+    val blocksTooLate: Long)
+
 
 class ShuffleWriteMetrics private[spark](
     val bytesWritten: Long,
     val writeTime: Long,
-    val recordsWritten: Long)
+    val recordsWritten: Long,
+    val pushBased: ShufflePushWriteMetrics)
 
 class TaskMetricDistributions private[spark](
     val quantiles: IndexedSeq[Double],
@@ -376,12 +413,32 @@ class ShuffleReadMetricDistributions private[spark](
     val fetchWaitTime: IndexedSeq[Double],
     val remoteBytesRead: IndexedSeq[Double],
     val remoteBytesReadToDisk: IndexedSeq[Double],
-    val totalBlocksFetched: IndexedSeq[Double])
+    val totalBlocksFetched: IndexedSeq[Double],
+    val remoteReqsDuration: IndexedSeq[Double],
+    val pushBased: ShufflePushReadMetricDistributions)
 
 class ShuffleWriteMetricDistributions private[spark](
     val writeBytes: IndexedSeq[Double],
     val writeRecords: IndexedSeq[Double],
-    val writeTime: IndexedSeq[Double])
+    val writeTime: IndexedSeq[Double],
+    val pushBased: ShufflePushWriteMetricDistributions)
+
+class ShufflePushReadMetricDistributions private[spark](
+     val corruptMergedBlockChunks: IndexedSeq[Double],
+     val fallbackCount: IndexedSeq[Double],
+     val remoteMergedBlocksFetched: IndexedSeq[Double],
+     val localMergedBlocksFetched: IndexedSeq[Double],
+     val remoteMergedChunksFetched: IndexedSeq[Double],
+     val localMergedChunksFetched: IndexedSeq[Double],
+     val remoteMergedBlocksBytesRead: IndexedSeq[Double],
+     val localMergedBlocksBytesRead: IndexedSeq[Double],
+     val remoteMergedReqsDuration: IndexedSeq[Double])
+
+class ShufflePushWriteMetricDistributions private[spark](
+     val blocksPushed: IndexedSeq[Double],
+     val blocksNotPushed: IndexedSeq[Double],
+     val blocksCollided: IndexedSeq[Double],
+     val blocksTooLate: IndexedSeq[Double])
 
 class AccumulableInfo private[spark](
     val id: Long,

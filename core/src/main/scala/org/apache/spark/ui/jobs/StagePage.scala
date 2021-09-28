@@ -200,6 +200,68 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
               }}
             </li>
           }}
+          {if (hasShuffleRead(stageData)) {
+            <li>
+              <strong>Push Based Shuffle Enabled: </strong>
+              {s"${stageData.isPushBasedShuffleEnabled}"}
+            </li>
+            if (stageData.isPushBasedShuffleEnabled)
+              {
+                <li>
+                  <strong>Fall Back Count: </strong>
+                  {s"${stageData.shuffleFallbackCount}"}
+                </li>
+                <li>
+                  <strong>Local Merged Blocks Fetched: </strong>
+                  {s"${stageData.shuffleMergedLocalBlocksFetched}"}
+                </li>
+                <li>
+                  <strong>Local Merged Blocks Bytes Read: </strong>
+                  {Utils.bytesToString(stageData.shuffleMergedLocalBytesRead)}
+                </li>
+                <li>
+                  <strong>Remote Merged Blocks Fetched: </strong>
+                  {s"${stageData.shuffleMergedRemoteBlocksFetched}"}
+                </li>
+                <li>
+                  <strong>Remote Merged Blocks Bytes Read: </strong>
+                  {Utils.bytesToString(stageData.shuffleMergedRemoteBytesRead)}
+                </li>
+                <li>
+                  <strong>Remote Merged Chunks Fetched: </strong>
+                  {s"${stageData.shuffleMergedRemoteChunksFetched}"}
+                </li>
+                <li>
+                  <strong>Local Merged Chunks Fetched: </strong>
+                  {s"${stageData.shuffleMergedLocalChunksFetched}"}
+                </li>
+              }
+        }}
+          {if (hasShuffleWrite(stageData)) {
+             <li>
+                <strong>Push Based Shuffle Enabled: </strong>
+                {s"${stageData.isPushBasedShuffleEnabled}"}
+             </li>
+          if (stageData.isPushBasedShuffleEnabled)
+          {
+              <li>
+                <strong>Blocks Pushed: </strong>
+                {s"${stageData.shuffleBlocksPushed}"}
+              </li>
+              <li>
+                <strong>Blocks Not Pushed: </strong>
+                {s"${stageData.shuffleBlocksNotPushed}"}
+              </li>
+              <li>
+                <strong>Blocks Too Late: </strong>
+                {s"${stageData.shuffleBlocksTooLate}"}
+              </li>
+              <li>
+                <strong>Blocks Collided: </strong>
+                {s"${stageData.shuffleBlocksCollided}"}
+              </li>
+          }
+        }}
         </ul>
       </div>
 

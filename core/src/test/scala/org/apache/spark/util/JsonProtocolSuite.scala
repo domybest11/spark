@@ -1085,6 +1085,14 @@ private[spark] object JsonProtocolSuite extends Assertions {
       sr.incRemoteBlocksFetched(f)
       sr.incRecordsRead(if (hasRecords) (b + d) / 100 else -1)
       sr.incLocalBytesRead(a + f)
+      sr.incCorruptMergedBlockChunks(if (f > e) f - e else e - f)
+      sr.incFallbackCount(if (f > e) f - e else e - f)
+      sr.incRemoteReqsDuration(a + d)
+      sr.incRemoteMergedReqsDuration(a + d)
+      sr.incCorruptMergedBlockChunks(if (f > e) f - e else e - f)
+      sr.incFallbackCount(if (f > e) f - e else e - f)
+      sr.incRemoteReqsDuration(a + d)
+      sr.incRemoteMergedReqsDuration(a + d)
       t.mergeShuffleReadMetrics()
     }
     if (hasOutput) {
@@ -1095,6 +1103,10 @@ private[spark] object JsonProtocolSuite extends Assertions {
       sw.incBytesWritten(a + b + c)
       sw.incWriteTime(b + c + d)
       sw.incRecordsWritten(if (hasRecords) (a + b + c) / 100 else -1)
+      sw.incBlocksPushed(if (b > a) b - a else a - b)
+      sw.incBlocksNotPushed(if (b > a) b - a else a - b)
+      sw.incBlocksCollided(if (b > a) b - a else a - b)
+      sw.incBlocksTooLate(if (b > a) b - a else a - b)
     }
     // Make at most 6 blocks
     t.setUpdatedBlockStatuses((1 to (e % 5 + 1)).map { i =>
@@ -1138,7 +1150,9 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |        "Count Failed Values": false
       |      }
       |    ],
-      |    "Resource Profile Id" : 0
+      |    "Resource Profile Id" : 0,
+      |    "Push based shuffle enabled" : false,
+      |    "Shuffle push mergers count" : 0
       |  },
       |  "Properties": {
       |    "France": "Paris",
@@ -1197,7 +1211,9 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |        "Count Failed Values": false
       |      }
       |    ],
-      |    "Resource Profile Id" : 0
+      |    "Resource Profile Id" : 0,
+      |    "Push based shuffle enabled" : false,
+      |    "Shuffle push mergers count" : 0
       |  }
       |}
     """.stripMargin
