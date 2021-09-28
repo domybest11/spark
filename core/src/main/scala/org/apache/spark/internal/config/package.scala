@@ -696,11 +696,17 @@ package object config {
       .booleanConf
       .createWithDefault(false)
 
-  private[spark] val SHUFFLE_REMOTE_SERVICE_MASTER =
-    ConfigBuilder("spark.shuffle.remote.service.master")
+  private[spark] val SHUFFLE_REMOTE_SERVICE_MASTER_HOST =
+    ConfigBuilder("spark.shuffle.remote.service.master.host")
       .version("3.2.0")
       .stringConf
       .createOptional
+
+  private[spark] val SHUFFLE_REMOTE_SERVICE_MASTER_PORT =
+    ConfigBuilder("spark.shuffle.remote.service.master.port")
+      .version("3.2.0")
+      .intConf
+      .createWithDefault(9097)
 
   private[spark] val SHUFFLE_REMOTE_REPORT_INTERVAL =
     ConfigBuilder("spark.shuffle.remote.report.interval")

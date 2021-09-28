@@ -18,16 +18,15 @@ package org.apache.spark.remote.shuffle
 
 import java.nio.ByteBuffer
 import java.util
+
 import com.google.common.collect.Lists
+
 import org.apache.spark.network.TransportContext
 import org.apache.spark.network.client.{RpcResponseCallback, TransportClient, TransportClientBootstrap}
 import org.apache.spark.network.server.NoOpRpcHandler
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage
 import org.apache.spark.network.shuffle.protocol.remote.{GetPushMergerLocations, MergerWorkers, RemoteShuffleDriverHeartbeat, UnregisteredApplication}
 import org.apache.spark.network.util.TransportConf
-import org.apache.spark.remote.shuffle.protocol.UnregisteredApplication
-
-
 
 
 class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, masterPort: Int) {

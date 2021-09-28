@@ -22,17 +22,15 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-public class RemoteMaster {
-    private static final Logger logger = LoggerFactory.getLogger(RemoteMaster.class);
+public class RemoteShuffleMaster {
+    private static final Logger logger = LoggerFactory.getLogger(RemoteShuffleMaster.class);
 
-    private static RemoteMaster master;
-    private static final CountDownLatch barrier = new CountDownLatch(1);
-
-    private int port = 0;
+    private String host;
+    private int port;
+    private TransportConf transportConf;
     private TransportContext transportContext;
     private TransportServer server;
     private TransportClientFactory clientFactory;
-    private TransportConf transportConf;
 
     private final ScheduledExecutorService cleanThread =
             Executors.newSingleThreadScheduledExecutor(
@@ -49,12 +47,13 @@ public class RemoteMaster {
 
     public final ConcurrentHashMap<String, RunningApplication> runningApplicationMap = new ConcurrentHashMap<>();
 
+    public RemoteShuffleMaster(String host, int port, TransportConf conf) {
+        this.host = host;
+        this.port = port;
+        transportConf = conf;
+    }
 
-
-
-
-    private void start() {
-        // TODO: 2021/9/26 从配置中获取基本信息启动
+    public void start() {
         if (server == null) {
             transportContext = new TransportContext(transportConf, new MasterRpcHandler(), true);
             List<TransportServerBootstrap> bootstraps = Lists.newArrayList();
@@ -62,10 +61,10 @@ public class RemoteMaster {
             clientFactory = transportContext.createClientFactory(Lists.newArrayList());
         }
         // application 超时检查
-        cleanThread.scheduleAtFixedRate(new ApplicationExpire(), 0, 10, TimeUnit.SECONDS);
+        cleanThread.scheduleAtFixedRate(new ApplicationExpire(), 0, 1, TimeUnit.MINUTES);
     }
 
-    private void stop() {
+    public void stop() {
         if (server != null) {
             server.close();
             server = null;
@@ -73,25 +72,6 @@ public class RemoteMaster {
         if (transportContext != null) {
             transportContext.close();
             transportContext = null;
-        }
-    }
-
-
-
-    public static void main(String[] args) {
-        master = new RemoteMaster();
-        master.start();
-
-        Runtime.getRuntime().addShutdownHook(
-                new Thread(() -> {
-                    master.stop();
-                    barrier.countDown();
-                })
-        );
-        try {
-            barrier.await();
-        } catch (InterruptedException e) {
-
         }
     }
 
@@ -243,7 +223,7 @@ public class RemoteMaster {
         }
     }
 
-    private static class RunningApplication {
+    public static class RunningApplication {
         private String appId;
         private int attemptId;
         private Set<WorkerInfo> workerInfos = new HashSet<>();

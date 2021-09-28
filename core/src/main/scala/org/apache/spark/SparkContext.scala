@@ -671,19 +671,17 @@ class SparkContext(config: SparkConf) extends Logging {
     }
 
     if (isRemoteShuffleEnabled) {
-       val transportConf =
-        SparkTransportConf.fromSparkConf(_conf, "shuffle", numUsableCores = 0)
-       val (shuffleMasterHost, shuffleMasterPort) = {
-         _conf.get(SHUFFLE_REMOTE_SERVICE_MASTER).get.split(":") match {
-          case Seq(host: String, port: String) =>
-            logInfo(s"remote shuffle service enable, master ${host}:${port}")
-            (host, Integer.valueOf(port))
-          case _ => throw new SparkException(s"remote shuffle service master format error")
-        }
-      }
+       val transportConf = {
+        SparkTransportConf.fromSparkConf(_conf, "shuffle")
+       }
+      val shuffleMasterHost = _conf.get(SHUFFLE_REMOTE_SERVICE_MASTER_HOST)
+      require(shuffleMasterHost.isDefined,
+        "Remote shuffle service enable, remote shuffle master must settings"
+      )
+      val shuffleMasterPort = _conf.get(SHUFFLE_REMOTE_SERVICE_MASTER_PORT)
       val remoteClient = new RemoteShuffleClient(
         transportConf,
-        shuffleMasterHost,
+        shuffleMasterHost.get,
         shuffleMasterPort)
       val remoteListener = new RemoteShuffleListener(
         _applicationId,
