@@ -31,7 +31,8 @@ import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.server.{TransportServer, TransportServerBootstrap}
 import org.apache.spark.network.shuffle.ExternalBlockHandler
 import org.apache.spark.network.util.TransportConf
-import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}
+import org.apache.spark.remote.shuffle.RemoteBlockHandler
+import org.apache.spark.util.{ShutdownHookManager, Utils}
 
 /**
  * Provides a server from which Executors can read shuffle files (rather than reading directly from
@@ -83,7 +84,20 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
   /** Create a new shuffle block handler. Factored out for subclasses to override. */
   protected def newShuffleBlockHandler(conf: TransportConf): ExternalBlockHandler = {
     if (sparkConf.get(config.SHUFFLE_SERVICE_DB_ENABLED) && enabled) {
-      new ExternalBlockHandler(conf, findRegisteredExecutorsDBFile(registeredExecutorsDB))
+      if (sparkConf.get(config.SHUFFLE_REMOTE_SERVICE_ENABLED)) {
+        val masterHost = sparkConf.get(config.SHUFFLE_REMOTE_SERVICE_MASTER_HOST)
+        require(masterHost.isDefined, "Remote shuffle master must settings")
+        val masterPort = sparkConf.get(config.SHUFFLE_REMOTE_SERVICE_MASTER_PORT)
+        new RemoteBlockHandler(
+          port,
+          masterHost.get,
+          masterPort,
+          conf,
+          findRegisteredExecutorsDBFile(registeredExecutorsDB)
+        )
+      } else {
+        new ExternalBlockHandler(conf, findRegisteredExecutorsDBFile(registeredExecutorsDB))
+      }
     } else {
       var file: File = null
       val filePath = conf.get("spark.shuffle.service.recovery.executor.path", null)

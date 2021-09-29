@@ -17,6 +17,7 @@
 
 package org.apache.spark.remote.shuffle;
 
+import com.codahale.metrics.Timer;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.commons.lang3.StringUtils;
@@ -27,6 +28,7 @@ import org.apache.spark.network.shuffle.ExternalBlockHandler;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.PushBlockStream;
+import org.apache.spark.network.shuffle.protocol.RegisterExecutor;
 import org.apache.spark.network.shuffle.protocol.remote.RunningStage;
 import org.apache.spark.network.util.TransportConf;
 import org.apache.spark.network.shuffle.protocol.remote.CleanApplication;
@@ -37,6 +39,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,13 +50,19 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
+
 // remote worker
 public class RemoteBlockHandler extends ExternalBlockHandler {
     private static final Logger logger = LoggerFactory.getLogger(RemoteBlockHandler.class);
+    private final String masterHost;
+    private final int masterPort;
+    private final String localHost;
+    private final int localPort;
     private volatile TransportClientFactory clientFactory;
-    private TransportConf transportConf;
-    private long heartbeatIntervalMs = 60 * 1000L;
-    private long monitorIntervalMs = 60 * 1000L;
+    private final TransportConf transportConf;
+    private final int heartbeatInterval = 1;
+    private final int monitorInterval = 1;
 
 
     //meta
@@ -78,46 +88,46 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                             .build());
 
 
-    public RemoteBlockHandler(TransportConf conf, File registeredExecutorFile) throws IOException {
+    public RemoteBlockHandler(int localPort, String masterHost, int masterPort, TransportConf conf, File registeredExecutorFile) throws IOException {
         super(conf, registeredExecutorFile);
-        transportConf = conf;
-        init(conf);
+        this.localPort = localPort;
+        this.localHost = findLocalHost();
+        this.masterHost = masterHost;
+        this.masterPort = masterPort;
+        this.transportConf = conf;
+        init();
     }
 
-    private void init(TransportConf conf) throws IOException {
-        // TODO: 2021/9/26 初始化worker 从配置中获取可用的工作目录
+    private void init() throws IOException {
         TransportContext context = new TransportContext(
                 transportConf, new NoOpRpcHandler(), true, true);
         List<TransportClientBootstrap> bootstraps = Lists.newArrayList();
         clientFactory = context.createClientFactory(bootstraps);
         try {
-            String masterHost = "";
-            int masterPort = 0;
-            String dirsConfig = conf.get("shuffle.worker.dirs", "");
+            String dirsConfig = transportConf.get("shuffle.remote.worker.dirs", "");
             if (StringUtils.isBlank(dirsConfig)) {
-                throw new IOException("");
+                throw new IOException("Remote shuffle worker dirs is empty");
             } else {
                 Arrays.stream(dirsConfig.split(",")).forEach(dir -> {
                     if (dir.contains(":")) {
                         String[] arr = dir.split(":");
-                        workDirs.add(new ShuffleDir(arr[0], DiskType.toDiskType(arr[1])));
+                        String path = arr[0];
+                        DiskType diskType = DiskType.toDiskType(arr[1]);
+                        workDirs.add(new ShuffleDir(path, diskType));
                     } else {
                         workDirs.add(new ShuffleDir(dir, DiskType.HDD));
                     }
                 });
-                // TODO: 2021/9/26 配置初始化完成后向master发送注册节点请求
-                registerRemoteShuffleWorker(masterHost, masterPort);
+                registerRemoteShuffleWorker();
             }
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
     }
 
-    private void registerRemoteShuffleWorker(
-            String host,
-            int port) throws IOException, InterruptedException {
-        TransportClient client = clientFactory.createClient(host, port);
-        ByteBuffer registerWorker = new RegisterWorker("", 0).toByteBuffer();
+    private void registerRemoteShuffleWorker() throws IOException, InterruptedException {
+        TransportClient client = clientFactory.createClient(masterHost, masterPort);
+        ByteBuffer registerWorker = new RegisterWorker(localHost, localPort).toByteBuffer();
         client.sendRpc(registerWorker, new RegisterWorkerCallback(client));
     }
 
@@ -166,6 +176,22 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             ConcurrentHashMap<String, RunningStage> map =  appStageMap.remove(appKey);
             if (map != null) {
                 RunningStage[] stages = map.values().toArray(new RunningStage[0]);
+            }
+        } else if (msgObj instanceof RegisterExecutor) {
+            final Timer.Context responseDelayContext =
+                    metrics.registerExecutorRequestLatencyMillis.time();
+            try {
+                RegisterExecutor msg = (RegisterExecutor) msgObj;
+                checkAuth(client, msg.appId);
+                blockManager.registerExecutor(msg.appId, msg.execId, msg.executorInfo);
+                callback.onSuccess(ByteBuffer.wrap(new byte[0]));
+                logger.info( "Registered executor {} of appId {} with executorInfo {} from host {}",
+                        msg.execId,
+                        msg.appId,
+                        msg.executorInfo.toString(),
+                        getRemoteAddress(client.getChannel()));
+            } finally {
+                responseDelayContext.stop();
             }
         } else {
             super.handleMessage(msgObj, client, callback);
@@ -227,6 +253,17 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         }
     }
 
+    private String findLocalHost() throws UnknownHostException {
+        String defaultIpOverride = System.getenv("JSS_LOCAL_IP");
+        InetAddress local;
+        if (defaultIpOverride != null) {
+            local = InetAddress.getByName(defaultIpOverride);
+        } else {
+            local = InetAddress.getLocalHost();
+        }
+        return local.getHostName();
+    }
+
 
     private class RegisterWorkerCallback implements RpcResponseCallback {
         private final TransportClient client;
@@ -237,17 +274,17 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
         @Override
         public void onFailure(Throwable e) {
-            logger.warn("Unable to registered remote shuffle worker");
+            logger.error("Unable to registered remote shuffle worker");
+            System.exit(-1);
         }
 
         @Override
         public void onSuccess(ByteBuffer response) {
-            // TODO: 2021/9/26 注册成功开始定时调度心跳和磁盘压力监控
             heartbeatThread.scheduleAtFixedRate(
-                    new Heartbeat(client), 0, heartbeatIntervalMs, TimeUnit.MILLISECONDS);
+                    new Heartbeat(client), 1, heartbeatInterval, TimeUnit.SECONDS);
 
             pressureMonitorThread.scheduleAtFixedRate(
-                    new PressureMonitor(), 0, monitorIntervalMs, TimeUnit.MILLISECONDS);
+                    new PressureMonitor(), 1, monitorInterval, TimeUnit.SECONDS);
 
             logger.info("Successfully registered remote shuffle worker");
         }
