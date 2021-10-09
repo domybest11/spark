@@ -3079,9 +3079,17 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
     }
 
     if (temp) {
-      val asSelect = if (ctx.query == null) "" else " AS ..."
-      operationNotAllowed(
-        s"CREATE TEMPORARY TABLE ...$asSelect, use CREATE TEMPORARY VIEW instead", ctx)
+      val columnCommentList = ctx.createTableClauses().commentSpec()
+      val userSpecifiedColumns: Seq[(String, Option[String])] = Seq()
+      if (columns.size == columnCommentList.size && columns.nonEmpty) {
+        columns.zipWithIndex.foreach {
+          case (col, index) =>
+            userSpecifiedColumns :+ (col, columnCommentList.get(index).COMMENT().toString)
+        }
+      }
+      
+      CreateViewStatement(table, userSpecifiedColumns, comment, properties,
+        Option(ctx.getText), plan(ctx.query), ifNotExists, false, LocalTempView)
     }
 
     val partitioning = partitionExpressions(partTransforms, partCols, ctx)
