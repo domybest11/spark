@@ -22,8 +22,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
-public class RemoteShuffleMaster {
-    private static final Logger logger = LoggerFactory.getLogger(RemoteShuffleMaster.class);
+public class RemoteShuffleMasterHandler {
+    private static final Logger logger = LoggerFactory.getLogger(RemoteShuffleMasterHandler.class);
 
     private String host;
     private int port;
@@ -47,7 +47,7 @@ public class RemoteShuffleMaster {
 
     public final ConcurrentHashMap<String, RunningApplication> runningApplicationMap = new ConcurrentHashMap<>();
 
-    public RemoteShuffleMaster(String host, int port, TransportConf conf) {
+    public RemoteShuffleMasterHandler(String host, int port, TransportConf conf) {
         this.host = host;
         this.port = port;
         transportConf = conf;

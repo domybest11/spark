@@ -22,18 +22,19 @@ import org.apache.spark.SparkConf
 import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.util.TransportConf
-import org.apache.spark.remote.shuffle.RemoteShuffleMaster
+import org.apache.spark.remote.shuffle.RemoteShuffleMasterHandler
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 
 object RemoteShuffleMaster extends Logging {
   @volatile
-  private var master: RemoteShuffleMaster = _
+  private var master: RemoteShuffleMasterHandler = _
 
   private val barrier = new CountDownLatch(1)
 
   def main(args: Array[String]): Unit = {
     main(args,
-      (host: String, port: Int, conf: TransportConf) => new RemoteShuffleMaster(host, port, conf)
+      (host: String, port: Int, conf: TransportConf) =>
+        new RemoteShuffleMasterHandler(host, port, conf)
     )
   }
 
@@ -41,7 +42,7 @@ object RemoteShuffleMaster extends Logging {
   /** A helper main method that allows the caller to call this with a remote shuffle master. */
   private[spark] def main(
       args: Array[String],
-      remoteShuffleMaster: (String, Int, TransportConf) => RemoteShuffleMaster): Unit = {
+      remoteShuffleMaster: (String, Int, TransportConf) => RemoteShuffleMasterHandler): Unit = {
     Utils.initDaemon(log)
     val sparkConf = new SparkConf
     Utils.loadDefaultSparkProperties(sparkConf)

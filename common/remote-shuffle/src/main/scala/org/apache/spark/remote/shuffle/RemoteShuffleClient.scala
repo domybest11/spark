@@ -19,8 +19,6 @@ package org.apache.spark.remote.shuffle
 import java.nio.ByteBuffer
 import java.util
 
-import com.google.common.collect.Lists
-
 import org.apache.spark.network.TransportContext
 import org.apache.spark.network.client.{RpcResponseCallback, TransportClient, TransportClientBootstrap}
 import org.apache.spark.network.server.NoOpRpcHandler
@@ -36,7 +34,7 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
   def start(): Unit = {
     require(client == null, "remote shuffle server driver client already started")
     // TODO: connect to master
-    val bootstraps: util.List[TransportClientBootstrap] = Lists.newArrayList
+    val bootstraps: util.List[TransportClientBootstrap] = new util.ArrayList[TransportClientBootstrap]()
     transportContext = new TransportContext(transportConf, new NoOpRpcHandler, true, true)
     client = transportContext.createClientFactory(bootstraps)
       .createClient(masterHost, masterPort)
@@ -70,7 +68,7 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
       new RemoteShuffleDriverHeartbeat(
         appId,
         Integer.valueOf(appAttemptId.getOrElse("-1")),
-        null
+        100L
       ).toByteBuffer
     )
   }
