@@ -3089,34 +3089,35 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
       }
       
       CreateViewStatement(table, userSpecifiedColumns, comment, properties,
-        Option(ctx.getText), plan(ctx.query), ifNotExists, false, LocalTempView)
-    }
+        Option(source(ctx.query)), plan(ctx.query), ifNotExists, false, LocalTempView)
+    } else {
 
-    val partitioning = partitionExpressions(partTransforms, partCols, ctx)
+      val partitioning = partitionExpressions(partTransforms, partCols, ctx)
 
-    Option(ctx.query).map(plan) match {
-      case Some(_) if columns.nonEmpty =>
-        operationNotAllowed(
-          "Schema may not be specified in a Create Table As Select (CTAS) statement",
-          ctx)
+      Option(ctx.query).map(plan) match {
+        case Some(_) if columns.nonEmpty =>
+          operationNotAllowed(
+            "Schema may not be specified in a Create Table As Select (CTAS) statement",
+            ctx)
 
-      case Some(_) if partCols.nonEmpty =>
-        // non-reference partition columns are not allowed because schema can't be specified
-        operationNotAllowed(
-          "Partition column types may not be specified in Create Table As Select (CTAS)",
-          ctx)
+        case Some(_) if partCols.nonEmpty =>
+          // non-reference partition columns are not allowed because schema can't be specified
+          operationNotAllowed(
+            "Partition column types may not be specified in Create Table As Select (CTAS)",
+            ctx)
 
-      case Some(query) =>
-        CreateTableAsSelectStatement(
-          table, query, partitioning, bucketSpec, properties, provider, options, location, comment,
-          writeOptions = Map.empty, serdeInfo, external = external, ifNotExists = ifNotExists)
+        case Some(query) =>
+          CreateTableAsSelectStatement(
+            table, query, partitioning, bucketSpec, properties, provider, options, location, comment,
+            writeOptions = Map.empty, serdeInfo, external = external, ifNotExists = ifNotExists)
 
-      case _ =>
-        // Note: table schema includes both the table columns list and the partition columns
-        // with data type.
-        val schema = StructType(columns ++ partCols)
-        CreateTableStatement(table, schema, partitioning, bucketSpec, properties, provider,
-          options, location, comment, serdeInfo, external = external, ifNotExists = ifNotExists)
+        case _ =>
+          // Note: table schema includes both the table columns list and the partition columns
+          // with data type.
+          val schema = StructType(columns ++ partCols)
+          CreateTableStatement(table, schema, partitioning, bucketSpec, properties, provider,
+            options, location, comment, serdeInfo, external = external, ifNotExists = ifNotExists)
+      }
     }
   }
 
