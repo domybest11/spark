@@ -19,23 +19,26 @@ package org.apache.spark.remote.shuffle
 import java.nio.ByteBuffer
 import java.util
 
+import org.slf4j.LoggerFactory
+
 import org.apache.spark.network.TransportContext
 import org.apache.spark.network.client.{RpcResponseCallback, TransportClient, TransportClientBootstrap}
 import org.apache.spark.network.server.NoOpRpcHandler
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage
-import org.apache.spark.network.shuffle.protocol.remote.{GetPushMergerLocations, MergerWorkers, RemoteShuffleDriverHeartbeat, UnregisteredApplication}
+import org.apache.spark.network.shuffle.protocol.remote.{GetPushMergerLocations, MergerWorkers, RegisterApplication, RemoteShuffleDriverHeartbeat, UnregisterApplication}
 import org.apache.spark.network.util.TransportConf
 
 
 class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, masterPort: Int) {
+  private val logger = LoggerFactory.getLogger(classOf[RemoteShuffleClient])
+
   private var client: TransportClient = _
   private var transportContext: TransportContext = _
 
   def start(): Unit = {
     require(client == null, "remote shuffle server driver client already started")
-    // TODO: connect to master
-    val bootstraps: util.List[TransportClientBootstrap] = new util.ArrayList[TransportClientBootstrap]()
-    transportContext = new TransportContext(transportConf, new NoOpRpcHandler, true, true)
+    val bootstraps = new util.ArrayList[TransportClientBootstrap]()
+    transportContext = new TransportContext(transportConf, new NoOpRpcHandler, false, true)
     client = transportContext.createClientFactory(bootstraps)
       .createClient(masterHost, masterPort)
   }
@@ -53,13 +56,13 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
 
   def startApplication(appId: String, appAttemptId: Option[String]): Unit = {
     client.send(
-      new UnregisteredApplication(appId, Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer
+      new RegisterApplication(appId, Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer
     )
   }
 
   def stopApplication(appId: String, appAttemptId: Option[String]): Unit = {
     client.send(
-      new UnregisteredApplication(appId, Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer
+      new UnregisterApplication(appId, Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer
     )
   }
 
@@ -68,7 +71,7 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
       new RemoteShuffleDriverHeartbeat(
         appId,
         Integer.valueOf(appAttemptId.getOrElse("-1")),
-        100L
+        System.currentTimeMillis()
       ).toByteBuffer
     )
   }
@@ -100,11 +103,12 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
       override def onSuccess(response: ByteBuffer): Unit = {
         val msgObj = BlockTransferMessage.Decoder.fromByteBuffer(response)
         result = msgObj.asInstanceOf[MergerWorkers].getWorkerInfos
+        logger.info("Shuffle {} get push merger location size: {}", shuffleId, result.size)
       }
 
       /** Exception either propagated from server or raised on client side. */
       override def onFailure(e: Throwable): Unit = {
-
+        logger.warn("Get push merger location from remote service fail", e)
       }
     })
     result

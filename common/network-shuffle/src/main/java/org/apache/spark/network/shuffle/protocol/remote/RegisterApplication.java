@@ -4,15 +4,13 @@ import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.protocol.Encoders;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 
-public class RemoteShuffleDriverHeartbeat  extends BlockTransferMessage {
-    private final String appId;
-    private final int attempt;
-    private final long latestHeartbeatTime;
+public class RegisterApplication extends BlockTransferMessage {
+    private String appId;
+    private int attempt;
 
-    public RemoteShuffleDriverHeartbeat(String appId, int attempt, long latestHeartbeatTime) {
+    public RegisterApplication(String appId, int attempt) {
         this.appId = appId;
         this.attempt = attempt;
-        this.latestHeartbeatTime = latestHeartbeatTime;
     }
 
     public String getAppId() {
@@ -23,10 +21,6 @@ public class RemoteShuffleDriverHeartbeat  extends BlockTransferMessage {
         return attempt;
     }
 
-    public long getLatestHeartbeatTime() {
-        return latestHeartbeatTime;
-    }
-
     public String getKey() {
         return appId + "_" + attempt;
     }
@@ -34,26 +28,23 @@ public class RemoteShuffleDriverHeartbeat  extends BlockTransferMessage {
     @Override
     public int encodedLength() {
         return Encoders.Strings.encodedLength(appId)
-                + 4
-                + 8;
+                + 4;
     }
 
     @Override
     public void encode(ByteBuf buf) {
         Encoders.Strings.encode(buf, appId);
         buf.writeInt(attempt);
-        buf.writeLong(latestHeartbeatTime);
     }
 
     @Override
     protected Type type() {
-        return Type.REMOTE_SHUFFLE_DRIVER_HEARTBEAT;
+        return Type.REGISTER_APPLICATION;
     }
 
-    public static RemoteShuffleDriverHeartbeat decode(ByteBuf buf) {
+    public static RegisterApplication decode(ByteBuf buf) {
         String appId = Encoders.Strings.decode(buf);
         int attempt = buf.readInt();
-        long latestHeartbeatTime = buf.readLong();
-        return new RemoteShuffleDriverHeartbeat(appId, attempt, latestHeartbeatTime);
+        return new RegisterApplication(appId, attempt);
     }
 }

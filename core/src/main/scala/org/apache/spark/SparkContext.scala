@@ -689,7 +689,7 @@ class SparkContext(config: SparkConf) extends Logging {
         _conf,
         remoteClient)
       remoteListener.start()
-      listenerBus.addToSharedQueue(remoteListener)
+      listenerBus.addToStatusQueue(remoteListener)
       _remoteShuffle = Some(remoteClient)
       _remoteShuffleListener = Some(remoteListener)
     } else {

@@ -143,20 +143,18 @@ public class RemoteShuffleMasterHandler {
                     }
                 });
                 logger.info("handle RemoteShuffleServiceHeartbeat time: {}ms", System.currentTimeMillis() - start);
-            } else if (msgObj instanceof RegisteredApplication) {
-                // TODO: 2021/9/26 注册application
-                RegisteredApplication application = (RegisteredApplication) msgObj;
+            } else if (msgObj instanceof RegisterApplication) {
+                RegisterApplication application = (RegisterApplication) msgObj;
                 String appId = application.getAppId();
                 int attemptId = application.getAttempt();
-                String key = appId + "_" + attemptId;
-                RunningApplication runningApplication = runningApplicationMap.computeIfAbsent(key, f -> new RunningApplication(appId,attemptId));
+                String key = application.getKey();
+                RunningApplication runningApplication = runningApplicationMap.computeIfAbsent(key, f -> new RunningApplication(appId, attemptId));
                 logger.info("application: {}_{} register success", runningApplication.appId, runningApplication.attemptId);
-            } else if (msgObj instanceof UnregisteredApplication) {
-                // TODO: 2021/9/26 卸载application
-                UnregisteredApplication application = (UnregisteredApplication) msgObj;
+            } else if (msgObj instanceof UnregisterApplication) {
+                UnregisterApplication application = (UnregisterApplication) msgObj;
                 String appId = application.getAppId();
                 int attemptId = application.getAttempt();
-                String key = appId + "_" + attemptId;
+                String key = application.getKey();
                 RunningApplication runningApplication = runningApplicationMap.remove(key);
                 if (runningApplication != null) {
                     runningApplication.alive.compareAndSet(true, false);
@@ -165,12 +163,11 @@ public class RemoteShuffleMasterHandler {
                     );
                 }
             } else if (msgObj instanceof RemoteShuffleDriverHeartbeat) {
-                // TODO: 2021/9/26 application心跳
                 RemoteShuffleDriverHeartbeat application = (RemoteShuffleDriverHeartbeat) msgObj;
                 String appId = application.getAppId();
                 int attemptId = application.getAttempt();
-                long heartbeatTimeoutMs = application.getHeartbeatTimeoutMs();
-                String key = appId + "_" + attemptId;
+                long heartbeatTimeoutMs = application.getLatestHeartbeatTime();
+                String key = application.getKey();
                 RunningApplication runningApplication = runningApplicationMap.get(key);
                 if (runningApplication != null) {
                     runningApplication.setLatestHeartbeatTime(heartbeatTimeoutMs);
@@ -188,7 +185,7 @@ public class RemoteShuffleMasterHandler {
                 int maxExecutors = msg.getMaxExecutors();
                 List<WorkerInfo> workerInfos = getMergerWorkers(appId, attempt, shuffleId, numPartitions, tasksPerExecutor, maxExecutors);
                 String[] res = new String[workerInfos.size()];
-                for (int i=0; i<workerInfos.size(); i++) {
+                for (int i=0; i < workerInfos.size(); i++) {
                     res[i] = workerInfos.get(i).address();
                 }
                 callback.onSuccess(new MergerWorkers(res).toByteBuffer());
@@ -205,18 +202,14 @@ public class RemoteShuffleMasterHandler {
 
         private List<WorkerInfo> getMergerWorkers(String appId, int attempt, int shuffleId, int numPartitions, int tasksPerExecutor, int maxExecutors) {
             int numMergersDesired = Math.min(Math.max(1, (int)Math.ceil(numPartitions * 1.0 / tasksPerExecutor)), maxExecutors);
-            // TODO: 2021/9/27 从配置中获取最少需要的节点
-            int minMergersDesired = 0;
             List<WorkerInfo> workerInfos = workersMap.values().stream().filter(
                     workerInfo ->
                             !blackWorkers.contains(workerInfo) && !busyWorkers.contains(workerInfo)
             ).collect(Collectors.toList());
             int capacity = workerInfos.size();
-            Collections.shuffle(workerInfos);
-            if (capacity<=minMergersDesired) {
-                return new ArrayList<>();
-            } else if (numMergersDesired <= capacity) {
-                return workerInfos.subList(0,numMergersDesired);
+          if (numMergersDesired <= capacity) {
+                Collections.shuffle(workerInfos);
+                return workerInfos.subList(0, numMergersDesired);
             } else {
                 return workerInfos;
             }
