@@ -657,6 +657,10 @@ class SparkContext(config: SparkConf) extends Logging {
         None
       }
 
+    if (conf.get(SQL_APP_LISTENER_ENABLED)) {
+      listenerBus.addToStatusQueue(new AppListener(_applicationId, _applicationAttemptId, _conf))
+    }
+
     _cleaner =
       if (_conf.get(CLEANER_REFERENCE_TRACKING)) {
         Some(new ContextCleaner(this, _shuffleDriverComponents))

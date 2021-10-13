@@ -21,18 +21,18 @@ import java.net.URL
 import java.util.UUID
 import java.util.concurrent.{ConcurrentHashMap, CopyOnWriteArrayList}
 import java.util.function.BiFunction
+
 import javax.annotation.concurrent.GuardedBy
 
 import scala.reflect.ClassTag
 import scala.util.Random
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.FsUrlStreamHandlerFactory
 import org.apache.hadoop.security.UserGroupInformation
-
 import org.apache.spark.{SparkConf, SparkContext, SparkException}
 import org.apache.spark.internal.Logging
+import org.apache.spark.internal.config.SQL_APP_LISTENER_ENABLED
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.CacheManager
 import org.apache.spark.sql.execution.status.{SqlAppStatusScheduler, SqlAppStoreStatusStoreV1, SqlMarioListener}
@@ -104,6 +104,8 @@ private[sql] class SharedState(
     val kvStore = sparkContext.statusStore.store.asInstanceOf[ElementTrackingStore]
     var listener: SQLAppStatusListener = null
     val enableThriftServer = sparkContext.conf.getBoolean("spark.thriftserver.model.enabled", false)
+    val sqlAppStatusStoreV1 = new SqlAppStoreStatusStoreV1(Some(statusStore),
+      Some(sparkContext.statusStore), sparkContext.conf)
     if (enableThriftServer) {
       listener = new SQLAppStatusListener(sparkContext.conf, kvStore, live = true)
     } else {
@@ -111,17 +113,17 @@ private[sql] class SharedState(
       listener = new SQLAppStatusListener(sparkContext.conf, kvStore, live = true,
         Some(sqlAppStatusScheduler._executionInfoQueue))
       if (!Utils.isTesting) {
-        val sqlAppStatusStoreV1 = new SqlAppStoreStatusStoreV1(Some(statusStore),
-          Some(sparkContext.statusStore), sparkContext.conf)
         sqlAppStatusScheduler.start(sqlAppStatusStoreV1)
       }
     }
     sparkContext.listenerBus.addToStatusQueue(listener)
     statusStore = new SQLAppStatusStore(kvStore, Some(listener))
     sparkContext.ui.foreach(new SQLTab(statusStore, _))
-    sparkContext.listenerBus.addToStatusQueue(
-      new SqlMarioListener(sparkContext.conf, kvStore, live = true)
-    )
+    if (conf.get(SQL_APP_LISTENER_ENABLED)) {
+      sparkContext.listenerBus.addToStatusQueue(
+        new SqlMarioListener(sparkContext, sqlAppStatusStoreV1, live = true)
+      )
+    }
     statusStore
   }
 

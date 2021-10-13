@@ -2249,4 +2249,11 @@ package object config {
       .version("3.2.0")
       .stringConf
       .createOptional
+
+  val SQL_APP_LISTENER_ENABLED =
+    ConfigBuilder("spark.sql.app.listener.enabled")
+      .doc("When true, spark will enable SqlMarioListener and AppListener to collect app metrics")
+      .version("3.1.1")
+      .booleanConf
+      .createWithDefault(false)
 }
