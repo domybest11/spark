@@ -61,6 +61,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     private TransportClient client;
     private final int heartbeatInterval = 1;
     private final int monitorInterval = 1;
+    private final int MAX_ATTEMPTS = 3;
 
 
     //meta
@@ -126,7 +127,26 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
     private void registerRemoteShuffleWorker() throws InterruptedException {
         ByteBuffer registerWorker = new RegisterWorker(localHost, localPort).toByteBuffer();
-        client.sendRpc(registerWorker, new RegisterWorkerCallback());
+        for (int i = 0; ; i++) {
+            try {
+                client.sendRpcSync(registerWorker, 3000L);
+                heartbeatThread.scheduleAtFixedRate(
+                        new Heartbeat(), 1, heartbeatInterval, TimeUnit.MINUTES);
+
+                pressureMonitorThread.scheduleAtFixedRate(
+                        new PressureMonitor(), 1, monitorInterval, TimeUnit.MINUTES);
+                logger.info("Registered remote shuffle worker successfully");
+                return;
+            } catch (Exception e) {
+                if (i < MAX_ATTEMPTS) {
+                    logger.warn("Failed to connect to remote shuffle server, will retry {} more times after waiting 10 seconds...", i-1 ,e);
+                    Thread.sleep(10 * 1000L);
+                } else {
+                    logger.error("Unable to register with remote shuffle server due to : {}", e.getMessage(), e);
+                    System.exit(-1);
+                }
+            }
+        }
     }
 
     private void unregisterRemoteShuffleWorker() {
@@ -188,6 +208,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 RegisterExecutor msg = (RegisterExecutor) msgObj;
                 checkAuth(client, msg.appId);
                 blockManager.registerExecutor(msg.appId, msg.execId, msg.executorInfo);
+                // 这里不在使用mergeManager注册工作目录
                 callback.onSuccess(ByteBuffer.wrap(new byte[0]));
                 logger.info( "Registered executor {} of appId {} with executorInfo {} from host {}",
                         msg.execId,
@@ -274,27 +295,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             local = InetAddress.getLocalHost();
         }
         return local.getHostName();
-    }
-
-
-    private class RegisterWorkerCallback implements RpcResponseCallback {
-
-        @Override
-        public void onFailure(Throwable e) {
-            logger.error("Unable to registered remote shuffle worker");
-            System.exit(-1);
-        }
-
-        @Override
-        public void onSuccess(ByteBuffer response) {
-            heartbeatThread.scheduleAtFixedRate(
-                    new Heartbeat(), 1, heartbeatInterval, TimeUnit.MINUTES);
-
-            pressureMonitorThread.scheduleAtFixedRate(
-                    new PressureMonitor(), 1, monitorInterval, TimeUnit.MINUTES);
-
-            logger.info("Registered remote shuffle worker successfully");
-        }
     }
 
     private class Heartbeat implements Runnable {
