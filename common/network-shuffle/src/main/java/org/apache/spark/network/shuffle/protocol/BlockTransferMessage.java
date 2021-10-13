@@ -52,7 +52,8 @@ public abstract class BlockTransferMessage implements Encodable {
     PUSH_BLOCK_STREAM(12), FINALIZE_SHUFFLE_MERGE(13), MERGE_STATUSES(14),
     FETCH_SHUFFLE_BLOCK_CHUNKS(15), DIAGNOSE_CORRUPTION(16), CORRUPTION_CAUSE(17),
     PUSH_BLOCK_RETURN_CODE(18),SHUFFLE_HEARTBEAT(30),GET_PUSH_MERGER_LOCATIONS(31),
-    MERGER_WORKERS(32),REGISTER_APPLICATION(33),UNREGISTER_APPLICATION(34),REMOTE_SHUFFLE_DRIVER_HEARTBEAT(35);
+    MERGER_WORKERS(32),REGISTER_APPLICATION(33),UNREGISTER_APPLICATION(34),REMOTE_SHUFFLE_DRIVER_HEARTBEAT(35),
+    REGISTER_WORKER(36), UNREGISTER_WORKER(37);
 
     private final byte id;
 
@@ -90,11 +91,14 @@ public abstract class BlockTransferMessage implements Encodable {
         case 16: return DiagnoseCorruption.decode(buf);
         case 17: return CorruptionCause.decode(buf);
         case 18: return BlockPushReturnCode.decode(buf);
+        case 30: return RemoteShuffleWorkerHeartbeat.decode(buf);
         case 31: return GetPushMergerLocations.decode(buf);
         case 32: return MergerWorkers.decode(buf);
         case 33: return RegisterApplication.decode(buf);
         case 34: return UnregisterApplication.decode(buf);
         case 35: return RemoteShuffleDriverHeartbeat.decode(buf);
+        case 36: return RegisterWorker.decode(buf);
+        case 37: return UnregisterWorker.decode(buf);
         default: throw new IllegalArgumentException("Unknown message type: " + type);
       }
     }

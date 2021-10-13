@@ -29,11 +29,8 @@ import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.PushBlockStream;
 import org.apache.spark.network.shuffle.protocol.RegisterExecutor;
-import org.apache.spark.network.shuffle.protocol.remote.RunningStage;
+import org.apache.spark.network.shuffle.protocol.remote.*;
 import org.apache.spark.network.util.TransportConf;
-import org.apache.spark.network.shuffle.protocol.remote.CleanApplication;
-import org.apache.spark.network.shuffle.protocol.remote.RegisterWorker;
-import org.apache.spark.network.shuffle.protocol.remote.RemoteShuffleServiceHeartbeat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,8 +56,9 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     private final int masterPort;
     private final String localHost;
     private final int localPort;
-    private volatile TransportClientFactory clientFactory;
     private final TransportConf transportConf;
+    private TransportClientFactory clientFactory;
+    private TransportClient client;
     private final int heartbeatInterval = 1;
     private final int monitorInterval = 1;
 
@@ -118,6 +116,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                         workDirs.add(new ShuffleDir(dir, DiskType.HDD));
                     }
                 });
+                client = clientFactory.createClient(masterHost, masterPort);
                 registerRemoteShuffleWorker();
             }
         } catch (InterruptedException e) {
@@ -125,11 +124,16 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         }
     }
 
-    private void registerRemoteShuffleWorker() throws IOException, InterruptedException {
-        TransportClient client = clientFactory.createClient(masterHost, masterPort);
+    private void registerRemoteShuffleWorker() throws InterruptedException {
         ByteBuffer registerWorker = new RegisterWorker(localHost, localPort).toByteBuffer();
-        client.sendRpc(registerWorker, new RegisterWorkerCallback(client));
+        client.sendRpc(registerWorker, new RegisterWorkerCallback());
     }
+
+    private void unregisterRemoteShuffleWorker() {
+        ByteBuffer unregisterWorker = new UnregisterWorker(localHost, localPort).toByteBuffer();
+        client.send(unregisterWorker);
+    }
+
 
     @Override
     public StreamCallbackWithID receiveStream(
@@ -202,8 +206,16 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     public void close() {
         super.close();
         heartbeatThread.shutdownNow();
+        if(client != null) {
+            unregisterRemoteShuffleWorker();
+            client.close();
+            client = null;
+        }
+        if(clientFactory != null) {
+            clientFactory.close();
+            clientFactory = null;
+        }
     }
-
 
     private void prepareAppWorkDir(String appId, int attemptId) {
         // TODO: 2021/9/26 兼容调社区版本注册app工作目录
@@ -266,11 +278,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
 
     private class RegisterWorkerCallback implements RpcResponseCallback {
-        private final TransportClient client;
-
-        public RegisterWorkerCallback(TransportClient client) {
-            this.client = client;
-        }
 
         @Override
         public void onFailure(Throwable e) {
@@ -281,35 +288,30 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         @Override
         public void onSuccess(ByteBuffer response) {
             heartbeatThread.scheduleAtFixedRate(
-                    new Heartbeat(client), 1, heartbeatInterval, TimeUnit.SECONDS);
+                    new Heartbeat(), 1, heartbeatInterval, TimeUnit.MINUTES);
 
             pressureMonitorThread.scheduleAtFixedRate(
-                    new PressureMonitor(), 1, monitorInterval, TimeUnit.SECONDS);
+                    new PressureMonitor(), 1, monitorInterval, TimeUnit.MINUTES);
 
-            logger.info("Successfully registered remote shuffle worker");
+            logger.info("Registered remote shuffle worker successfully");
         }
     }
 
     private class Heartbeat implements Runnable {
-        private final TransportClient client;
-
-        private Heartbeat(TransportClient client) {
-            this.client = client;
-        }
 
         @Override
         public void run() {
             List<RunningStage> currentRunningStages = new ArrayList<>();
             appStageMap.values().forEach(stageMap-> currentRunningStages.addAll(stageMap.values()));
-            // TODO: 2021/9/22 心跳上报
             client.send(
-                    new RemoteShuffleServiceHeartbeat(
-                            "host",
-                            0,
+                    new RemoteShuffleWorkerHeartbeat(
+                            localHost,
+                            localPort,
                             System.currentTimeMillis(),
                             "0.0",
-                            currentRunningStages.toArray(new RunningStage[0])).toByteBuffer()
+                            currentRunningStages.toArray(new RunningStage[1])).toByteBuffer()
             );
+            logger.debug("worker send heartbeat");
         }
     }
 

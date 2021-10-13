@@ -42,8 +42,8 @@ public class RemoteShuffleMasterHandler {
 
     //meta
     public final ConcurrentHashMap<String, WorkerInfo> workersMap = new ConcurrentHashMap<>();
-    public final HashSet<WorkerInfo> blackWorkers = new HashSet<>();
-    public final HashSet<WorkerInfo> busyWorkers = new HashSet<>();
+    public final CopyOnWriteArraySet<WorkerInfo> blackWorkers = new CopyOnWriteArraySet<>();
+    public final CopyOnWriteArraySet<WorkerInfo> busyWorkers = new CopyOnWriteArraySet<>();
 
     public final ConcurrentHashMap<String, RunningApplication> runningApplicationMap = new ConcurrentHashMap<>();
 
@@ -115,11 +115,10 @@ public class RemoteShuffleMasterHandler {
                 String address = host + ":" + port;
                 workersMap.computeIfAbsent(address, w -> new WorkerInfo(clientFactory, host, port));
                 callback.onSuccess(ByteBuffer.allocate(0));
-                logger.info("handle RegisterWorker time: {}ms", System.currentTimeMillis() - start);
-            } else if (msgObj instanceof RemoteShuffleServiceHeartbeat) {
-                // TODO: 2021/9/26 worker 心跳处理
+                logger.info("handle register worker time: {}ms", System.currentTimeMillis() - start);
+            } else if (msgObj instanceof RemoteShuffleWorkerHeartbeat) {
                 long start = System.currentTimeMillis();
-                RemoteShuffleServiceHeartbeat workHeartbeat = (RemoteShuffleServiceHeartbeat) msgObj;
+                RemoteShuffleWorkerHeartbeat workHeartbeat = (RemoteShuffleWorkerHeartbeat) msgObj;
                 String host = workHeartbeat.getHost();
                 int port = workHeartbeat.getPort();
                 String address = host + ":" + port;
@@ -136,12 +135,20 @@ public class RemoteShuffleMasterHandler {
                     String appId = runningStage.getApplicationId();
                     int attemptId = runningStage.getAttemptId();
                     String key = appId + "_" + attemptId;
-                    RunningApplication runningApplication = runningApplicationMap.computeIfAbsent(key, f -> new RunningApplication(appId,attemptId));
+                    RunningApplication runningApplication = runningApplicationMap.computeIfAbsent(key, f -> new RunningApplication(appId, attemptId));
                     synchronized (runningApplication) {
                         runningApplication.getWorkerInfos().add(workerInfo);
                     }
                 });
                 logger.info("handle RemoteShuffleServiceHeartbeat time: {}ms", System.currentTimeMillis() - start);
+            } else if (msgObj instanceof UnregisterWorker) {
+                UnregisterWorker unregisterWorker = (UnregisterWorker) msgObj;
+                String host = unregisterWorker.getHost();
+                int port = unregisterWorker.getPort();
+                String address = host + ":" + port;
+                WorkerInfo workerInfo = workersMap.remove(address);
+                blackWorkers.remove(workerInfo);
+                busyWorkers.remove(workerInfo);
             } else if (msgObj instanceof RegisterApplication) {
                 RegisterApplication application = (RegisterApplication) msgObj;
                 String appId = application.getAppId();

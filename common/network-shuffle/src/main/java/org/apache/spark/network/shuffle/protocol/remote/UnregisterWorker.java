@@ -4,11 +4,11 @@ import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.protocol.Encoders;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 
-public class RegisterWorker extends BlockTransferMessage {
+public class UnregisterWorker extends BlockTransferMessage {
     private final String host;
     private final int port;
 
-    public RegisterWorker(String host, int port) {
+    public UnregisterWorker(String host, int port) {
         this.host = host;
         this.port = port;
     }
@@ -35,12 +35,12 @@ public class RegisterWorker extends BlockTransferMessage {
 
     @Override
     protected Type type() {
-        return Type.REGISTER_WORKER;
+        return Type.UNREGISTER_WORKER;
     }
 
-    public static RegisterWorker decode(ByteBuf buf) {
+    public static UnregisterWorker decode(ByteBuf buf) {
         String host = Encoders.Strings.decode(buf);
         int port = buf.readInt();
-        return new RegisterWorker(host, port);
+        return new UnregisterWorker(host, port);
     }
 }

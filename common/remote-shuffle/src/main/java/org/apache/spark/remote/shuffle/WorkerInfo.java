@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 
 public class WorkerInfo {
@@ -27,6 +28,7 @@ public class WorkerInfo {
         this.host = host;
         this.port = port;
         this.clientFactory = clientFactory;
+        this.latestHeartbeatTime = System.currentTimeMillis();
     }
 
     public void cleanApplication(String applicationId, int attemptId) {
@@ -69,6 +71,18 @@ public class WorkerInfo {
         return host+ ":" + port;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        WorkerInfo that = (WorkerInfo) o;
+        return port == that.port && host.equals(that.host);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(host, port);
+    }
 
     private class CleanApplicationCallback implements RpcResponseCallback {
         private CleanApplication application;
