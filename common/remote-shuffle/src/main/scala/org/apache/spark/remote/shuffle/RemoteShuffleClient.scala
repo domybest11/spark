@@ -18,7 +18,9 @@ package org.apache.spark.remote.shuffle
 
 import java.nio.ByteBuffer
 import java.util
+import java.util.concurrent.{Executors, TimeUnit}
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.network.TransportContext
@@ -28,12 +30,17 @@ import org.apache.spark.network.shuffle.protocol.BlockTransferMessage
 import org.apache.spark.network.shuffle.protocol.remote.{GetPushMergerLocations, MergerWorkers, RegisterApplication, RemoteShuffleDriverHeartbeat, UnregisterApplication}
 import org.apache.spark.network.util.TransportConf
 
-
 class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, masterPort: Int) {
   private val logger = LoggerFactory.getLogger(classOf[RemoteShuffleClient])
 
   private var client: TransportClient = _
   private var transportContext: TransportContext = _
+  private lazy val heartbeatThread = Executors.newSingleThreadScheduledExecutor(
+    new ThreadFactoryBuilder()
+      .setDaemon(true)
+      .setNameFormat("remote-shuffle-driver-heartbeat")
+      .build
+  )
 
   def start(): Unit = {
     require(client == null, "remote shuffle server driver client already started")
@@ -44,6 +51,9 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
   }
 
   def stop(): Unit = {
+    if (heartbeatThread != null) {
+      heartbeatThread.shutdownNow()
+    }
     if (transportContext != null) {
       transportContext.close()
       transportContext = null
@@ -54,9 +64,25 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
     }
   }
 
-  def startApplication(appId: String, appAttemptId: Option[String]): Unit = {
-    client.send(
-      new RegisterApplication(appId, Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer
+  def startApplication(appId: String,
+                       appAttemptId: Option[String],
+                       reportIntervalMs: Long): Unit = {
+    client.sendRpc(
+      new RegisterApplication(
+        appId,
+        Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer,
+      new RpcResponseCallback {
+        override def onSuccess(response: ByteBuffer): Unit = {
+          heartbeatThread.scheduleAtFixedRate(() => {
+            sendHeartbeat(appId, Integer.valueOf(appAttemptId.getOrElse("-1")))
+          }, 30, reportIntervalMs, TimeUnit.SECONDS)
+          logger.info("Registered application to remote shuffle master successfully")
+        }
+
+        override def onFailure(e: Throwable): Unit = {
+          logger.error("Unable to register application to remote shuffle master")
+        }
+      }
     )
   }
 
@@ -66,11 +92,11 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
     )
   }
 
-  def sendHeartbeat(appId: String, appAttemptId: Option[String]): Unit = {
+  private def sendHeartbeat(appId: String, appAttemptId: Int): Unit = {
     client.send(
       new RemoteShuffleDriverHeartbeat(
         appId,
-        Integer.valueOf(appAttemptId.getOrElse("-1")),
+        appAttemptId,
         System.currentTimeMillis()
       ).toByteBuffer
     )

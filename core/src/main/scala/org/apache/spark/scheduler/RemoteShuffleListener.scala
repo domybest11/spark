@@ -38,45 +38,20 @@ private[spark] class RemoteShuffleListener(
 
   private val reportIntervalMs = sparkConf.get(SHUFFLE_REMOTE_REPORT_INTERVAL)
 
-  private var heartbeatThread: ScheduledExecutorService = _
-
   def start(): Unit = {
     shuffleClient.start()
     logInfo(s"remote shuffle service driver client start success")
   }
 
   def stop(): Unit = {
-    if (heartbeatThread !=null) {
-      heartbeatThread.shutdownNow()
-    }
-    heartbeatThread.shutdownNow
+    shuffleClient.stop()
   }
 
   override def onApplicationStart(applicationStart: SparkListenerApplicationStart): Unit = {
-    if (heartbeatThread == null) {
-      heartbeatThread = Executors.newSingleThreadScheduledExecutor(
-        new ThreadFactoryBuilder()
-          .setDaemon(true)
-          .setNameFormat("remote-shuffle-driver-heartbeat")
-          .build
-      )
-    }
-    shuffleClient.startApplication(appId, appAttemptId)
-    heartbeatThread.scheduleAtFixedRate(
-      new Heartbeat(),
-      0,
-      reportIntervalMs,
-      TimeUnit.MILLISECONDS)
+    shuffleClient.startApplication(appId, appAttemptId, reportIntervalMs)
   }
 
   override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd): Unit = {
     shuffleClient.stopApplication(appId, appAttemptId)
   }
-
-  private class Heartbeat() extends Runnable {
-    override def run(): Unit = {
-      shuffleClient.sendHeartbeat(appId, appAttemptId)
-    }
-  }
-
 }

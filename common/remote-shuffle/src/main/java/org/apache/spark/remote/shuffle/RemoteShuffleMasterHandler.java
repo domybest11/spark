@@ -108,7 +108,6 @@ public class RemoteShuffleMasterHandler {
 
         private void handleMessage(BlockTransferMessage msgObj, TransportClient client, RpcResponseCallback callback) {
             if (msgObj instanceof RegisterWorker) {
-                // TODO: 2021/9/26 注册worker
                 long start = System.currentTimeMillis();
                 RegisterWorker registerWorker = (RegisterWorker) msgObj;
                 String host = registerWorker.getHost();
@@ -149,6 +148,7 @@ public class RemoteShuffleMasterHandler {
                 int attemptId = application.getAttempt();
                 String key = application.getKey();
                 RunningApplication runningApplication = runningApplicationMap.computeIfAbsent(key, f -> new RunningApplication(appId, attemptId));
+                callback.onSuccess(ByteBuffer.wrap(new byte[0]));
                 logger.info("application: {}_{} register success", runningApplication.appId, runningApplication.attemptId);
             } else if (msgObj instanceof UnregisterApplication) {
                 UnregisterApplication application = (UnregisterApplication) msgObj;
