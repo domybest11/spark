@@ -17,17 +17,10 @@
 
 package org.apache.spark.scheduler
 
-import java.util.concurrent.{Executors, ScheduledExecutorService, TimeUnit}
-
-import com.google.common.util.concurrent.ThreadFactoryBuilder
-
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.SHUFFLE_REMOTE_REPORT_INTERVAL
 import org.apache.spark.remote.shuffle.RemoteShuffleClient
-
-
-
 
 private[spark] class RemoteShuffleListener(
     appId: String,

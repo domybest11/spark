@@ -117,6 +117,7 @@ public class RemoteShuffleMasterHandler {
                 callback.onSuccess(ByteBuffer.allocate(0));
                 logger.info("handle register worker time: {}ms", System.currentTimeMillis() - start);
             } else if (msgObj instanceof RemoteShuffleWorkerHeartbeat) {
+                logger.info("handle RemoteShuffleServiceHeartbeat");
                 long start = System.currentTimeMillis();
                 RemoteShuffleWorkerHeartbeat workHeartbeat = (RemoteShuffleWorkerHeartbeat) msgObj;
                 String host = workHeartbeat.getHost();

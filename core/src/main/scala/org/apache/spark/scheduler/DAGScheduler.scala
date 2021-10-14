@@ -1378,7 +1378,7 @@ private[spark] class DAGScheduler(
           )
         }).foreach(workers => workers.foreach(
           work => {
-            work.split(":") match {
+            work.split(":").toSeq match {
               case Seq(host: String, port: String) =>  res += new BlockManagerId(host, host, port.toInt, None)
               case _ => logWarning(s"get shuffle push merger location error, worker format is wrong")
             }
@@ -1392,7 +1392,7 @@ private[spark] class DAGScheduler(
         if (res.size > minMergersNeeded) {
           Some(res)
         } else {
-          Some(new ArrayBuffer[BlockManagerId]())
+          Some(Seq.empty[BlockManagerId])
         }
       } else {
         Some(sc.schedulerBackend.getShufflePushMergerLocations(

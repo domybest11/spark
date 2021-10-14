@@ -62,7 +62,7 @@ public class RemoteShuffleWorkerHeartbeat extends BlockTransferMessage {
         buf.writeInt(port);
         buf.writeLong(heartbeatTimeMs);
         Encoders.Strings.encode(buf, pressure);
-        Arrays.stream(runningStages).forEach(runningStage -> runningStage.encode(buf));
+        RunningStages.encode(buf, runningStages);
     }
 
     public static RemoteShuffleWorkerHeartbeat decode(ByteBuf buf) {

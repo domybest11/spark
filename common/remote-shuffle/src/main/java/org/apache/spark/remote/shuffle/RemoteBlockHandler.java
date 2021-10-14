@@ -105,7 +105,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         List<TransportClientBootstrap> bootstraps = Lists.newArrayList();
         clientFactory = context.createClientFactory(bootstraps);
         try {
-            String dirsConfig = transportConf.get("shuffle.remote.worker.dirs", "");
+            String dirsConfig = transportConf.get("spark.shuffle.remote.worker.dirs", "");
             if (StringUtils.isBlank(dirsConfig)) {
                 throw new IOException("Remote shuffle worker dirs is empty");
             } else {
@@ -301,11 +301,11 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     }
 
     private class Heartbeat implements Runnable {
-
         @Override
         public void run() {
             List<RunningStage> currentRunningStages = new ArrayList<>();
             appStageMap.values().forEach(stageMap-> currentRunningStages.addAll(stageMap.values()));
+            logger.info("worker send heartbeat");
             client.send(
                     new RemoteShuffleWorkerHeartbeat(
                             localHost,
@@ -314,7 +314,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                             "0.0",
                             currentRunningStages.toArray(new RunningStage[1])).toByteBuffer()
             );
-            logger.debug("worker send heartbeat");
         }
     }
 
@@ -326,6 +325,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         @Override
         public void run() {
             // TODO: 2021/9/26 监控磁盘压力
+            logger.info("PressureMonitor");
         }
     }
 
