@@ -18,6 +18,8 @@
 package org.apache.spark.remote.shuffle;
 
 import com.codahale.metrics.Timer;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.commons.lang3.StringUtils;
@@ -39,14 +41,14 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.spark.network.shuffle.RemoteBlockPushResolver.ATTEMPT_ID_KEY;
+import static org.apache.spark.network.shuffle.RemoteBlockPushResolver.MERGE_DIR_KEY;
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
 // remote worker
@@ -120,12 +122,12 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 client = clientFactory.createClient(masterHost, masterPort);
                 registerRemoteShuffleWorker();
             }
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            throw new IOException(e);
         }
     }
 
-    private void registerRemoteShuffleWorker() throws InterruptedException {
+    private void registerRemoteShuffleWorker() throws InterruptedException, IOException {
         ByteBuffer registerWorker = new RegisterWorker(localHost, localPort).toByteBuffer();
         for (int i = 0; ; i++) {
             try {
@@ -142,8 +144,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                     logger.warn("Failed to connect to remote shuffle server, will retry {} more times after waiting 10 seconds...", i-1 ,e);
                     Thread.sleep(10 * 1000L);
                 } else {
-                    logger.error("Unable to register with remote shuffle server due to : {}", e.getMessage(), e);
-                    System.exit(-1);
+                    throw new IOException("Unable to register with remote shuffle server due to : " + e.getMessage() , e);
                 }
             }
         }
@@ -166,18 +167,11 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             checkAuth(client, message.appId);
             String appKey = message.appId + "_" + message.appAttemptId;
             String shuffleKey = message.appId + "_" + message.appAttemptId + "_" + message.shuffleId + "_";
-            // TODO: 2021/9/26 第一次push数据,需要构建相关的数据结构, 构建过程最好可以提前, push开始后性能非常重要
-            //  原实现时工作目录通过RegisterExecutor注册, rss无法这样注册
-            //  个人想法
-            //  1：registerShuffle的时候就开始location获取，同时相关worker就开始构造相关的工作目录
-            //  2.driver在DagScheduler.prepareShuffleServicesForShuffleMapStage 获取到目标worker后，这
-            //  时候driver开始向worker申请工作目录
-            
             ConcurrentHashMap<String, RunningStage> appRunningStageMap = appStageMap.computeIfAbsent(appKey, v -> {
-                prepareAppWorkDir(message.appId, message.appAttemptId);
+                registerExecutor(message.appId, message.appAttemptId);
                 return new ConcurrentHashMap<>();
             });
-            RunningStage runningStage = appRunningStageMap.computeIfAbsent(shuffleKey, v -> 
+            appRunningStageMap.computeIfAbsent(shuffleKey, v ->
                  new RunningStage(
                         message.appId,
                         message.appAttemptId,
@@ -238,38 +232,47 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         }
     }
 
-    private void prepareAppWorkDir(String appId, int attemptId) {
-        // TODO: 2021/9/26 兼容调社区版本注册app工作目录
+    private void registerExecutor(String appId, int attemptId) {
+        Map<String, String> mergedMetaMap = new HashMap<>();
+        mergedMetaMap.put(MERGE_DIR_KEY, "merge_manager_" + attemptId);
+        mergedMetaMap.put(ATTEMPT_ID_KEY, String.valueOf(attemptId));
+        ObjectMapper mapper = new ObjectMapper();
+        String jsonString = null;
+        try {
+            jsonString = mapper.writeValueAsString(mergedMetaMap);
+        } catch (JsonProcessingException e) {
+            e.printStackTrace();
+        }
+        String shuffleManagerMeta = "_:" + jsonString; //适配RemoteBlockPushResolver.registerExecutor
+        List<String> localDirs = new ArrayList<>();
         workDirs.forEach(shuffleDir -> {
             String rootDir = shuffleDir.getPath();
-            File mergeDir = new File(rootDir, appId+"/_"+attemptId+"/merge_manager");
-            if (!mergeDir.exists()) {
-                for(int dirNum=0; dirNum<64; dirNum++){
-                    File subDir = new File(mergeDir, String.format("%02x", dirNum));
-                    try {
-                        if (!subDir.exists()) {
-                            // Only one container will create this directory. The filesystem will handle
-                            // any race conditions.
-                            createDirWithPermission770(subDir);
-                        }
-                    } catch (IOException | InterruptedException e) {
-                        e.printStackTrace();
-                    }
+            File mergeDir = new File(rootDir, appId + "/_" + attemptId);
+            if(!mergeDir.exists()) {
+                try {
+                    createDirWithPermission770(mergeDir);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
             }
-            mergeManager.registerExecutor(appId,new ExecutorShuffleInfo(null,64,null));
+            if(mergeDir.exists()){
+                localDirs.add(mergeDir.getAbsolutePath());
+            }
         });
+        mergeManager.registerExecutor(appId,new ExecutorShuffleInfo(localDirs.toArray(new String[1]), 64, shuffleManagerMeta));
     }
 
     private void createDirWithPermission770(File dirToCreate) throws IOException, InterruptedException {
         int attempts = 0;
-        int maxAttempts = 10;
+        int maxAttempts = 3;
         File created = null;
         while (created == null) {
             attempts += 1;
             if (attempts > maxAttempts) {
                 throw new IOException(
-                        "Failed to create directory "+ dirToCreate.getAbsolutePath() +" with permission 770 after $maxAttempts attempts!");
+                        "Failed to create directory "+ dirToCreate.getAbsolutePath() +" with permission 770 after 3 attempts!");
             }
             try {
                 ProcessBuilder builder = new ProcessBuilder().command(
