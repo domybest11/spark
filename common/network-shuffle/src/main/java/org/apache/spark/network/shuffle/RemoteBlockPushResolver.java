@@ -848,10 +848,13 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
       // memory, while still providing the necessary guarantee.
       synchronized (partitionInfo) {
         AppShuffleMergePartitionsInfo info = appShuffleInfo.shuffles.get(partitionInfo.shuffleId);
-        if (isStale(info, partitionInfo.shuffleMergeId) ||
+        if (null == info || isStale(info, partitionInfo.shuffleMergeId) ||
             isTooLate(info, partitionInfo.reduceId)) {
           deferredBufs = null;
-          return;
+          shuffleMetrics.pushBlocksTooLates.inc();
+          throw new BlockPushNonFatalFailure(
+                  new BlockPushReturnCode(ReturnCode.TOO_LATE_BLOCK_PUSH.id(), streamId).toByteBuffer(),
+                  BlockPushNonFatalFailure.getErrorMsg(streamId, ReturnCode.TOO_LATE_BLOCK_PUSH));
         }
         // Check whether we can write to disk
         if (allowedToWrite()) {
@@ -929,7 +932,7 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
           // message, the block request is either stale or too late. We should thus respond
           // the error code to the client.
           AppShuffleMergePartitionsInfo info = appShuffleInfo.shuffles.get(partitionInfo.shuffleId);
-          if (isTooLate(info, partitionInfo.reduceId)) {
+          if (null == info || isTooLate(info, partitionInfo.reduceId)) {
             deferredBufs = null;
             shuffleMetrics.pushBlocksTooLates.inc();
             throw new BlockPushNonFatalFailure(
@@ -1348,7 +1351,7 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
 
     /**
      * The logic here is consistent with
-     * @see [[org.apache.spark.storage.DiskBlockManager#getMergedShuffleFile(
+     * @see [[org.apache.spark.storage.DiskBlockManager getMergedShuffleFile(
      *      org.apache.spark.storage.BlockId, scala.Option)]]
      */
     private File getFile(String filename) {

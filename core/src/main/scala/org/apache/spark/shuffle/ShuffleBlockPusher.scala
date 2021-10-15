@@ -20,9 +20,12 @@ package org.apache.spark.shuffle
 import java.io.{File, FileNotFoundException}
 import java.net.ConnectException
 import java.nio.ByteBuffer
-import java.util.concurrent.ExecutorService
+import java.util.concurrent.{CopyOnWriteArraySet, ExecutorService}
 
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
+
+import org.roaringbitmap.RoaringBitmap
+
 import org.apache.spark.{ShuffleDependency, SparkConf, SparkEnv}
 import org.apache.spark.annotation.Since
 import org.apache.spark.executor.ShuffleWriteMetrics
@@ -40,6 +43,7 @@ import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.ShufflePu
 import org.apache.spark.shuffle.ShuffleBlockPusher._
 import org.apache.spark.storage.{BlockId, BlockManagerId, ShufflePushBlockId}
 import org.apache.spark.util.{ThreadUtils, Utils}
+
 
 /**
  * Used for pushing shuffle blocks to remote shuffle services when push shuffle is enabled.
@@ -62,6 +66,8 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
   private[this] val numBlocksInFlightPerAddress = new HashMap[BlockManagerId, Int]()
   private[this] val deferredPushRequests = new HashMap[BlockManagerId, Queue[PushRequest]]()
   private[this] val pushRequests = new Queue[PushRequest]
+  private[this] val pushPartionCompleted = new RoaringBitmap()
+  private[this] var pushBlockNums = 0
   private[this] val errorHandler = createErrorHandler()
   // VisibleForTesting
   private[shuffle] val unreachableBlockMgrs = new HashSet[BlockManagerId]()
@@ -120,7 +126,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
     if (pushRequests.isEmpty) {
       notifyDriverAboutPushCompletion()
     }
-
+    pushBlockNums = pushRequests.map(_.blocks.size).sum
     submitTask(() => {
       tryPushUpToMax()
     })
@@ -215,7 +221,6 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
     reqsInFlight += 1
     numBlocksInFlightPerAddress(request.address) = numBlocksInFlightPerAddress.getOrElseUpdate(
       request.address, 0) + request.blocks.length
-
     val sizeMap = request.blocks.map { case (blockId, size) => (blockId.toString, size) }.toMap
     val address = request.address
     val blockIds = request.blocks.map(_._1.toString)
@@ -241,7 +246,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
       }
 
       override def onBlockPushSuccess(blockId: String, data: ManagedBuffer): Unit = {
-        logInfo(s"Push for block $blockId (size:${data.size()}) to $address successful.")
+        logInfo(s"Pushed for block $blockId to $address successful. ${System.currentTimeMillis()}")
         shuffleWriteMetrics.incBlocksPushed(1)
         handleResult(PushResult(blockId, null))
       }
@@ -249,9 +254,11 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
       override def onBlockPushFailure(blockId: String, exception: Throwable): Unit = {
         // check the message or it's cause to see it needs to be logged.
         if (!errorHandler.shouldLogError(exception)) {
-          logWarning(s"Pushing block $blockId to $address failed.", exception)
+          logWarning(s"Pushed block $blockId to $address failed. ${System.currentTimeMillis()}",
+            exception)
         } else {
-          logWarning(s"Pushing block $blockId to $address failed.", exception)
+          logWarning(s"Pushed block $blockId to $address failed. ${System.currentTimeMillis()}",
+            exception)
         }
         handleResult(PushResult(blockId, exception))
       }
@@ -318,6 +325,8 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
       remainingBlocks: HashSet[String],
       pushResult: PushResult): Boolean = synchronized {
     remainingBlocks -= pushResult.blockId
+    val partition = pushResult.blockId.split("_")(4).toInt
+    pushPartionCompleted.add(partition)
     bytesInFlight -= bytesPushed
     numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
     if (remainingBlocks.isEmpty) {
@@ -330,14 +339,22 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
       if (!unreachableBlockMgrs.contains(address)) {
         var removed = 0
         unreachableBlockMgrs.add(address)
-       val unPushRequests = pushRequests.dequeueAll(req => req.address == address).length
-       val unDeferredPushRequests = deferredPushRequests.remove(address).map(_.length).getOrElse(0)
-        removed += unPushRequests
-        removed += unDeferredPushRequests
+       val unPushRequests = pushRequests.dequeueAll(req => req.address == address)
+       unPushRequests.flatMap(_.blocks.map(_._1))
+          .foreach(block => pushPartionCompleted.add(block.toString.split("_")(4).toInt))
+       val unPushRequestNum = unPushRequests.length
+       val unDeferredPushRequests = deferredPushRequests.remove(address)
+        if (unDeferredPushRequests.isDefined) {
+          unDeferredPushRequests.get.flatMap(_.blocks.map(_._1))
+            .foreach(block => pushPartionCompleted.add(block.toString.split("_")(4).toInt))
+        }
+       val unDeferredPushRequestNum = unDeferredPushRequests.map(_.length).getOrElse(0)
+        removed += unPushRequestNum
+        removed += unDeferredPushRequestNum
         logWarning(s"Received a ConnectException from $address. " +
           s"Dropping $removed push-requests and " +
           s"not pushing any more blocks to this address.")
-        shuffleWriteMetrics.incBlocksNotPushed(unPushRequests + unDeferredPushRequests)
+        shuffleWriteMetrics.incBlocksNotPushed(unPushRequestNum + unDeferredPushRequestNum)
       }
     }
 
@@ -350,11 +367,13 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
             }
            case _ =>
       }
-      logDebug(s"Encountered an exception from $address which indicates that push needs to " +
+      logInfo(s"Encountered an exception from $address which indicates that push needs to " +
         s"stop.")
       return false
     } else {
-      if (remainingBlocks.isEmpty && pushRequests.isEmpty && deferredPushRequests.isEmpty &&
+      import scala.collection.JavaConverters._
+      if (pushPartionCompleted.getCardinality == pushBlockNums
+        && pushRequests.isEmpty && deferredPushRequests.isEmpty &&
         !pushCompletionNotified) {
         notifyDriverAboutPushCompletion()
         pushCompletionNotified = true
