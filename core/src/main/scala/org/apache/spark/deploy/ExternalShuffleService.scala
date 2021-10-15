@@ -32,7 +32,7 @@ import org.apache.spark.network.server.{TransportServer, TransportServerBootstra
 import org.apache.spark.network.shuffle.ExternalBlockHandler
 import org.apache.spark.network.util.TransportConf
 import org.apache.spark.remote.shuffle.RemoteBlockHandler
-import org.apache.spark.util.{ShutdownHookManager, Utils}
+import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}
 
 /**
  * Provides a server from which Executors can read shuffle files (rather than reading directly from
