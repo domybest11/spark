@@ -462,17 +462,19 @@ class DataFrameSuite extends QueryTest
   test("repartitionByZOrder") {
     val data1d = Random.shuffle(0.to(7))
     val data2d = data1d.map(i => Random.shuffle(0.to(7)).map(j => (i, j))).flatten
+    val df = data2d.toDF("x", "y")
 
-    val rows = data2d.toDF("x", "y").repartitionByZOrderRange(4, $"x", $"y")
+    df.sqlContext.setConf("spark.sql.execution.zorderExchange.partitionsFactor", "100")
+    val rows1 = df.repartitionByZOrderRange(4, $"x", $"y")
       .select(spark_partition_id().as("id"), $"x", $"y").collect()
 
-    val dist = (0 to data1d.size).map {
+    val dist1 = (0 to data1d.size).map {
       index =>
-        rows.filter(_.get(1) == index).sortBy(_.get(2).asInstanceOf[Int])
+        rows1.filter(_.get(1) == index).sortBy(_.get(2).asInstanceOf[Int])
           .map(row => row.get(0).toString).mkString(" ")
     }.mkString("\n")
 
-    val expected =
+    val expected1 =
         "0 0 0 0 2 2 2 2\n" +
         "0 0 0 0 2 2 2 2\n" +
         "0 0 0 0 2 2 2 2\n" +
@@ -482,7 +484,34 @@ class DataFrameSuite extends QueryTest
         "1 1 1 1 3 3 3 3\n" +
         "1 1 1 1 3 3 3 3\n"
 
-    assertResult(expected)(dist)
+    assertResult(expected1)(dist1)
+
+    // set a small dimension boundary
+    df.sqlContext.setConf("spark.sql.execution.zorderExchange.partitionsFactor", "10")
+    val rows2 = df.repartitionByZOrderRange(4, $"x", $"y")
+      .select(spark_partition_id().as("id"), $"x", $"y").collect()
+
+    val dist2 = (0 to data1d.size).map {
+      index =>
+        rows2.filter(_.get(1) == index).sortBy(_.get(2).asInstanceOf[Int])
+          .map(row => row.get(0).toString).mkString(" ")
+    }.mkString("\n")
+
+    // With new ZORDER algorithm, the 7 x 7 inputs with two dimensions (x, y) and 4 expected partitions,
+    // will produce the internal dimensions matrix, of which first row size is 7 and second row size is 6.
+    // The following partitions collection is produced by the previous algorithm with 7 partitions on x column and
+    // 6 partitions on y column, so here the new result produced by the new algorithm should be equal to it.
+    val expected2 =
+        "0 0 0 0 1 1 3 3\n" +
+        "0 0 0 0 1 1 3 3\n" +
+        "0 0 0 1 1 1 3 3\n" +
+        "0 0 0 1 1 1 3 3\n" +
+        "0 0 0 1 1 1 3 3\n" +
+        "1 1 2 2 2 2 3 3\n" +
+        "2 2 2 2 2 2 3 3\n" +
+        "2 2 2 2 2 2 3 3\n";
+
+    assertResult(expected2)(dist2)
 
     // at least one partition-by expression must be specified
     intercept[IllegalArgumentException] {
@@ -496,21 +525,23 @@ class DataFrameSuite extends QueryTest
     }
   }
 
-
   test("repartitionByHilbertCurve") {
     val data1d = Random.shuffle(0.to(7))
     val data2d = data1d.map(i => Random.shuffle(0.to(7)).map(j => (i, j))).flatten
 
-    val rows = data2d.toDF("x", "y").repartitionByHilbertCurveRange(4, $"x", $"y")
+    val df = data2d.toDF("x", "y")
+
+    df.sqlContext.setConf("spark.sql.execution.zorderExchange.partitionsFactor", "100")
+    val rows1 = df.repartitionByHilbertCurveRange(4, $"x", $"y")
       .select(spark_partition_id().as("id"), $"x", $"y").collect()
 
-    val dist = (0 to data1d.size).map {
+    val dist1 = (0 to data1d.size).map {
       index =>
-        rows.filter(_.get(1) == index).sortBy(_.get(2).asInstanceOf[Int])
+        rows1.filter(_.get(1) == index).sortBy(_.get(2).asInstanceOf[Int])
           .map(row => row.get(0).toString).mkString(" ")
     }.mkString("\n")
 
-    val expected =
+    val expected1 =
         "0 0 0 0 1 1 1 1\n" +
         "0 0 0 0 1 1 1 1\n" +
         "0 0 0 0 1 1 1 1\n" +
@@ -520,7 +551,29 @@ class DataFrameSuite extends QueryTest
         "3 3 3 3 2 2 2 2\n" +
         "3 3 3 3 2 2 2 2\n"
 
-    assertResult(expected)(dist)
+    assertResult(expected1)(dist1)
+
+    df.sqlContext.setConf("spark.sql.execution.zorderExchange.partitionsFactor", "10")
+    val rows2 = df.repartitionByHilbertCurveRange(4, $"x", $"y")
+      .select(spark_partition_id().as("id"), $"x", $"y").collect()
+
+    val dist2 = (0 to data1d.size).map {
+      index =>
+        rows2.filter(_.get(1) == index).sortBy(_.get(2).asInstanceOf[Int])
+          .map(row => row.get(0).toString).mkString(" ")
+    }.mkString("\n")
+
+    val expected2 =
+        "0 0 0 1 1 1 1 2\n" +
+        "0 0 0 1 1 1 1 2\n" +
+        "0 0 0 1 1 1 2 2\n" +
+        "0 0 0 0 1 1 2 2\n" +
+        "0 0 0 1 1 1 2 2\n" +
+        "3 3 3 3 3 3 2 2\n" +
+        "3 3 3 3 3 3 2 2\n" +
+        "3 3 3 2 2 2 2 2\n";
+
+    assertResult(expected2)(dist2)
 
     // at least one partition-by expression must be specified
     intercept[IllegalArgumentException] {

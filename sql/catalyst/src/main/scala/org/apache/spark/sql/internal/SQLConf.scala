@@ -2043,14 +2043,17 @@ object SQLConf {
       .intConf
       .createWithDefault(100)
 
-  val ZORDER_EXCHANGE_SAMPLE_SIZE =
-    buildConf("spark.sql.execution.zorderExchange.sampleSize")
+  val ZORDER_PARTITIONS_FACTOR =
+    buildConf("spark.sql.execution.zorderExchange.partitionsFactor")
       .internal()
-      .doc("Number of points to sample in order to determine the range boundaries" +
-        " for lexicographical index.")
+      .doc("When constructing the sampled partitions space on the sampled rows," +
+        " multiply this factor with 'spark.sql.shuffle.partitions' as the row mappings," +
+        " to calculate the partition id for each row." +
+        " (e.g.: default 10 * shufflePartitions row mappings, eventually to be divided" +
+        " into 'shufflePartitions' pieces.")
       .version("3.1.0")
       .intConf
-      .createWithDefault(100)
+      .createWithDefault(10)
 
   val ARROW_EXECUTION_ENABLED =
     buildConf("spark.sql.execution.arrow.enabled")
@@ -3657,7 +3660,7 @@ class SQLConf extends Serializable with Logging {
 
   def rangeExchangeSampleSizePerPartition: Int = getConf(RANGE_EXCHANGE_SAMPLE_SIZE_PER_PARTITION)
 
-  def zorderExchangeSampleSize: Int = getConf(ZORDER_EXCHANGE_SAMPLE_SIZE)
+  def zorderEstimatedPartitionsFactor: Int = getConf(ZORDER_PARTITIONS_FACTOR)
 
   def arrowPySparkEnabled: Boolean = getConf(ARROW_PYSPARK_EXECUTION_ENABLED)
 
