@@ -105,35 +105,62 @@ class CurveRangePartitioner(
           candidates ++= reSampled.map(x => (x, weight))
         }
 
-        dimensionBounds = orders.map {
-          order =>
-            implicit val ordering = order.dataType match {
-              case dt: AtomicType =>
-                dt.ordering.asInstanceOf[Ordering[Any]]
-              case a: ArrayType =>
-                a.interpretedOrdering.asInstanceOf[Ordering[Any]]
-              case s: StructType =>
-                s.interpretedOrdering.asInstanceOf[Ordering[Any]]
-              case other =>
-                throw new IllegalArgumentException(s"Type $other does not" +
-                  s" support ordered operations")
-            }
-            val values = candidates.map {
-              case (value, weight) =>
-                (order.child.eval(value), weight)
-            }.filter(_._1 != null)
-              .groupBy(_._1)
-              .mapValues(_.map(_._2).sum)
-              .toSeq
-            val boundarySize = math.min(SQLConf.get.zorderExchangeSampleSize, values.size)
-            val sortedBoundary = CurveRangePartitioner.determineBounds(values, boundarySize)
-            (order, ordering, sortedBoundary)
-        }.toArray
+        val candidatesAndWeightsWithIndex = orders.map(orderKey => {
+          candidates.map {
+            case (row, weight) =>
+              (orderKey.child.eval(row), weight)
+          }.filter(_._1 != null)
+            .groupBy(_._1)
+            .mapValues(_.map(_._2).sum)
+            .toSeq
+        }).zipWithIndex
+
+        def getOrdering(idx: Int): Ordering[Any] = {
+          orders(idx).dataType match {
+            case dt: AtomicType =>
+              dt.ordering.asInstanceOf[Ordering[Any]]
+            case a: ArrayType =>
+              a.interpretedOrdering.asInstanceOf[Ordering[Any]]
+            case s: StructType =>
+              s.interpretedOrdering.asInstanceOf[Ordering[Any]]
+            case other =>
+              throw new IllegalArgumentException(s"Type $other does not" +
+                s" support ordered operations")
+          }
+        }
+
+        val sortedKeyAndWeightsWithIndex = candidatesAndWeightsWithIndex.sortBy(_._1.size)
+        val totalSamplePartitions = candidatesAndWeightsWithIndex.map(_._1.size).product
+        var totalOverheadPartitions = partitions * SQLConf.get.zorderEstimatedPartitionsFactor
+
+        val computedDimensionBounds = for (i <- sortedKeyAndWeightsWithIndex.indices) yield {
+          val aggCandidates = sortedKeyAndWeightsWithIndex(i)._1
+          val orderIdx = sortedKeyAndWeightsWithIndex(i)._2
+          implicit val ordering = getOrdering(orderIdx)
+
+          val estimatedPartitions = if (totalSamplePartitions > totalOverheadPartitions) {
+            val avgDimensionSize = math.ceil(
+              math.pow(totalOverheadPartitions, 1d / (orders.size - i))).toInt
+            val estimatedPartitions = math.min(avgDimensionSize, aggCandidates.size)
+            totalOverheadPartitions = math.ceil(
+              totalOverheadPartitions.toDouble / estimatedPartitions).toInt
+            estimatedPartitions
+          } else {
+            aggCandidates.size
+          }
+
+          val dimensionBoundary = CurveRangePartitioner.determineBounds(
+            aggCandidates, estimatedPartitions.toInt)
+          (orders(orderIdx), ordering, dimensionBoundary)
+        }
+
+        dimensionBounds = computedDimensionBounds.toArray
 
         val indexCandidates = candidates.map {
           case (row, weight) =>
             (mappingIndex(row), weight)
         }
+
         CurveRangePartitioner.determineBounds(indexCandidates,
           math.min(partitions, candidates.size))
       }
