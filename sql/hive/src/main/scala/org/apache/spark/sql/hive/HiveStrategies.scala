@@ -326,28 +326,33 @@ case class RepartitionBeforeWriteHive(session: SparkSession) extends Rule[Logica
   def addRepartition(plan: LogicalPlan): LogicalPlan = plan match {
     case i @ InsertIntoHiveTable(table, _, query, _, _, _)
       if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartExps = resolveColumnNames(table.partitionColumnNames, query.output)
-      applyRepartition(i, table.bucketSpec, dynamicPartExps)
+      val dynamicPartitionColumns = query.output.
+        filter(attr => table.partitionColumnNames.contains(attr.name))
+      applyRepartition(i, table.bucketSpec, dynamicPartitionColumns)
 
     case c @ CreateHiveTableAsSelectCommand(table, query, _, _)
       if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartExps = resolveColumnNames(table.partitionColumnNames, query.output)
-      applyRepartition(c, table.bucketSpec, dynamicPartExps)
+      val dynamicPartitionColumns = query.output.
+        filter(attr => table.partitionColumnNames.contains(attr.name))
+      applyRepartition(c, table.bucketSpec, dynamicPartitionColumns)
 
     case o @ OptimizedCreateHiveTableAsSelectCommand(table, query, _, _)
       if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartExps = resolveColumnNames(table.partitionColumnNames, query.output)
-      applyRepartition(o, table.bucketSpec, dynamicPartExps)
+      val dynamicPartitionColumns = query.output.
+        filter(attr => table.partitionColumnNames.contains(attr.name))
+      applyRepartition(o, table.bucketSpec, dynamicPartitionColumns)
 
     case i @ InsertIntoHadoopFsRelationCommand(_, _, _, _, _, _, _, query, _, table, _, _)
       if query.resolved && table.isDefined && canInsertRepartitionByExpression(query) =>
-        val dynamicPartExps = resolveColumnNames(table.get.partitionColumnNames, query.output)
-        applyRepartition(i, table.get.bucketSpec, dynamicPartExps)
+      val dynamicPartitionColumns = query.output.
+        filter(attr => table.get.partitionColumnNames.contains(attr.name))
+        applyRepartition(i, table.get.bucketSpec, dynamicPartitionColumns)
 
     case o @ CreateDataSourceTableAsSelectCommand(table, _, query, _)
       if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartExps = resolveColumnNames(table.partitionColumnNames, query.output)
-      applyRepartition(o, table.bucketSpec, dynamicPartExps)
+      val dynamicPartitionColumns = query.output.
+        filter(attr => table.partitionColumnNames.contains(attr.name))
+      applyRepartition(o, table.bucketSpec, dynamicPartitionColumns)
 
     case _ => plan
   }
