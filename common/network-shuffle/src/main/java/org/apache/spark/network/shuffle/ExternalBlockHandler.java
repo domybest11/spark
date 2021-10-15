@@ -74,15 +74,15 @@ public class ExternalBlockHandler extends RpcHandler
   private static final String SHUFFLE_CHUNK_ID = "shuffleChunk";
 
   @VisibleForTesting
-  private static ExternalShuffleBlockResolver blockManager;
+  protected static ExternalShuffleBlockResolver blockManager;
 
   public ExternalShuffleBlockResolver getBlockManager() {
     return blockManager;
   }
 
   private final OneForOneStreamManager streamManager;
-  private static ShuffleMetrics metrics = new ShuffleMetrics();
-  private final MergedShuffleFileManager mergeManager;
+  protected static ShuffleMetrics metrics = new ShuffleMetrics();
+  protected final MergedShuffleFileManager mergeManager;
 
 
   public ExternalBlockHandler(TransportConf conf, File registeredExecutorFile)
