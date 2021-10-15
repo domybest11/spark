@@ -25,7 +25,7 @@ import org.apache.spark.internal.config.PUSH_BASED_SHUFFLE_ENABLED
 import org.apache.spark.scheduler.{JobFailed, JobSucceeded, SparkListener, SparkListenerBlockManagerAdded, SparkListenerBlockManagerRemoved, SparkListenerBlockUpdated, SparkListenerEnvironmentUpdate, SparkListenerEvent, SparkListenerExecutorAdded, SparkListenerExecutorExcluded, SparkListenerExecutorExcludedForStage, SparkListenerExecutorMetricsUpdate, SparkListenerExecutorRemoved, SparkListenerExecutorReportInfo, SparkListenerExecutorUnexcluded, SparkListenerJobEnd, SparkListenerJobStart, SparkListenerNodeExcluded, SparkListenerNodeExcludedForStage, SparkListenerNodeUnexcluded, SparkListenerResourceProfileAdded, SparkListenerSpeculativeTaskSubmitted, SparkListenerStageCompleted, SparkListenerStageExecutorMetrics, SparkListenerStageSubmitted, SparkListenerTaskEnd, SparkListenerTaskGettingResult, SparkListenerTaskStart, SparkListenerUnpersistRDD, SparkListenerUnschedulableTaskSetAdded, SparkListenerUnschedulableTaskSetRemoved, StageInfo}
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.sql.execution.ui.{SparkListenerSQLExecutionEnd, SparkListenerSQLExecutionStart}
-import org.apache.spark.util.{ExceptionRecord, ExecutionDataRecord, JobDataRecord, KafkaProducerUtil, StageDataRecord, TaskAvgMetrics, TaskMaxMetrics, Utils}
+import org.apache.spark.util.{ApplicationDataRecord, ExceptionRecord, ExecutionDataRecord, JobDataRecord, KafkaProducerUtil, StageDataRecord, TaskAvgMetrics, TaskMaxMetrics, Utils}
 import org.apache.spark.util.ExceptionType.SHUFFLE_FAIL
 import org.apache.spark.status.api.v1
 
@@ -68,7 +68,21 @@ class SqlMarioListener(sc: SparkContext,
       job.activeStages += 1
     }
 
-    KafkaProducerUtil.report(new StageDataRecord(
+    KafkaProducerUtil.report(new ApplicationDataRecord(
+      appId,
+      appName,
+      attemptId,
+      submitHost,
+      queue,
+      "",
+      0,
+      0,
+      driverHost,
+      status = "RUNNING",
+      user = Utils.getCurrentUserName(),
+      sparkVersion = SPARK_VERSION,
+      traceId,
+      stageDataRecord = Some(new StageDataRecord(
       appName,
       appId,
       stageSubmitted.stageInfo.attemptNumber,
@@ -80,7 +94,7 @@ class SqlMarioListener(sc: SparkContext,
       stageSubmitted.stageInfo.numTasks,
       submissionTime = stageSubmitted.stageInfo.submissionTime.getOrElse(0),
       isPushBasedShuffleEnabled = sc.conf.get(PUSH_BASED_SHUFFLE_ENABLED),
-      details = stageSubmitted.stageInfo.details)
+      details = stageSubmitted.stageInfo.details)))
     )
 
   }
@@ -152,73 +166,88 @@ class SqlMarioListener(sc: SparkContext,
           )
         }
 
-        KafkaProducerUtil.report(new StageDataRecord(
-          appName,
+        KafkaProducerUtil.report(new ApplicationDataRecord(
           appId,
-          summary.attemptId,
+          appName,
+          attemptId,
+          submitHost,
+          queue,
+          "",
+          0,
+          0,
+          driverHost,
+          status = "RUNNING",
+          user = Utils.getCurrentUserName(),
+          sparkVersion = SPARK_VERSION,
           traceId,
-          stage.jobIds,
-          summary.stageId,
-          summary.name,
-          summary.status.name(),
-          summary.numTasks,
-          summary.numCompleteTasks,
-          summary.numFailedTasks,
-          summary.numKilledTasks,
-          summary.numCompletedIndices,
-          summary.firstTaskLaunchedTime,
-          summary.submissionTime,
-          summary.completionTime,
-          summary.failureReason.getOrElse(""),
-          stageData.executorDeserializeTime,
-          stageData.executorDeserializeCpuTime,
-          stageData.resultSize,
-          stageData.jvmGcTime,
-          stageData.resultSerializationTime,
-          stageData.memoryBytesSpilled,
-          stageData.diskBytesSpilled,
-          stageData.peakExecutionMemory,
-          stageData.inputBytes,
-          stageData.inputRecords,
-          stageData.outputBytes,
-          stageData.outputRecords,
-          stageData.shuffleReadBytes,
-          stageData.executorRunTime,
-          stageData.executorCpuTime,
-          stageData.shuffleRemoteBlocksFetched,
-          stageData.shuffleLocalBlocksFetched,
-          stageData.shuffleFetchWaitTime,
-          stageData.shuffleRemoteBytesRead,
-          stageData.shuffleRemoteBytesReadToDisk,
-          stageData.shuffleLocalBytesRead,
-          stageData.shuffleReadRecords,
-          stageData.shuffleWriteBytes,
-          stageData.shuffleWriteTime,
-          stageData.shuffleWriteRecords,
-          stageData.isPushBasedShuffleEnabled,
-          stageData.shuffleCorruptMergedBlockChunks,
-          stageData.shuffleFallbackCount,
-          stageData.shuffleMergedRemoteBlocksFetched,
-          stageData.shuffleMergedLocalBlocksFetched,
-          stageData.shuffleMergedRemoteChunksFetched,
-          stageData.shuffleMergedLocalChunksFetched,
-          stageData.shuffleMergedRemoteBytesRead,
-          stageData.shuffleMergedLocalBytesRead,
-          stageData.shuffleRemoteReqsDuration,
-          stageData.shuffleMergedRemoteReqsDuration,
-          stageData.shuffleBlocksPushed,
-          stageData.shuffleBlocksNotPushed,
-          stageData.shuffleBlocksCollided,
-          stageData.shuffleBlocksTooLate,
-          stageData.shuffleMergersCount,
-          summary.taskAnyRate,
-          summary.taskNoPrefRate,
-          summary.taskProcessLocalRate,
-          summary.taskRackLocalRate,
-          Some(taskAvgMetrics),
-          Some(taskMaxMetrics),
-          stageData.details,
-          stageData.description.getOrElse(""))
+          stageDataRecord = Some(new StageDataRecord(
+            appName,
+            appId,
+            summary.attemptId,
+            traceId,
+            stage.jobIds,
+            summary.stageId,
+            summary.name,
+            summary.status.name(),
+            summary.numTasks,
+            summary.numCompleteTasks,
+            summary.numFailedTasks,
+            summary.numKilledTasks,
+            summary.numCompletedIndices,
+            summary.firstTaskLaunchedTime,
+            summary.submissionTime,
+            summary.completionTime,
+            summary.failureReason.getOrElse(""),
+            stageData.executorDeserializeTime,
+            stageData.executorDeserializeCpuTime,
+            stageData.resultSize,
+            stageData.jvmGcTime,
+            stageData.resultSerializationTime,
+            stageData.memoryBytesSpilled,
+            stageData.diskBytesSpilled,
+            stageData.peakExecutionMemory,
+            stageData.inputBytes,
+            stageData.inputRecords,
+            stageData.outputBytes,
+            stageData.outputRecords,
+            stageData.shuffleReadBytes,
+            stageData.executorRunTime,
+            stageData.executorCpuTime,
+            stageData.shuffleRemoteBlocksFetched,
+            stageData.shuffleLocalBlocksFetched,
+            stageData.shuffleFetchWaitTime,
+            stageData.shuffleRemoteBytesRead,
+            stageData.shuffleRemoteBytesReadToDisk,
+            stageData.shuffleLocalBytesRead,
+            stageData.shuffleReadRecords,
+            stageData.shuffleWriteBytes,
+            stageData.shuffleWriteTime,
+            stageData.shuffleWriteRecords,
+            stageData.isPushBasedShuffleEnabled,
+            stageData.shuffleCorruptMergedBlockChunks,
+            stageData.shuffleFallbackCount,
+            stageData.shuffleMergedRemoteBlocksFetched,
+            stageData.shuffleMergedLocalBlocksFetched,
+            stageData.shuffleMergedRemoteChunksFetched,
+            stageData.shuffleMergedLocalChunksFetched,
+            stageData.shuffleMergedRemoteBytesRead,
+            stageData.shuffleMergedLocalBytesRead,
+            stageData.shuffleRemoteReqsDuration,
+            stageData.shuffleMergedRemoteReqsDuration,
+            stageData.shuffleBlocksPushed,
+            stageData.shuffleBlocksNotPushed,
+            stageData.shuffleBlocksCollided,
+            stageData.shuffleBlocksTooLate,
+            stageData.shuffleMergersCount,
+            summary.taskAnyRate,
+            summary.taskNoPrefRate,
+            summary.taskProcessLocalRate,
+            summary.taskRackLocalRate,
+            Some(taskAvgMetrics),
+            Some(taskMaxMetrics),
+            summary.skewKeys,
+            stageData.details,
+            stageData.description.getOrElse(""))))
         )
 
       })
@@ -353,7 +382,21 @@ class SqlMarioListener(sc: SparkContext,
       stage.jobs :+= job
       stage.jobIds += jobStart.jobId
     }
-    KafkaProducerUtil.report(new JobDataRecord(
+    KafkaProducerUtil.report(new ApplicationDataRecord(
+      appId,
+      appName,
+      attemptId,
+      submitHost,
+      queue,
+      "",
+      0,
+      0,
+      driverHost,
+      status = "RUNNING",
+      user = Utils.getCurrentUserName(),
+      sparkVersion = SPARK_VERSION,
+      traceId,
+      jobDataRecord = Some(new JobDataRecord(
       appId,
       appName,
       attemptId,
@@ -365,7 +408,7 @@ class SqlMarioListener(sc: SparkContext,
       startTime = startTime,
       status = status,
       numTasks = numTasks,
-      numStages = stageIds.size,
+      numStages = stageIds.size))
     ))
   }
 
@@ -396,7 +439,21 @@ class SqlMarioListener(sc: SparkContext,
 
       job.completionTime = if (jobEnd.time > 0) Some(new Date(jobEnd.time)) else Some(new Date(now))
 
-      KafkaProducerUtil.report(new JobDataRecord(
+      KafkaProducerUtil.report(new ApplicationDataRecord(
+        appId,
+        appName,
+        attemptId,
+        submitHost,
+        queue,
+        "",
+        0,
+        0,
+        driverHost,
+        status = "RUNNING",
+        user = Utils.getCurrentUserName(),
+        sparkVersion = SPARK_VERSION,
+        traceId,
+        jobDataRecord = Some(new JobDataRecord(
         appId,
         appName,
         attemptId,
@@ -416,7 +473,7 @@ class SqlMarioListener(sc: SparkContext,
         job.completedStages.size + job.skippedStages.size + job.failedStages,
         job.completedStages.size,
         job.skippedStages.size,
-        job.failedStages
+        job.failedStages))
       ))
     }
   }
@@ -445,14 +502,28 @@ class SqlMarioListener(sc: SparkContext,
   override def onExecutorInfoUpdate(event: SparkListenerExecutorReportInfo): Unit = {
     event.executorReportInfo.exception.foreach {
       case fetchFailedException: FetchFailedException =>
-        KafkaProducerUtil.report(new ExceptionRecord(
+        KafkaProducerUtil.report(new ApplicationDataRecord(
+          appId,
+          appName,
+          attemptId,
+          submitHost,
+          queue,
+          "",
+          0,
+          0,
+          driverHost,
+          status = "RUNNING",
+          user = Utils.getCurrentUserName(),
+          sparkVersion = SPARK_VERSION,
+          traceId,
+          exceptionRecord = Some(new ExceptionRecord(
           appId,
           attemptId,
           traceId,
           event.execId,
           user,
           SHUFFLE_FAIL,
-          fetchFailedException
+          fetchFailedException))
         ))
       case _ =>
     }
@@ -530,7 +601,21 @@ class SqlMarioListener(sc: SparkContext,
     val sqlExecution = new SqlExecution(executionId, description, details,
       physicalPlanDescription, sparkPlanInfo, startTime, sqlText)
     sqlExecutions.put(executionId, sqlExecution)
-    KafkaProducerUtil.report(new ExecutionDataRecord(
+    KafkaProducerUtil.report(new ApplicationDataRecord(
+      appId,
+      appName,
+      attemptId,
+      submitHost,
+      queue,
+      "",
+      0,
+      0,
+      driverHost,
+      status = "RUNNING",
+      user = Utils.getCurrentUserName(),
+      sparkVersion = SPARK_VERSION,
+      traceId,
+      executionDataRecord = Some(new ExecutionDataRecord(
       appId,
       appName,
       attemptId,
@@ -542,7 +627,7 @@ class SqlMarioListener(sc: SparkContext,
       details,
       physicalPlanDescription,
       time,
-      0L
+      0L))
     ))
   }
 
@@ -550,7 +635,21 @@ class SqlMarioListener(sc: SparkContext,
     val now = System.nanoTime()
     val endTime = if (event.time > 0) event.time else now
     sqlExecutions.remove(event.executionId).foreach { execution =>
-      KafkaProducerUtil.report(new ExecutionDataRecord(
+      KafkaProducerUtil.report(new ApplicationDataRecord(
+        appId,
+        appName,
+        attemptId,
+        submitHost,
+        queue,
+        "",
+        0,
+        0,
+        driverHost,
+        status = "RUNNING",
+        user = Utils.getCurrentUserName(),
+        sparkVersion = SPARK_VERSION,
+        traceId,
+        executionDataRecord = Some(new ExecutionDataRecord(
         appId,
         appName,
         attemptId,
@@ -562,7 +661,7 @@ class SqlMarioListener(sc: SparkContext,
         execution.details,
         execution.physicalPlanDescription,
         execution.startTime.get.getTime,
-        endTime
+        endTime))
       ))
     }
   }

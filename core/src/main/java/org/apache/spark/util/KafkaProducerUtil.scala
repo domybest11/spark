@@ -123,7 +123,11 @@ private[spark] class ApplicationDataRecord(
     val status: String,
     val user: String,
     val sparkVersion: String,
-    val traceId: String) extends Record
+    val traceId: String,
+    var executionDataRecord: Option[ExecutionDataRecord] = None,
+    var jobDataRecord: Option[JobDataRecord] = None,
+    var stageDataRecord: Option[StageDataRecord] = None,
+    var exceptionRecord: Option[ExceptionRecord] = None) extends Record
 
 private[spark] class ExecutionDataRecord(
     val appId: String,
@@ -226,6 +230,7 @@ private[spark] class StageDataRecord(
     var taskRackLocalRate: Double = 0,
     var taskAvgMetrics: Option[TaskAvgMetrics] = None,
     var taskMaxMetrics: Option[TaskMaxMetrics] = None,
+    var skewKeys: Seq[String] = Seq.empty,
     val details: String = "",
     val description: String = "") extends Record
 
