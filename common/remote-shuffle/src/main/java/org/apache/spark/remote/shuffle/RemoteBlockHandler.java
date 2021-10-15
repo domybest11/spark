@@ -312,7 +312,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                             localPort,
                             System.currentTimeMillis(),
                             "0.0",
-                            currentRunningStages.toArray(new RunningStage[1])).toByteBuffer()
+                            currentRunningStages.toArray(new RunningStage[0])).toByteBuffer()
             );
         }
     }

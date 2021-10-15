@@ -4,8 +4,6 @@ import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.protocol.Encoders;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 
-import java.util.Arrays;
-
 public class RemoteShuffleWorkerHeartbeat extends BlockTransferMessage {
 
     private final String host;
