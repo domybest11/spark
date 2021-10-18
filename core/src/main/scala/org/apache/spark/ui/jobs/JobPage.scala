@@ -490,8 +490,8 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
 
     var content = summary
     val appStartTime = store.applicationInfo().attempts.head.startTime.getTime()
-    if (parent.sc.get.conf.getBoolean("spark.thriftserver.model.enabled", false) ||
-      parent.sc.get.conf.getBoolean("spark.kyuubi.model.enabled", false)) {
+    if (parent.conf.getBoolean("spark.thriftserver.model.enabled", false) ||
+      parent.conf.getBoolean("spark.kyuubi.model.enabled", false)) {
       val eventTimelineParameterJobsPage = request.getParameter("job.eventTimelinePageNumber")
       val eventTimelineParameterJobsPageSize = request.getParameter("job.eventTimelinePageSize")
       var eventTimelineJobsPage = Option(eventTimelineParameterJobsPage).map(_.toInt).getOrElse(1)
