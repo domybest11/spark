@@ -526,7 +526,6 @@ private[spark] abstract class MapOutputTracker(conf: SparkConf) extends Logging 
       endPartition: Int): Iterator[(BlockManagerId, Seq[(BlockId, Long, Int)])] = {
     val mapSizesByExecutorId = getPushBasedShuffleMapSizesByExecutorId(
       shuffleId, startMapIndex, endMapIndex, startPartition, endPartition)
-    assert(mapSizesByExecutorId.enableBatchFetch == true)
     mapSizesByExecutorId.iter
   }
 
@@ -1081,7 +1080,7 @@ private[spark] class MapOutputTrackerMaster(
   }
 
   // This method is only called in local-mode.
-  def getMapSizesByExecutorId(
+  def getPushBasedShuffleMapSizesByExecutorId(
       shuffleId: Int,
       startMapIndex: Int,
       endMapIndex: Int,

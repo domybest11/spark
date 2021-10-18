@@ -20,7 +20,7 @@ package org.apache.spark.shuffle
 import java.io.{File, FileNotFoundException}
 import java.net.ConnectException
 import java.nio.ByteBuffer
-import java.util.concurrent.{CopyOnWriteArraySet, ExecutorService}
+import java.util.concurrent.ExecutorService
 
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 
@@ -246,7 +246,7 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
       }
 
       override def onBlockPushSuccess(blockId: String, data: ManagedBuffer): Unit = {
-        logInfo(s"Pushed for block $blockId to $address successful. ${System.currentTimeMillis()}")
+        logInfo(s"Pushed for block $blockId to $address successful.")
         shuffleWriteMetrics.incBlocksPushed(1)
         handleResult(PushResult(blockId, null))
       }
@@ -254,10 +254,10 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
       override def onBlockPushFailure(blockId: String, exception: Throwable): Unit = {
         // check the message or it's cause to see it needs to be logged.
         if (!errorHandler.shouldLogError(exception)) {
-          logWarning(s"Pushed block $blockId to $address failed. ${System.currentTimeMillis()}",
+          logWarning(s"Pushed block $blockId to $address failed.",
             exception)
         } else {
-          logWarning(s"Pushed block $blockId to $address failed. ${System.currentTimeMillis()}",
+          logWarning(s"Pushed block $blockId to $address failed.",
             exception)
         }
         handleResult(PushResult(blockId, exception))
@@ -371,7 +371,6 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
         s"stop.")
       return false
     } else {
-      import scala.collection.JavaConverters._
       if (pushPartionCompleted.getCardinality == pushBlockNums
         && pushRequests.isEmpty && deferredPushRequests.isEmpty &&
         !pushCompletionNotified) {
