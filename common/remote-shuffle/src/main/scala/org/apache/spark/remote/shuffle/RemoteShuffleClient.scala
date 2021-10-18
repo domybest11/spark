@@ -118,25 +118,10 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
       tasksPerExecutor,
       maxExecutors
     )
-    var result: Seq[String] = Nil
-    client.sendRpc(getPushMergerLocations.toByteBuffer, new RpcResponseCallback {
-      /**
-       * Successful serialized result from server.
-       *
-       * After `onSuccess` returns, `response` will be recycled and its content will become invalid.
-       * Please copy the content of `response` if you want to use it after `onSuccess` returns.
-       */
-      override def onSuccess(response: ByteBuffer): Unit = {
-        val msgObj = BlockTransferMessage.Decoder.fromByteBuffer(response)
-        result = msgObj.asInstanceOf[MergerWorkers].getWorkerInfos
-        logger.info("Shuffle {} get push merger location size: {}", shuffleId, result.size)
-      }
-
-      /** Exception either propagated from server or raised on client side. */
-      override def onFailure(e: Throwable): Unit = {
-        logger.warn("Get push merger location from remote service fail", e)
-      }
-    })
+    val response = client.sendRpcSync(getPushMergerLocations.toByteBuffer, 1000L)
+    val msgObj = BlockTransferMessage.Decoder.fromByteBuffer(response)
+    val result = msgObj.asInstanceOf[MergerWorkers].getWorkerInfos
+    logger.info("Shuffle {} get push merger location size: {}", shuffleId, result.size)
     result
   }
 

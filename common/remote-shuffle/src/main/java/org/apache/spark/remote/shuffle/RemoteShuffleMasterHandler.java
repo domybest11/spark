@@ -197,7 +197,7 @@ public class RemoteShuffleMasterHandler {
                     res[i] = workerInfos.get(i).address();
                 }
                 callback.onSuccess(new MergerWorkers(res).toByteBuffer());
-                logger.info( "Get push merger locations for app {} shuffle {} ", appId, shuffleId);
+                logger.info( "Get push merger locations for app {} shuffle {} {}", appId, shuffleId, String.join(",", res));
             } else {
                 throw new UnsupportedOperationException("Unexpected message: " + msgObj);
             }

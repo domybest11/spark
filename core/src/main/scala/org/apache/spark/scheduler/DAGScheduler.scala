@@ -1368,7 +1368,7 @@ private[spark] class DAGScheduler(
           sc.getConf.get(config.EXECUTOR_INSTANCES).getOrElse(0)
         }
         sc.remoteShuffleClient.map(client => {
-          client.getShufflePushMergerLocations(
+          val workers = client.getShufflePushMergerLocations(
             sc.applicationId,
             sc.applicationAttemptId,
             stage.id,
@@ -1376,6 +1376,8 @@ private[spark] class DAGScheduler(
             tasksPerExecutor,
             maxExecutors
           )
+          logInfo(s"worker: ${workers.mkString(",")}")
+          workers
         }).foreach(workers => workers.foreach(
           work => {
             work.split(":").toSeq match {
@@ -1398,7 +1400,7 @@ private[spark] class DAGScheduler(
         Some(sc.schedulerBackend.getShufflePushMergerLocations(
           stage.shuffleDep.partitioner.numPartitions, stage.resourceProfileId))
       }
-      if (mergerLocs.isDefined && mergerLocs.nonEmpty) {
+      if (mergerLocs.isDefined && mergerLocs.get.nonEmpty) {
         stage.shuffleDep.setMergerLocs(mergerLocs.get)
         logInfo(s"Push-based shuffle enabled for $stage (${stage.name}) with" +
           s" ${stage.shuffleDep.getMergerLocs.size} merger locations")

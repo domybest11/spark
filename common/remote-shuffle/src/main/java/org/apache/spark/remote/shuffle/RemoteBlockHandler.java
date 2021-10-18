@@ -247,21 +247,26 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         List<String> localDirs = new ArrayList<>();
         workDirs.forEach(shuffleDir -> {
             String rootDir = shuffleDir.getPath();
-            File mergeDir = new File(rootDir, appId + "/_" + attemptId);
+            File mergeDir = new File(rootDir, appId + "/merge_manager_" + attemptId);
             if(!mergeDir.exists()) {
-                try {
-                    createDirWithPermission770(mergeDir);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+                for(int dirNum = 0; dirNum < 64; dirNum++) {
+                    File subDir = new File(mergeDir, String.format("%02x", dirNum));
+                    try {
+                        if (!subDir.exists()) {
+                            // Only one container will create this directory. The filesystem will handle
+                            // any race conditions.
+                            createDirWithPermission770(subDir);
+                        }
+                    } catch (IOException | InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
             if(mergeDir.exists()){
                 localDirs.add(mergeDir.getAbsolutePath());
             }
         });
-        mergeManager.registerExecutor(appId,new ExecutorShuffleInfo(localDirs.toArray(new String[1]), 64, shuffleManagerMeta));
+        mergeManager.registerExecutor(appId,new ExecutorShuffleInfo(localDirs.toArray(new String[0]), 64, shuffleManagerMeta));
     }
 
     private void createDirWithPermission770(File dirToCreate) throws IOException, InterruptedException {
