@@ -44,6 +44,10 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
 
   def start(): Unit = {
     require(client == null, "remote shuffle server driver client already started")
+    connection()
+  }
+
+  private def connection(): Unit = {
     val bootstraps = new util.ArrayList[TransportClientBootstrap]()
     transportContext = new TransportContext(transportConf, new NoOpRpcHandler, false, true)
     client = transportContext.createClientFactory(bootstraps)
@@ -93,13 +97,18 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
   }
 
   private def sendHeartbeat(appId: String, appAttemptId: Int): Unit = {
-    client.send(
-      new RemoteShuffleDriverHeartbeat(
-        appId,
-        appAttemptId,
-        System.currentTimeMillis()
-      ).toByteBuffer
-    )
+    try {
+      client.send(
+        new RemoteShuffleDriverHeartbeat(
+          appId,
+          appAttemptId,
+          System.currentTimeMillis()
+        ).toByteBuffer
+      )
+      logger.info("Send application heartbeat success")
+    } catch {
+      case e: Exception => e.printStackTrace()
+    }
   }
 
   def getShufflePushMergerLocations(
@@ -118,6 +127,9 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
       tasksPerExecutor,
       maxExecutors
     )
+    if(!client.isActive) {
+      connection()
+    }
     val response = client.sendRpcSync(getPushMergerLocations.toByteBuffer, 1000L)
     val msgObj = BlockTransferMessage.Decoder.fromByteBuffer(response)
     val result = msgObj.asInstanceOf[MergerWorkers].getWorkerInfos
