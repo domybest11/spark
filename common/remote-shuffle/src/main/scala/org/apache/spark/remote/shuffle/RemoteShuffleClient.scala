@@ -127,7 +127,7 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
       tasksPerExecutor,
       maxExecutors
     )
-    if(!client.isActive) {
+    if (!client.isActive) {
       connection()
     }
     val response = client.sendRpcSync(getPushMergerLocations.toByteBuffer, 1000L)

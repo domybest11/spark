@@ -268,7 +268,8 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def eventLogDir: Option[URI] = _eventLogDir
   private[spark] def eventLogCodec: Option[String] = _eventLogCodec
 
-  private[spark] def isRemoteShuffleEnabled: Boolean = _conf.get(SHUFFLE_REMOTE_SERVICE_ENABLED)
+  // scalastyle:off
+  private[spark] def isRemoteShuffleEnabled: Boolean = _conf.get(SHUFFLE_REMOTE_SERVICE_ENABLED) && _conf.get(PUSH_BASED_SHUFFLE_ENABLED)
 
   def isLocal: Boolean = Utils.isLocalMaster(_conf)
 
