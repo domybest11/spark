@@ -32,6 +32,7 @@ import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.PushBlockStream;
 import org.apache.spark.network.shuffle.protocol.RegisterExecutor;
 import org.apache.spark.network.shuffle.protocol.remote.*;
+import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.TransportConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,9 +62,13 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     private final TransportConf transportConf;
     private TransportClientFactory clientFactory;
     private TransportClient client;
-    private final int heartbeatInterval = 1;
-    private final int monitorInterval = 1;
     private final int MAX_ATTEMPTS = 3;
+
+    private final int subDirsPerLocalDir;
+    private final long heartbeatInterval;
+    private final long monitorInterval;
+
+
 
 
     //meta
@@ -96,6 +101,9 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         this.masterHost = masterHost;
         this.masterPort = masterPort;
         this.transportConf = conf;
+        this.subDirsPerLocalDir = conf.getInt("spark.diskStore.subDirectories",64);
+        this.heartbeatInterval = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.worker.interval","60s"));
+        this.monitorInterval = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.worker.monitor","60s"));
         init();
     }
 
@@ -133,10 +141,10 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             try {
                 client.sendRpcSync(registerWorker, 3000L);
                 heartbeatThread.scheduleAtFixedRate(
-                        new Heartbeat(), 1, heartbeatInterval, TimeUnit.MINUTES);
+                        new Heartbeat(), 10, heartbeatInterval, TimeUnit.SECONDS);
 
                 pressureMonitorThread.scheduleAtFixedRate(
-                        new PressureMonitor(), 1, monitorInterval, TimeUnit.MINUTES);
+                        new PressureMonitor(), 10, monitorInterval, TimeUnit.SECONDS);
                 logger.info("Registered remote shuffle worker successfully");
                 return;
             } catch (Exception e) {
@@ -249,7 +257,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             String rootDir = shuffleDir.getPath();
             File mergeDir = new File(rootDir, appId + "/merge_manager_" + attemptId);
             if(!mergeDir.exists()) {
-                for(int dirNum = 0; dirNum < 64; dirNum++) {
+                for(int dirNum = 0; dirNum < subDirsPerLocalDir; dirNum++) {
                     File subDir = new File(mergeDir, String.format("%02x", dirNum));
                     try {
                         if (!subDir.exists()) {

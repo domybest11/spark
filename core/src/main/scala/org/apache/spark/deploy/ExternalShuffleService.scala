@@ -105,7 +105,20 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
         file = new File(filePath)
       }
       logInfo("the shuffle service recovery path is " + filePath)
-      new ExternalBlockHandler(conf, file)
+      if (sparkConf.get(config.SHUFFLE_REMOTE_SERVICE_ENABLED)) {
+        val masterHost = sparkConf.get(config.SHUFFLE_REMOTE_SERVICE_MASTER_HOST)
+        require(masterHost.isDefined, "Remote shuffle master must settings")
+        val masterPort = sparkConf.get(config.SHUFFLE_REMOTE_SERVICE_MASTER_PORT)
+        new RemoteBlockHandler(
+          port,
+          masterHost.get,
+          masterPort,
+          conf,
+          file
+        )
+      } else {
+        new ExternalBlockHandler(conf, file)
+      }
     }
   }
 

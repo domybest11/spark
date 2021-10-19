@@ -711,9 +711,30 @@ package object config {
   private[spark] val SHUFFLE_REMOTE_REPORT_INTERVAL =
     ConfigBuilder("spark.shuffle.remote.report.interval")
       .version("3.2.0")
-      .timeConf(TimeUnit.MILLISECONDS)
+      .timeConf(TimeUnit.SECONDS)
       .checkValue(_ >= 0L, "Timeout must be >= 0.")
       .createWithDefaultString("60s")
+
+  private[spark] val SHUFFLE_REMOTE_WORKER_INTERVAL =
+    ConfigBuilder("spark.shuffle.remote.worker.interval")
+      .version("3.2.0")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(_ >= 0L, "Timeout must be >= 0.")
+      .createWithDefaultString("60s")
+
+  private[spark] val SHUFFLE_REMOTE_WORKER_MONITOR =
+    ConfigBuilder("spark.shuffle.remote.worker.monitor")
+      .version("3.2.0")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(_ >= 0L, "Timeout must be >= 0.")
+      .createWithDefaultString("60s")
+
+  private[spark] val SHUFFLE_REMOTE_APPLICATION_EXPIRE =
+    ConfigBuilder("spark.shuffle.remote.application.expire")
+      .version("3.2.0")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(_ >= 0L, "Timeout must be >= 0.")
+      .createWithDefaultString("600s")
 
   private[spark] val SHUFFLE_SERVICE_FETCH_RDD_ENABLED =
     ConfigBuilder(Constants.SHUFFLE_SERVICE_FETCH_RDD_ENABLED)

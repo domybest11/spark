@@ -12,6 +12,7 @@ import org.apache.spark.network.server.TransportServer;
 import org.apache.spark.network.server.TransportServerBootstrap;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.shuffle.protocol.remote.*;
+import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.TransportConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +33,8 @@ public class RemoteShuffleMasterHandler {
     private TransportServer server;
     private TransportClientFactory clientFactory;
 
+    private final long applicationExpireTimeout;
+
     private final ScheduledExecutorService cleanThread =
             Executors.newSingleThreadScheduledExecutor(
                     new ThreadFactoryBuilder()
@@ -51,6 +54,7 @@ public class RemoteShuffleMasterHandler {
         this.host = host;
         this.port = port;
         transportConf = conf;
+        this.applicationExpireTimeout = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.application.expire","600s")) * 1000;
     }
 
     public void start() {
@@ -61,7 +65,7 @@ public class RemoteShuffleMasterHandler {
             clientFactory = transportContext.createClientFactory(Lists.newArrayList());
         }
         // application 超时检查
-        cleanThread.scheduleAtFixedRate(new ApplicationExpire(), 0, 1, TimeUnit.MINUTES);
+        cleanThread.scheduleAtFixedRate(new ApplicationExpire(), 1, 1, TimeUnit.MINUTES);
     }
 
     public void stop() {
@@ -84,7 +88,7 @@ public class RemoteShuffleMasterHandler {
             while (it.hasNext()){
                 RunningApplication runningApplication = it.next();
                 // TODO: 2021/9/22 application 超时过期回收
-                if (runningApplication.latestHeartbeatTime + 1000L > System.currentTimeMillis()) {
+                if (runningApplication.latestHeartbeatTime + applicationExpireTimeout > System.currentTimeMillis()) {
                     it.remove();
                     runningApplication.alive.compareAndSet(true, false);
                     synchronized (runningApplication) {

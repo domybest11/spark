@@ -70,7 +70,7 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
 
   def startApplication(appId: String,
                        appAttemptId: Option[String],
-                       reportIntervalMs: Long): Unit = {
+                       reportInterval: Long): Unit = {
     client.sendRpc(
       new RegisterApplication(
         appId,
@@ -79,7 +79,7 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
         override def onSuccess(response: ByteBuffer): Unit = {
           heartbeatThread.scheduleAtFixedRate(() => {
             sendHeartbeat(appId, Integer.valueOf(appAttemptId.getOrElse("-1")))
-          }, 30, reportIntervalMs, TimeUnit.SECONDS)
+          }, 30, reportInterval, TimeUnit.SECONDS)
           logger.info("Registered application to remote shuffle master successfully")
         }
 

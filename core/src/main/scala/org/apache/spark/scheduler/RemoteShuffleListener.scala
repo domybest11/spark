@@ -29,7 +29,7 @@ private[spark] class RemoteShuffleListener(
     shuffleClient: RemoteShuffleClient)
   extends SparkListener with Logging {
 
-  private val reportIntervalMs = sparkConf.get(SHUFFLE_REMOTE_REPORT_INTERVAL)
+  private val reportInterval = sparkConf.get(SHUFFLE_REMOTE_REPORT_INTERVAL)
 
   def start(): Unit = {
     shuffleClient.start()
@@ -41,7 +41,7 @@ private[spark] class RemoteShuffleListener(
   }
 
   override def onApplicationStart(applicationStart: SparkListenerApplicationStart): Unit = {
-    shuffleClient.startApplication(appId, appAttemptId, reportIntervalMs)
+    shuffleClient.startApplication(appId, appAttemptId, reportInterval)
   }
 
   override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd): Unit = {
