@@ -247,6 +247,12 @@ package object config {
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefaultString("10s")
 
+  private[spark] val EXECUTOR_HEARTBEAT_INITIAL =
+    ConfigBuilder("spark.executor.heartbeatInitial")
+      .version("3.2.0")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("3s")
+
   private[spark] val EXECUTOR_HEARTBEAT_MAX_FAILURES =
     ConfigBuilder("spark.executor.heartbeat.maxFailures")
       .internal()
