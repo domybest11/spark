@@ -122,15 +122,6 @@ spark_client_build:
            "replica": 100
         }'
 
-      curl --location --request POST 'http://uat-alter.bilibili.co/api/alter/cicd/pack/hdfs/open/spark/jars/upload' \
-        --header 'Content-Type: application/json' \
-        --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
-        --data '{
-          "bossPath":"'"$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME"'",
-          "fileName":"'"$DEST_FILE_NAME"'",
-           "replica": 100
-        }'
-
 hadoop_build:
   stage: build
   only:
