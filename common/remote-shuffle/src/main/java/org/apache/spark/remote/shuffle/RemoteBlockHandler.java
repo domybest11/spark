@@ -27,12 +27,15 @@ import org.apache.spark.network.TransportContext;
 import org.apache.spark.network.client.*;
 import org.apache.spark.network.server.NoOpRpcHandler;
 import org.apache.spark.network.shuffle.ExternalBlockHandler;
+import org.apache.spark.network.shuffle.MergedShuffleFileManager;
+import org.apache.spark.network.shuffle.RemoteBlockPushResolver;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.PushBlockStream;
 import org.apache.spark.network.shuffle.protocol.RegisterExecutor;
 import org.apache.spark.network.shuffle.protocol.remote.*;
 import org.apache.spark.network.util.JavaUtils;
+import org.apache.spark.network.util.NettyUtils;
 import org.apache.spark.network.util.TransportConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,11 +45,11 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 import static org.apache.spark.network.shuffle.RemoteBlockPushResolver.ATTEMPT_ID_KEY;
 import static org.apache.spark.network.shuffle.RemoteBlockPushResolver.MERGE_DIR_KEY;
@@ -67,17 +70,12 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     private final int subDirsPerLocalDir;
     private final long heartbeatInterval;
     private final long monitorInterval;
+    private final Executor mergedDirCleaner;
 
-
-
-
-    //meta
-//    private ConcurrentHashMap<String, ShuffleDir> workDirs = new ConcurrentHashMap<>();
     private List<ShuffleDir> workDirs = new ArrayList<>();
     // key: appid_attempt  value: v-key: shuffle_key v-value: runningStage
     private ConcurrentHashMap<String, ConcurrentHashMap<String, RunningStage>> appStageMap = new ConcurrentHashMap<>();
-//    private ConcurrentHashMap<ShuffleDir,List<RunningStage>> dirInfo = new ConcurrentHashMap<>();
-
+    private ConcurrentHashMap<String, List<String>> localMergeDirs = new ConcurrentHashMap<>();
 
     private final ScheduledExecutorService heartbeatThread =
             Executors.newSingleThreadScheduledExecutor(
@@ -104,6 +102,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         this.subDirsPerLocalDir = conf.getInt("spark.diskStore.subDirectories",64);
         this.heartbeatInterval = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.worker.interval","60s"));
         this.monitorInterval = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.worker.monitor","60s"));
+        this.mergedDirCleaner = Executors.newSingleThreadExecutor(
+                NettyUtils.createThreadFactory("shuffle-merge-worker-directory-cleaner"));
         init();
     }
 
@@ -196,12 +196,21 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     protected void handleMessage(BlockTransferMessage msgObj, TransportClient client, RpcResponseCallback callback) {
         if (msgObj instanceof CleanApplication) {
             CleanApplication cleanApplication = (CleanApplication) msgObj;
-            // TODO: 2021/9/23 这里有个问题，这种直接删除会影响到application attempt
             applicationRemoved(cleanApplication.getAppId(), true);
             String appKey = cleanApplication.getAppId() + "_" + cleanApplication.getAttempt();
-            ConcurrentHashMap<String, RunningStage> map =  appStageMap.remove(appKey);
-            if (map != null) {
-                RunningStage[] stages = map.values().toArray(new RunningStage[0]);
+            appStageMap.remove(appKey);
+            if (mergeManager != null) {
+                RemoteBlockPushResolver remoteBlockPushResolver =  (RemoteBlockPushResolver) mergeManager;
+                ConcurrentMap<String, RemoteBlockPushResolver.AppShuffleInfo> appInfos =
+                        remoteBlockPushResolver.getAppsShuffleInfo();
+                if (null != appInfos && !appInfos.isEmpty()) {
+                    appInfos.remove(cleanApplication.getAppId());
+                }
+            }
+          List<String> localDirs = localMergeDirs.remove(appKey);
+            if (!localDirs.isEmpty()) {
+                mergedDirCleaner.execute(() ->
+                        deleteExecutorDirs(localDirs));
             }
         } else if (msgObj instanceof RegisterExecutor) {
             final Timer.Context responseDelayContext =
@@ -222,6 +231,20 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             }
         } else {
             super.handleMessage(msgObj, client, callback);
+        }
+    }
+
+    void deleteExecutorDirs(List<String> localDirs) {
+        Path[] dirs = localDirs.stream().map(dir -> Paths.get(dir)).toArray(Path[]::new);
+        for (Path localDir : dirs) {
+            try {
+                if (Files.exists(localDir)) {
+                    JavaUtils.deleteRecursively(localDir.toFile());
+                    logger.debug("Successfully cleaned up directory: {}", localDir);
+                }
+            } catch (Exception e) {
+                logger.error("Failed to delete directory: {}", localDir, e);
+            }
         }
     }
 
@@ -274,6 +297,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 localDirs.add(mergeDir.getAbsolutePath());
             }
         });
+        String appKey = appId + "_" + attemptId;
+        localMergeDirs.computeIfAbsent(appKey, v -> { return localDirs; });
         mergeManager.registerExecutor(appId,new ExecutorShuffleInfo(localDirs.toArray(new String[0]), 64, shuffleManagerMeta));
     }
 
