@@ -107,7 +107,8 @@ spark_client_build:
     - mkdir -p dest/tmp
     - mv *.tgz dest
     - tar -zxvf dest/*.tgz -C dest/tmp
-    - export DEST_FILE_NAME=spark-3.1-${CI_COMMIT_TAG}.zip
+    - export BUILD_TIME=`date "+%Y%m%d-%H%M%S"`
+    - export DEST_FILE_NAME=spark-3.1-${CI_COMMIT_TAG}-${BUILD_TIME}.zip
     - zip -r -j dest/$DEST_FILE_NAME dest/tmp/spark*/jars/*
     - rm -rf dest/tmp
     - alterctl fs upload dest/$DEST_FILE_NAME $CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
