@@ -199,14 +199,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             applicationRemoved(cleanApplication.getAppId(), true);
             String appKey = cleanApplication.getAppId() + "_" + cleanApplication.getAttempt();
             appStageMap.remove(appKey);
-            if (mergeManager != null) {
-                RemoteBlockPushResolver remoteBlockPushResolver =  (RemoteBlockPushResolver) mergeManager;
-                ConcurrentMap<String, RemoteBlockPushResolver.AppShuffleInfo> appInfos =
-                        remoteBlockPushResolver.getAppsShuffleInfo();
-                if (null != appInfos && !appInfos.isEmpty()) {
-                    appInfos.remove(cleanApplication.getAppId());
-                }
-            }
           List<String> localDirs = localMergeDirs.remove(appKey);
             if (!localDirs.isEmpty()) {
                 mergedDirCleaner.execute(() ->
@@ -276,9 +268,12 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         }
         String shuffleManagerMeta = "_:" + jsonString; //适配RemoteBlockPushResolver.registerExecutor
         List<String> localDirs = new ArrayList<>();
+        List<String> localParentDirs = new ArrayList<>();
         workDirs.forEach(shuffleDir -> {
             String rootDir = shuffleDir.getPath();
-            File mergeDir = new File(rootDir, appId + "/merge_manager_" + attemptId);
+            String parentPath = rootDir + "/" + appId + "_" + attemptId;
+            localParentDirs.add(parentPath);
+            File mergeDir = new File(rootDir, appId + "_" + attemptId + "/merge_manager");
             if(!mergeDir.exists()) {
                 for(int dirNum = 0; dirNum < subDirsPerLocalDir; dirNum++) {
                     File subDir = new File(mergeDir, String.format("%02x", dirNum));
@@ -298,7 +293,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             }
         });
         String appKey = appId + "_" + attemptId;
-        localMergeDirs.computeIfAbsent(appKey, v -> { return localDirs; });
+        localMergeDirs.computeIfAbsent(appKey, v -> { return localParentDirs; });
         mergeManager.registerExecutor(appId,new ExecutorShuffleInfo(localDirs.toArray(new String[0]), 64, shuffleManagerMeta));
     }
 
