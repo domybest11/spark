@@ -110,6 +110,11 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
   private final ConcurrentMap<String, AppShuffleInfo> appsShuffleInfo;
 
   private final Executor mergedShuffleCleaner;
+
+  public ConcurrentMap<String, AppShuffleInfo> getAppsShuffleInfo() {
+    return appsShuffleInfo;
+  }
+
   private final TransportConf conf;
   private final int minChunkSize;
   private final int ioExceptionsThresholdDuringMerge;
