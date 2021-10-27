@@ -17,15 +17,20 @@
 
 package org.apache.spark.scheduler
 
+import org.apache.commons.lang3.StringUtils
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.{ApplicationDataRecord, KafkaProducerUtil, Utils}
 import org.apache.spark.{SPARK_VERSION, SparkConf}
+
+import scala.collection.mutable.HashMap
 
 private[spark] class AppListener(
     appId: String,
     appAttemptId : Option[String],
     sparkConf: SparkConf)
   extends SparkListener with Logging {
+
+  private val sqlRules = new HashMap[String, Int]()
 
   override def onApplicationStart(event: SparkListenerApplicationStart): Unit = {
     val startTime: Long = event.time
@@ -46,6 +51,12 @@ private[spark] class AppListener(
 
   override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd): Unit = {
     val endTime: Long = applicationEnd.time
+    val HBOEffectiveRules = sparkConf.get("spark.deploy.autoConfEffectiveRules", "")
+    if (StringUtils.isNotEmpty(HBOEffectiveRules)) {
+      HBOEffectiveRules.split(",").foreach(ruleName => {
+        sqlRules.put(ruleName, 1)
+      })
+    }
     KafkaProducerUtil.report(new ApplicationDataRecord(
       appId,
       sparkConf.get("spark.app.name", ""),
@@ -58,7 +69,18 @@ private[spark] class AppListener(
       status = "END",
       user = Utils.getCurrentUserName(),
       sparkVersion = SPARK_VERSION,
-      traceId = sparkConf.get("spark.trace.id", "")))
+      traceId = sparkConf.get("spark.trace.id", ""),
+      ruleNames = sqlRules
+    ))
+  }
+
+  override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
+    case e: SparkListenerRuleExecute => onRuleExecute(e)
+    case _ =>
+  }
+
+  def onRuleExecute(event: SparkListenerRuleExecute): Unit = {
+    sqlRules.put(event.ruleName, 1)
   }
 
 }

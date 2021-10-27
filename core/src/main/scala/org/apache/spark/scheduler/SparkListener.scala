@@ -254,6 +254,9 @@ case class SparkListenerExecutorReportInfo(
     executorReportInfo: ExecutorReportInfo)
   extends SparkListenerEvent
 
+@DeveloperApi
+case class SparkListenerRuleExecute(ruleName: String) extends SparkListenerEvent
+
 /**
  * Peak metric values for the executor for the stage, written to the history log at stage
  * completion.

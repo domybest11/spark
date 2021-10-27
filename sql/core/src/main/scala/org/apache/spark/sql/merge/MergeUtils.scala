@@ -8,7 +8,6 @@ import java.util.concurrent.TimeUnit.MILLISECONDS
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.common.FileUtils
@@ -27,10 +26,10 @@ import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.hadoop.io.Writable
 import org.apache.hadoop.mapred.{FileOutputFormat, FileSplit, JobConf, RecordReader}
 import org.apache.hadoop.security.UserGroupInformation
-
 import org.apache.spark.{SparkContext, SparkException, TaskContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.scheduler.SparkListenerRuleExecute
 import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable, CatalogTableType, CatalogUtils}
@@ -422,6 +421,7 @@ object MergeUtils extends Logging {
      avgConditionSize: Long,
      targetFileSize: Long,
      sparkSession: SparkSession): Unit = {
+    val sparkContext = sparkSession.sparkContext
     val hiveOutputFormat: HiveOutputFormat[AnyRef, Writable] = conf.value.getOutputFormat
       .asInstanceOf[HiveOutputFormat[AnyRef, Writable]]
     val extension = Utilities.getFileExtension(conf.value,
@@ -436,10 +436,13 @@ object MergeUtils extends Logging {
     if (existDynamicPartition) {
       val mergeRules = MergeUtils.generateDynamicMergeRule(fs, path,
         conf.value, avgConditionSize, targetFileSize, directRenamePathList)
-      sparkSession.sparkContext.union(mergeRules.map { r =>
+      if (mergeRules.nonEmpty) {
+        sparkContext.listenerBus.post(SparkListenerRuleExecute("MergeFiles"))
+      }
+      sparkContext.union(mergeRules.map { r =>
         val groupSize = Math.ceil(r.files.size * 1d / r.numFiles).toInt
         val groupedFiles = r.files.toArray.grouped(groupSize).map(x => (r.path, x)).toArray
-        MergeUtils.mergePathRDD(sparkSession.sparkContext, groupedFiles, groupedFiles.size)
+        MergeUtils.mergePathRDD(sparkContext, groupedFiles, groupedFiles.size)
       }).foreach { case (partOutputDir, files) =>
         val tmpPartMergeLocationDir = partOutputDir.replace("-ext-10000", MergeUtils.TEMP_DIR)
         MergeUtils.mergeAction(conf, outputClassName, files, partOutputDir, tmpPartMergeLocationDir,
@@ -464,8 +467,11 @@ object MergeUtils extends Logging {
         val files = fs.listStatus(path).filter(_.getLen > 0).map(_.getPath.toString)
         val groupSize = Math.ceil(files.size * 1d / numFiles).toInt
         val groupedFiles = files.grouped(groupSize).toArray
+        if (groupedFiles.nonEmpty && groupedFiles.size > 0) {
+          sparkContext.listenerBus.post(SparkListenerRuleExecute("MergeFiles"))
+        }
         fileSinkConf.dir = tmpMergeLocation.toString
-        sparkSession.sparkContext.parallelize(groupedFiles, groupedFiles.size).foreach { files =>
+        sparkContext.parallelize(groupedFiles, groupedFiles.size).foreach { files =>
           MergeUtils.mergeAction(conf, outputClassName, files, outputDir, tmpMergeLocationDir,
             extension, waitTime)
         }
