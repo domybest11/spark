@@ -1,6 +1,8 @@
 package org.apache.spark.remote.shuffle;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.spark.network.TransportContext;
 import org.apache.spark.network.client.RpcResponseCallback;
@@ -10,14 +12,22 @@ import org.apache.spark.network.server.RpcHandler;
 import org.apache.spark.network.server.StreamManager;
 import org.apache.spark.network.server.TransportServer;
 import org.apache.spark.network.server.TransportServerBootstrap;
+import org.apache.spark.network.shuffle.ExternalShuffleBlockResolver;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
+import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.remote.*;
 import org.apache.spark.network.util.JavaUtils;
+import org.apache.spark.network.util.LevelDBProvider;
 import org.apache.spark.network.util.TransportConf;
+import org.iq80.leveldb.DB;
+import org.iq80.leveldb.DBIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,6 +43,9 @@ public class RemoteShuffleMasterHandler {
     private TransportServer server;
     private TransportClientFactory clientFactory;
 
+    private DB db;
+    private static final LevelDBProvider.StoreVersion CURRENT_VERSION = new LevelDBProvider.StoreVersion(1, 0);
+    private static final ObjectMapper mapper = new ObjectMapper();
     private final long applicationExpireTimeout;
 
     private final ScheduledExecutorService cleanThread =
@@ -49,12 +62,137 @@ public class RemoteShuffleMasterHandler {
     public final CopyOnWriteArraySet<WorkerInfo> busyWorkers = new CopyOnWriteArraySet<>();
 
     public final ConcurrentHashMap<String, RunningApplication> runningApplicationMap = new ConcurrentHashMap<>();
+    private static final String RUNNING_APP_PREFIX = "RunningApplication";
+    private static final String WORKERS_PREFIX = "Workers";
+    private static final String BLACK_WORKERS_PREFIX = "BlackWorkers";
+    private static final String BUSY_WORKERS_PREFIX = "BusyWorkers";
 
-    public RemoteShuffleMasterHandler(String host, int port, TransportConf conf) {
+    public RemoteShuffleMasterHandler(String host, int port, TransportConf conf) throws IOException {
         this.host = host;
         this.port = port;
         transportConf = conf;
         this.applicationExpireTimeout = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.application.expire","600s")) * 1000;
+        String filePath = conf.get("spark.shuffle.master.recovery.path", null);
+        if (filePath != null) {
+            File file = new File(filePath);
+            try {
+                db = LevelDBProvider.initLevelDB(file, CURRENT_VERSION, mapper);
+            } catch (Exception e) {
+                db = null;
+            }
+        }
+        if (db != null) {
+            reloadRemoteMasterStateFromDB(db);
+        }
+    }
+
+    private void reloadRemoteMasterStateFromDB(DB db) throws IOException {
+        if (db != null) {
+            DBIterator itr = db.iterator();
+            while (itr.hasNext()) {
+                Map.Entry<byte[], byte[]> e = itr.next();
+                String key = new String(e.getKey(), StandardCharsets.UTF_8);
+                String keyType = getDBType(key);
+                switch (keyType) {
+                    case RUNNING_APP_PREFIX:
+                        String appId = parseDbKey(key);
+                        logger.info("Reloading registered runningApp: " +  appId);
+                        RunningApplication runningApplication = mapper.readValue(e.getValue(), RunningApplication.class);
+                        runningApplicationMap.put(appId, runningApplication);
+                        break;
+                    case WORKERS_PREFIX:
+                        String address = parseDbKey(key);
+                        logger.info("Reloading registered worker: " +  address);
+                        WorkerInfo workerInfo = mapper.readValue(e.getValue(), WorkerInfo.class);
+                        workersMap.put(address, workerInfo);
+                        break;
+                    case BLACK_WORKERS_PREFIX:
+                        String blackWorker = parseDbKey(key);
+                        logger.info("Reloading registered blackWorker: " + blackWorker);
+                        WorkerInfo blackWorkerInfo = mapper.readValue(e.getValue(), WorkerInfo.class);
+                        blackWorkers.add(blackWorkerInfo);
+                        break;
+                    case BUSY_WORKERS_PREFIX:
+                        String busyWorker = parseDbKey(key);
+                        logger.info("Reloading registered busyWorker: " + busyWorker);
+                        WorkerInfo busyWorkerInfo = mapper.readValue(e.getValue(), WorkerInfo.class);
+                        busyWorkers.add(busyWorkerInfo);
+                        break;
+                    default:
+                }
+            }
+        }
+    }
+
+    public String getDBType(String key) {
+      if (key.startsWith(RUNNING_APP_PREFIX)) {
+          return RUNNING_APP_PREFIX;
+      }
+      if (key.startsWith(WORKERS_PREFIX)) {
+          return WORKERS_PREFIX;
+      }
+      if (key.startsWith(BLACK_WORKERS_PREFIX)) {
+            return BLACK_WORKERS_PREFIX;
+      }
+      if (key.startsWith(BUSY_WORKERS_PREFIX)) {
+            return BUSY_WORKERS_PREFIX;
+      }
+      return key;
+    }
+
+    public String parseDbKey(String key) throws IOException {
+        String keyType = getDBType(key);
+        String result = "";
+        switch (keyType) {
+            case RUNNING_APP_PREFIX:
+                String appJson = key.substring(RUNNING_APP_PREFIX.length() + 1);
+                result = mapper.readValue(appJson, String.class);
+                break;
+            case WORKERS_PREFIX:
+                String workersJson = key.substring(WORKERS_PREFIX.length() + 1);
+                result = mapper.readValue(workersJson, String.class);
+                break;
+            case BLACK_WORKERS_PREFIX:
+                String blackWorkerJson = key.substring(BLACK_WORKERS_PREFIX.length() + 1);
+                result = mapper.readValue(blackWorkerJson, String.class);
+                break;
+            case BUSY_WORKERS_PREFIX:
+                String busyWorkerJson = key.substring(BUSY_WORKERS_PREFIX.length() + 1);
+                result = mapper.readValue(busyWorkerJson, String.class);
+                break;
+            default:
+        }
+        return result;
+    }
+
+    public byte[] dbAppExecKey(String indexName, Object keyInfo) throws IOException {
+        String keyType = getDBType(indexName);
+        String appExecJson = mapper.writeValueAsString(keyInfo);
+        String key = (keyType + ";" + appExecJson);
+        return key.getBytes(StandardCharsets.UTF_8);
+    }
+
+    public void saveMasterStateDB(Object keyInfo, Object obj, String indexName) {
+        try {
+            if (db != null) {
+                byte[] key = dbAppExecKey(indexName, keyInfo);
+                byte[] value = mapper.writeValueAsString(obj).getBytes(StandardCharsets.UTF_8);
+                db.put(key, value);
+            }
+        } catch (Exception e) {
+            logger.error("Error saving registered " + indexName, e);
+        }
+    }
+
+    public void deleteMasterStateDB(Object keyInfo, String indexName) {
+        try {
+            if (db != null) {
+                byte[] key = dbAppExecKey(indexName, keyInfo);
+                db.delete(key);
+            }
+        } catch (Exception e) {
+            logger.error("Error deleting registered " + indexName, e);
+        }
     }
 
     public void start() {
@@ -117,7 +255,11 @@ public class RemoteShuffleMasterHandler {
                 String host = registerWorker.getHost();
                 int port = registerWorker.getPort();
                 String address = host + ":" + port;
-                workersMap.computeIfAbsent(address, w -> new WorkerInfo(clientFactory, host, port));
+                workersMap.computeIfAbsent(address, w -> {
+                  WorkerInfo workerInfo = new WorkerInfo(clientFactory, host, port);
+                  saveMasterStateDB(address, workerInfo, WORKERS_PREFIX);
+                  return workerInfo;
+                });
                 callback.onSuccess(ByteBuffer.allocate(0));
                 logger.info("handle register worker time: {}ms", System.currentTimeMillis() - start);
             } else if (msgObj instanceof RemoteShuffleWorkerHeartbeat) {
@@ -129,7 +271,11 @@ public class RemoteShuffleMasterHandler {
                 String address = host + ":" + port;
                 RunningStage[] runningStages = workHeartbeat.getRunningStages();
                 WorkerPressure pressure = new WorkerPressure(workHeartbeat.getPressure());
-                WorkerInfo workerInfo = workersMap.computeIfAbsent(address, w -> new WorkerInfo(clientFactory, host, port));
+                WorkerInfo workerInfo = workersMap.computeIfAbsent(address, w -> {
+                    WorkerInfo worker = new WorkerInfo(clientFactory, host, port);
+                    saveMasterStateDB(address, worker, WORKERS_PREFIX);
+                    return worker;
+                });
                 workerInfo.setLatestHeartbeatTime(workHeartbeat.getHeartbeatTimeMs());
                 workerInfo.setPressure(pressure);
                 // TODO: 2021/9/22 根据pressure维护work列, 部分不健康的节点从可用节点
@@ -151,6 +297,7 @@ public class RemoteShuffleMasterHandler {
                 String host = unregisterWorker.getHost();
                 int port = unregisterWorker.getPort();
                 String address = host + ":" + port;
+                deleteMasterStateDB(address, WORKERS_PREFIX);
                 WorkerInfo workerInfo = workersMap.remove(address);
                 blackWorkers.remove(workerInfo);
                 busyWorkers.remove(workerInfo);
