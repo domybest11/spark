@@ -27,8 +27,6 @@ import org.apache.spark.network.TransportContext;
 import org.apache.spark.network.client.*;
 import org.apache.spark.network.server.NoOpRpcHandler;
 import org.apache.spark.network.shuffle.ExternalBlockHandler;
-import org.apache.spark.network.shuffle.MergedShuffleFileManager;
-import org.apache.spark.network.shuffle.RemoteBlockPushResolver;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.PushBlockStream;
