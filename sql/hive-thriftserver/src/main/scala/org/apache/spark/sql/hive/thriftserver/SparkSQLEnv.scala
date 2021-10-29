@@ -34,11 +34,14 @@ private[hive] object SparkSQLEnv extends Logging {
   var sqlContext: SQLContext = _
   var sparkContext: SparkContext = _
 
-  def init(): Unit = {
+  def init(isOnlyDDL: Boolean = false) {
     if (sqlContext == null) {
       val sparkConf = new SparkConf(loadDefaults = true)
       // If user doesn't specify the appName, we want to get [SparkSQL::localHostName] instead of
       // the default appName [SparkSQLCLIDriver] in cli or beeline.
+      if (isOnlyDDL) {
+        sparkConf.setMaster("local")
+      }
       val maybeAppName = sparkConf
         .getOption("spark.app.name")
         .filterNot(_ == classOf[SparkSQLCLIDriver].getName)
