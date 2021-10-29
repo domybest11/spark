@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit
 import scala.collection.JavaConverters._
 import jline.console.ConsoleReader
 import jline.console.history.FileHistory
+import org.apache.commons.io.FileUtils
 import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.hive.cli.{CliDriver, CliSessionState, OptionsProcessor}
@@ -56,6 +57,7 @@ private[hive] object SparkSQLCLIDriver extends Logging {
   private val prompt = "spark-sql"
   private val continuedPrompt = "".padTo(prompt.length, ' ')
   private var transport: TSocket = _
+  private val dmlKeywords: Seq[String] = List("select", "analyze", "insert", "cache")
   private final val SPARK_HADOOP_PROP_PREFIX = "spark.hadoop."
 
   initializeLogIfNecessary(true)
@@ -152,7 +154,26 @@ private[hive] object SparkSQLCLIDriver extends Logging {
       (k, v)
     }
 
-    val cli = new SparkSQLCLIDriver
+    var queryContent = ""
+    if (sessionState.execString != null) {
+      queryContent = sessionState.execString.toLowerCase(Locale.ROOT)
+    } else if (sessionState.fileName != null) {
+      try {
+      queryContent = FileUtils.readFileToString(
+        new File(sessionState.fileName)).toLowerCase(Locale.ROOT)
+      } catch {
+        case e: Exception =>
+          logError(s"Could not read input file. (${e.getMessage})")
+          System.exit(3)
+      }
+    }
+
+    var onlyDDL = false
+    if (!StringUtils.isBlank(queryContent) && !dmlKeywords.exists(queryContent.contains(_))) {
+      onlyDDL = true
+    }
+
+    val cli = new SparkSQLCLIDriver(onlyDDL)
     cli.setHiveVariables(oproc.getHiveVariables)
 
     // In SparkSQL CLI, we may want to use jars augmented by hiveconf
@@ -303,7 +324,7 @@ private[hive] object SparkSQLCLIDriver extends Logging {
 
 }
 
-private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
+private[hive] class SparkSQLCLIDriver(onlyDDL: Boolean = false) extends CliDriver with Logging {
   private val sessionState = SessionState.get().asInstanceOf[CliSessionState]
 
   private val LOG = LoggerFactory.getLogger(classOf[SparkSQLCLIDriver])
@@ -320,7 +341,11 @@ private[hive] class SparkSQLCLIDriver extends CliDriver with Logging {
   // Force initializing SparkSQLEnv. This is put here but not object SparkSQLCliDriver
   // because the Hive unit tests do not go through the main() code path.
   if (!isRemoteMode) {
-    SparkSQLEnv.init()
+    if (onlyDDL) {
+      SparkSQLEnv.init(true)
+    } else {
+      SparkSQLEnv.init()
+    }
     if (sessionState.getIsSilent) {
       SparkSQLEnv.sparkContext.setLogLevel(Level.WARN.toString)
     }
