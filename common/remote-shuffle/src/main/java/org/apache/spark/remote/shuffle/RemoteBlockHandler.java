@@ -200,7 +200,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
           List<String> localDirs = localMergeDirs.remove(appKey);
             if (!localDirs.isEmpty()) {
                 mergedDirCleaner.execute(() ->
-                        deleteExecutorDirs(localDirs));
+                        deleteExecutorDirs(localDirs, appKey));
             }
         } else if (msgObj instanceof RegisterExecutor) {
             final Timer.Context responseDelayContext =
@@ -224,18 +224,24 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         }
     }
 
-    void deleteExecutorDirs(List<String> localDirs) {
+    void deleteExecutorDirs(List<String> localDirs, String appAttempt) {
         Path[] dirs = localDirs.stream().map(dir -> Paths.get(dir)).toArray(Path[]::new);
         for (Path localDir : dirs) {
             try {
-                if (Files.exists(localDir)) {
+                if (Files.exists(localDir)
+                        && checkDeleteDirs(localDir.toAbsolutePath().toString(), appAttempt)) {
                     JavaUtils.deleteRecursively(localDir.toFile());
-                    logger.debug("Successfully cleaned up directory: {}", localDir);
+                    logger.info("Successfully cleaned up directory: {}", localDir);
                 }
             } catch (Exception e) {
                 logger.error("Failed to delete directory: {}", localDir, e);
             }
         }
+    }
+
+    public Boolean checkDeleteDirs(String path, String appAttempt) {
+        return !StringUtils.isBlank(path) && !StringUtils.isBlank(appAttempt)
+                && path.endsWith(appAttempt) ;
     }
 
     @Override
