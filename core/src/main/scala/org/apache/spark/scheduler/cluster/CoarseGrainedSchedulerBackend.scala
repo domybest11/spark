@@ -58,7 +58,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   protected val totalRegisteredExecutors = new AtomicInteger(0)
   protected val conf = scheduler.sc.conf
   private val maxRpcMessageSize = RpcUtils.maxMessageSizeBytes(conf)
-  private val defaultAskTimeout = RpcUtils.askRpcTimeout(conf)
+  private val defaultAskTimeout = RpcUtils.askYarnTimeout(conf)
   // Submit tasks only after (registered resources / total expected resources)
   // is equal to at least this value, that is double between 0 and 1.
   private val _minRegisteredRatio =
@@ -701,7 +701,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       doRequestTotalExecutors(requestedTotalExecutorsPerResourceProfile.toMap)
     }
 
-    defaultAskTimeout.awaitResult(response)
+    val start = System.currentTimeMillis()
+    val flag = defaultAskTimeout.awaitResult(response)
+    val end = System.currentTimeMillis()
+    listenerBus.post(SparkListenerRequestYarnTime(end - start))
+    flag
   }
 
   /**
@@ -742,7 +746,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       this.rpHostToLocalTaskCount = hostToLocalTaskCount
       doRequestTotalExecutors(requestedTotalExecutorsPerResourceProfile.toMap)
     }
-    defaultAskTimeout.awaitResult(response)
+    val start = System.currentTimeMillis()
+    val flag = defaultAskTimeout.awaitResult(response)
+    val end = System.currentTimeMillis()
+    listenerBus.post(SparkListenerRequestYarnTime(end - start))
+    flag
   }
 
   /**
@@ -843,7 +851,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       )(ThreadUtils.sameThread)
     }
 
-    defaultAskTimeout.awaitResult(response)
+    val start = System.currentTimeMillis()
+    val flag = defaultAskTimeout.awaitResult(response)
+    val end = System.currentTimeMillis()
+    listenerBus.post(SparkListenerRequestYarnTime(end - start))
+    flag
   }
 
   /**
