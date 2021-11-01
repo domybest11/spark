@@ -57,6 +57,12 @@ private[spark] object Network {
       .stringConf
       .createOptional
 
+  private[spark] val YARN_ASK_TIMEOUT =
+    ConfigBuilder("spark.yarn.askTimeout")
+      .version("3.1.0")
+      .stringConf
+      .createWithDefault("120s")
+
   private[spark] val RPC_CONNECT_THREADS =
     ConfigBuilder("spark.rpc.connect.threads")
       .version("1.6.0")

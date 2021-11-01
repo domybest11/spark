@@ -126,6 +126,7 @@ private[spark] class ApplicationDataRecord(
     val user: String,
     val sparkVersion: String,
     val traceId: String,
+    val maxRequestYarnTime: Long = 0,
     val ruleNames: HashMap[String, Int] = null) extends Record
 
 private[spark] class ExecutionDataRecord(

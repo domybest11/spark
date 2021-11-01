@@ -31,6 +31,7 @@ private[spark] class AppListener(
   extends SparkListener with Logging {
 
   private val sqlRules = new HashMap[String, Int]()
+  private var maxRequestYarnTime = 0L
 
   override def onApplicationStart(event: SparkListenerApplicationStart): Unit = {
     val startTime: Long = event.time
@@ -70,17 +71,23 @@ private[spark] class AppListener(
       user = Utils.getCurrentUserName(),
       sparkVersion = SPARK_VERSION,
       traceId = sparkConf.get("spark.trace.id", ""),
+      maxRequestYarnTime = maxRequestYarnTime,
       ruleNames = sqlRules
     ))
   }
 
   override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
     case e: SparkListenerRuleExecute => onRuleExecute(e)
+    case e: SparkListenerRequestYarnTime => onYarnRequest(e)
     case _ =>
   }
 
   def onRuleExecute(event: SparkListenerRuleExecute): Unit = {
     sqlRules.put(event.ruleName, 1)
+  }
+
+  def onYarnRequest(event: SparkListenerRequestYarnTime): Unit = {
+    maxRequestYarnTime = Math.max(maxRequestYarnTime, event.time)
   }
 
 }
