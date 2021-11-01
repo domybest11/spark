@@ -277,9 +277,13 @@ object OptimizeSkewedJoin extends CustomShuffleReaderRule {
       }.length
 
       if (numShuffles > 0) {
-        logDebug("OptimizeSkewedJoin rule is not applied due" +
-          " to additional shuffles will be introduced.")
-        plan
+        if (conf.getConf(SQLConf.SKEW_JOIN_OPTIMIZE_FORCE)) {
+          optimizePlan
+        } else {
+          logInfo("OptimizeSkewedJoin rule is not applied due" +
+            " to additional shuffles will be introduced.")
+          plan
+        }
       } else {
         optimizePlan
       }

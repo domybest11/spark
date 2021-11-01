@@ -557,6 +557,15 @@ object SQLConf {
       .bytesConf(ByteUnit.BYTE)
       .createWithDefaultString("256MB")
 
+  val SKEW_JOIN_OPTIMIZE_FORCE =
+    buildConf("spark.sql.adaptive.skewJoin.optimizeJoinForce.enabled")
+      .doc("When using OptimizeSkewedJoin rule, it may result in extra shuffles, which may" +
+        "cause less cost than OptimizeSkewedJoin rule. Provide an option to still use " +
+        "OptimizeSkewedJoin rule.")
+      .version("3.0.0")
+      .booleanConf
+      .createWithDefault(false)
+
   val NON_EMPTY_PARTITION_RATIO_FOR_BROADCAST_JOIN =
     buildConf("spark.sql.adaptive.nonEmptyPartitionRatioForBroadcastJoin")
       .internal()
