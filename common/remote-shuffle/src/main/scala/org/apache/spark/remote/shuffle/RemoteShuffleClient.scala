@@ -99,8 +99,10 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
 
   private def sendHeartbeat(appId: String, appAttemptId: Int): Unit = {
     try {
-    val newClient = checkAndCreateNewClient(client);
-      newClient.send(
+      if (!client.isActive) {
+        connection()
+      }
+      client.send(
         new RemoteShuffleDriverHeartbeat(
           appId,
           appAttemptId,
@@ -111,17 +113,6 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
     } catch {
       case e: Exception => e.printStackTrace()
     }
-  }
-
-  def checkAndCreateNewClient(client: TransportClient): TransportClient = {
-    if (!client.isActive) {
-      try {
-       return clientFactory.createClient(masterHost, masterPort)
-      } catch {
-        case e: Exception =>
-          logger.warn("check and create a new client occurs an error:", e.getCause)
-      }
-    return client
   }
 
   def getShufflePushMergerLocations(
