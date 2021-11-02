@@ -43,7 +43,7 @@ public class RemoteShuffleMasterHandler {
     private TransportServer server;
     private TransportClientFactory clientFactory;
 
-    private DB db;
+    public DB db;
     private static final LevelDBProvider.StoreVersion CURRENT_VERSION = new LevelDBProvider.StoreVersion(1, 0);
     private static final ObjectMapper mapper = new ObjectMapper();
     private final long applicationExpireTimeout;
@@ -62,10 +62,10 @@ public class RemoteShuffleMasterHandler {
     public final CopyOnWriteArraySet<WorkerInfo> busyWorkers = new CopyOnWriteArraySet<>();
 
     public final ConcurrentHashMap<String, RunningApplication> runningApplicationMap = new ConcurrentHashMap<>();
-    private static final String RUNNING_APP_PREFIX = "RunningApplication";
-    private static final String WORKERS_PREFIX = "Workers";
-    private static final String BLACK_WORKERS_PREFIX = "BlackWorkers";
-    private static final String BUSY_WORKERS_PREFIX = "BusyWorkers";
+    public static final String RUNNING_APP_PREFIX = "RunningApplication";
+    public static final String WORKERS_PREFIX = "Workers";
+    public static final String BLACK_WORKERS_PREFIX = "BlackWorkers";
+    public static final String BUSY_WORKERS_PREFIX = "BusyWorkers";
 
     public RemoteShuffleMasterHandler(String host, int port, TransportConf conf) throws IOException {
         this.host = host;
@@ -86,10 +86,10 @@ public class RemoteShuffleMasterHandler {
         }
     }
 
-    private void reloadRemoteMasterStateFromDB(DB db) throws IOException {
+    public void reloadRemoteMasterStateFromDB(DB db) throws IOException {
         if (db != null) {
             DBIterator itr = db.iterator();
-            while (itr.hasNext()) {
+            for (itr.seekToFirst(); itr.hasNext();) {
                 Map.Entry<byte[], byte[]> e = itr.next();
                 String key = new String(e.getKey(), StandardCharsets.UTF_8);
                 String keyType = getDBType(key);
@@ -98,24 +98,30 @@ public class RemoteShuffleMasterHandler {
                         String appId = parseDbKey(key);
                         logger.info("Reloading registered runningApp: " +  appId);
                         RunningApplication runningApplication = mapper.readValue(e.getValue(), RunningApplication.class);
+                        runningApplication.getWorkerInfos().forEach(worker -> {
+                            worker.setClientFactory(clientFactory);
+                        });
                         runningApplicationMap.put(appId, runningApplication);
                         break;
                     case WORKERS_PREFIX:
                         String address = parseDbKey(key);
                         logger.info("Reloading registered worker: " +  address);
                         WorkerInfo workerInfo = mapper.readValue(e.getValue(), WorkerInfo.class);
+                        workerInfo.setClientFactory(clientFactory);
                         workersMap.put(address, workerInfo);
                         break;
                     case BLACK_WORKERS_PREFIX:
                         String blackWorker = parseDbKey(key);
                         logger.info("Reloading registered blackWorker: " + blackWorker);
                         WorkerInfo blackWorkerInfo = mapper.readValue(e.getValue(), WorkerInfo.class);
+                        blackWorkerInfo.setClientFactory(clientFactory);
                         blackWorkers.add(blackWorkerInfo);
                         break;
                     case BUSY_WORKERS_PREFIX:
                         String busyWorker = parseDbKey(key);
                         logger.info("Reloading registered busyWorker: " + busyWorker);
                         WorkerInfo busyWorkerInfo = mapper.readValue(e.getValue(), WorkerInfo.class);
+                        busyWorkerInfo.setClientFactory(clientFactory);
                         busyWorkers.add(busyWorkerInfo);
                         break;
                     default:
@@ -207,6 +213,7 @@ public class RemoteShuffleMasterHandler {
     }
 
     public void stop() {
+        logger.info("Remote master server is stopping");
         if (server != null) {
             server.close();
             server = null;
@@ -214,6 +221,13 @@ public class RemoteShuffleMasterHandler {
         if (transportContext != null) {
             transportContext.close();
             transportContext = null;
+        }
+        if (db != null) {
+            try {
+                db.close();
+            } catch (IOException e) {
+                logger.error("levelDB encountered an error during shutdown:", e.getCause());
+            }
         }
     }
 
@@ -240,7 +254,7 @@ public class RemoteShuffleMasterHandler {
     }
 
 
-    private class MasterRpcHandler extends RpcHandler {
+    public class MasterRpcHandler extends RpcHandler {
 
         @Override
         public void receive(TransportClient client, ByteBuffer message, RpcResponseCallback callback) {
@@ -381,6 +395,9 @@ public class RemoteShuffleMasterHandler {
         private Set<WorkerInfo> workerInfos = new HashSet<>();
         private long latestHeartbeatTime;
         private AtomicBoolean alive;
+
+        public RunningApplication() {
+        }
 
         public RunningApplication(String appId, int attemptId) {
             this.appId = appId;

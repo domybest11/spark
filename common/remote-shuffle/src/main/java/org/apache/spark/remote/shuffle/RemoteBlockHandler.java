@@ -200,7 +200,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
           List<String> localDirs = localMergeDirs.remove(appKey);
             if (!localDirs.isEmpty()) {
                 mergedDirCleaner.execute(() ->
-                        deleteExecutorDirs(localDirs));
+                        deleteExecutorDirs(localDirs, appKey));
             }
         } else if (msgObj instanceof RegisterExecutor) {
             final Timer.Context responseDelayContext =
@@ -224,18 +224,24 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         }
     }
 
-    void deleteExecutorDirs(List<String> localDirs) {
+    void deleteExecutorDirs(List<String> localDirs, String appAttempt) {
         Path[] dirs = localDirs.stream().map(dir -> Paths.get(dir)).toArray(Path[]::new);
         for (Path localDir : dirs) {
             try {
-                if (Files.exists(localDir)) {
+                if (Files.exists(localDir)
+                        && checkDeleteDirs(localDir.toAbsolutePath().toString(), appAttempt)) {
                     JavaUtils.deleteRecursively(localDir.toFile());
-                    logger.debug("Successfully cleaned up directory: {}", localDir);
+                    logger.info("Successfully cleaned up directory: {}", localDir);
                 }
             } catch (Exception e) {
                 logger.error("Failed to delete directory: {}", localDir, e);
             }
         }
+    }
+
+    public Boolean checkDeleteDirs(String path, String appAttempt) {
+        return !StringUtils.isBlank(path) && !StringUtils.isBlank(appAttempt)
+                && path.endsWith(appAttempt) ;
     }
 
     @Override
@@ -337,6 +343,9 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             List<RunningStage> currentRunningStages = new ArrayList<>();
             appStageMap.values().forEach(stageMap-> currentRunningStages.addAll(stageMap.values()));
             logger.info("worker send heartbeat");
+            if (!client.isActive()) {
+                connection();
+            }
             client.send(
                     new RemoteShuffleWorkerHeartbeat(
                             localHost,
@@ -345,6 +354,18 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                             "0.0",
                             currentRunningStages.toArray(new RunningStage[0])).toByteBuffer()
             );
+        }
+    }
+
+    public void connection() {
+        TransportContext context = new TransportContext(
+                transportConf, new NoOpRpcHandler(), true, true);
+        List<TransportClientBootstrap> bootstraps = Lists.newArrayList();
+        clientFactory = context.createClientFactory(bootstraps);
+        try {
+            client = clientFactory.createClient(masterHost, masterPort);
+        } catch (Exception e) {
+          logger.warn("create new client orrcus an new error: ", e.getCause());
         }
     }
 

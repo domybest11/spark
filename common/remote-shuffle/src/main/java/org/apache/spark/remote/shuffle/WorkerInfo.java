@@ -13,8 +13,8 @@ import java.util.Objects;
 
 
 public class WorkerInfo {
-    private static final Logger logger = LoggerFactory.getLogger(WorkerInfo.class);
 
+    private static final Logger logger = LoggerFactory.getLogger(WorkerInfo.class);
     private String host;
     private int port;
     private long latestHeartbeatTime;
@@ -22,13 +22,18 @@ public class WorkerInfo {
 
     private TransportClientFactory clientFactory;
 
-
+    public WorkerInfo() {
+    }
 
     public WorkerInfo(TransportClientFactory clientFactory, String host, int port) {
         this.host = host;
         this.port = port;
         this.clientFactory = clientFactory;
         this.latestHeartbeatTime = System.currentTimeMillis();
+    }
+
+    public void setClientFactory(TransportClientFactory clientFactory) {
+        this.clientFactory = clientFactory;
     }
 
     public void cleanApplication(String applicationId, int attemptId) {
@@ -41,6 +46,10 @@ public class WorkerInfo {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+    }
+
+    public void setHost(String host) {
+        this.host = host;
     }
 
     public String getHost() {
