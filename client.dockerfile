@@ -64,11 +64,10 @@ RUN tar zxf /var/tmp/spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz -C /data/src/
     && ln -sfn /data/src/spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8 /data/service/spark3.1
 
 # install kerberos tools
-RUN curl http://10.70.82.16:8000/hadoop/krb5.conf -o /etc/krb5.conf \
-    && rm -f /var/tmp/*.tar.gz
+RUN curl http://10.70.82.16:8000/hadoop/krb5.conf -o /etc/krb5.conf
 
 # Clear *.tar.gz
-RUN rm -f /var/tmp/*.tar.gz
+RUN rm -rf /var/tmp/*
 
 # env
 RUN curl http://10.70.82.16:8000/hadoop/hdfs-env.sh -o /etc/profile.d/hdfs-env.sh   \
