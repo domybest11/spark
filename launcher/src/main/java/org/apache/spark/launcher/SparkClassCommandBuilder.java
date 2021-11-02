@@ -90,7 +90,7 @@ class SparkClassCommandBuilder extends AbstractCommandBuilder {
         extraClassPath = getenv("SPARK_DAEMON_CLASSPATH");
         memKey = "SPARK_DAEMON_MEMORY";
         break;
-      case "org.apache.spark.remote.shuffle.RemoteShuffleMasterHandler":
+      case "org.apache.spark.deploy.shuffle.RemoteShuffleMaster":
         javaOptsKeys.add("SPARK_REMOTE_MASTER_OPTS");
         memKey = "SPARK_REMOTE_MASTER_MEMORY";
         break;

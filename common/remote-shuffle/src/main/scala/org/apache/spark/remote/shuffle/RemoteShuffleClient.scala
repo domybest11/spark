@@ -22,9 +22,8 @@ import java.util.concurrent.{Executors, TimeUnit}
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder
 import org.slf4j.LoggerFactory
-
 import org.apache.spark.network.TransportContext
-import org.apache.spark.network.client.{RpcResponseCallback, TransportClient, TransportClientBootstrap}
+import org.apache.spark.network.client.{RpcResponseCallback, TransportClient, TransportClientBootstrap, TransportClientFactory}
 import org.apache.spark.network.server.NoOpRpcHandler
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage
 import org.apache.spark.network.shuffle.protocol.remote.{GetPushMergerLocations, MergerWorkers, RegisterApplication, RemoteShuffleDriverHeartbeat, UnregisterApplication}
@@ -35,6 +34,8 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
 
   private var client: TransportClient = _
   private var transportContext: TransportContext = _
+  private var clientFactory: TransportClientFactory = _
+
   private lazy val heartbeatThread = Executors.newSingleThreadScheduledExecutor(
     new ThreadFactoryBuilder()
       .setDaemon(true)
@@ -50,8 +51,8 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
   private def connection(): Unit = {
     val bootstraps = new util.ArrayList[TransportClientBootstrap]()
     transportContext = new TransportContext(transportConf, new NoOpRpcHandler, false, true)
-    client = transportContext.createClientFactory(bootstraps)
-      .createClient(masterHost, masterPort)
+    clientFactory = transportContext.createClientFactory(bootstraps)
+    client = clientFactory.createClient(masterHost, masterPort)
   }
 
   def stop(): Unit = {
@@ -98,7 +99,8 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
 
   private def sendHeartbeat(appId: String, appAttemptId: Int): Unit = {
     try {
-      client.send(
+    val newClient = checkAndCreateNewClient(client);
+      newClient.send(
         new RemoteShuffleDriverHeartbeat(
           appId,
           appAttemptId,
@@ -109,6 +111,17 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
     } catch {
       case e: Exception => e.printStackTrace()
     }
+  }
+
+  def checkAndCreateNewClient(client: TransportClient): TransportClient = {
+    if (!client.isActive) {
+      try {
+       return clientFactory.createClient(masterHost, masterPort)
+      } catch {
+        case e: Exception =>
+          logger.warn("check and create a new client occurs an error:", e.getCause)
+      }
+    return client
   }
 
   def getShufflePushMergerLocations(

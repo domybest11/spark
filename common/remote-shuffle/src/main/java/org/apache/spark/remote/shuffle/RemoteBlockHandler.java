@@ -343,7 +343,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             List<RunningStage> currentRunningStages = new ArrayList<>();
             appStageMap.values().forEach(stageMap-> currentRunningStages.addAll(stageMap.values()));
             logger.info("worker send heartbeat");
-            client.send(
+            TransportClient newClient = checkAndCreateNewClient(client);
+            newClient.send(
                     new RemoteShuffleWorkerHeartbeat(
                             localHost,
                             localPort,
@@ -352,6 +353,18 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                             currentRunningStages.toArray(new RunningStage[0])).toByteBuffer()
             );
         }
+    }
+
+
+    public TransportClient checkAndCreateNewClient(TransportClient client) {
+        if (!client.isActive()) {
+            try {
+                return clientFactory.createClient(masterHost, masterPort);
+            } catch (Exception e) {
+                logger.warn("check and create a new client occurs an error:", e.getCause());
+            }
+        }
+        return client;
     }
 
     private class PressureMonitor implements Runnable {
