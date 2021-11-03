@@ -72,6 +72,7 @@ public class WorkerInfo {
         return pressure;
     }
 
+    // TODO: 2021/11/1
     public void setPressure(WorkerPressure pressure) {
         this.pressure = pressure;
     }

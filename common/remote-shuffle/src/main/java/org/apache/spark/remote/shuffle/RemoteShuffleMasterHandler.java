@@ -2,7 +2,6 @@ package org.apache.spark.remote.shuffle;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.spark.network.TransportContext;
 import org.apache.spark.network.client.RpcResponseCallback;
@@ -12,9 +11,7 @@ import org.apache.spark.network.server.RpcHandler;
 import org.apache.spark.network.server.StreamManager;
 import org.apache.spark.network.server.TransportServer;
 import org.apache.spark.network.server.TransportServerBootstrap;
-import org.apache.spark.network.shuffle.ExternalShuffleBlockResolver;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
-import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.remote.*;
 import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.LevelDBProvider;
@@ -284,7 +281,7 @@ public class RemoteShuffleMasterHandler {
                 int port = workHeartbeat.getPort();
                 String address = host + ":" + port;
                 RunningStage[] runningStages = workHeartbeat.getRunningStages();
-                WorkerPressure pressure = new WorkerPressure(workHeartbeat.getPressure());
+                WorkerPressure pressure = new WorkerPressure(workHeartbeat.getWorkerMetric());
                 WorkerInfo workerInfo = workersMap.computeIfAbsent(address, w -> {
                     WorkerInfo worker = new WorkerInfo(clientFactory, host, port);
                     saveMasterStateDB(address, worker, WORKERS_PREFIX);
@@ -292,10 +289,6 @@ public class RemoteShuffleMasterHandler {
                 });
                 workerInfo.setLatestHeartbeatTime(workHeartbeat.getHeartbeatTimeMs());
                 workerInfo.setPressure(pressure);
-                // TODO: 2021/9/22 根据pressure维护work列, 部分不健康的节点从可用节点
-                if ( pressure != null) {
-
-                }
                 Arrays.stream(runningStages).forEach(runningStage -> {
                     String appId = runningStage.getApplicationId();
                     int attemptId = runningStage.getAttemptId();
@@ -375,9 +368,9 @@ public class RemoteShuffleMasterHandler {
 
         private List<WorkerInfo> getMergerWorkers(String appId, int attempt, int shuffleId, int numPartitions, int tasksPerExecutor, int maxExecutors) {
             int numMergersDesired = Math.min(Math.max(1, (int)Math.ceil(numPartitions * 1.0 / tasksPerExecutor)), maxExecutors);
+            // TODO: 2021/11/1 节点选择逻辑实现
             List<WorkerInfo> workerInfos = workersMap.values().stream().filter(
-                    workerInfo ->
-                            !blackWorkers.contains(workerInfo) && !busyWorkers.contains(workerInfo)
+                    workerInfo -> workerInfo.getPressure().available()
             ).collect(Collectors.toList());
             int capacity = workerInfos.size();
           if (numMergersDesired <= capacity) {
@@ -440,6 +433,9 @@ public class RemoteShuffleMasterHandler {
             }
         }
     }
+
+
+
 
 }
 
