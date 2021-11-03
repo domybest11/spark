@@ -9,14 +9,14 @@ public class RemoteShuffleWorkerHeartbeat extends BlockTransferMessage {
     private final String host;
     private final int port;
     private final long heartbeatTimeMs;
-    private final String pressure;
+    private final long[] workerMetrics;
     private final RunningStage[] runningStages;
 
-    public RemoteShuffleWorkerHeartbeat(String host, int port, long heartbeatTimeMs, String pressure, RunningStage[] runningStages) {
+    public RemoteShuffleWorkerHeartbeat(String host, int port, long heartbeatTimeMs, long[] workerMetrics, RunningStage[] runningStages) {
         this.host = host;
         this.port = port;
         this.heartbeatTimeMs = heartbeatTimeMs;
-        this.pressure = pressure;
+        this.workerMetrics = workerMetrics;
         this.runningStages = runningStages;
     }
 
@@ -28,8 +28,8 @@ public class RemoteShuffleWorkerHeartbeat extends BlockTransferMessage {
         return port;
     }
 
-    public String getPressure() {
-        return pressure;
+    public long[] getWorkerMetric() {
+        return workerMetrics;
     }
 
     public long getHeartbeatTimeMs() {
@@ -50,7 +50,7 @@ public class RemoteShuffleWorkerHeartbeat extends BlockTransferMessage {
         return Encoders.Strings.encodedLength(host)
                 + 4 // port
                 + 8 // heartbeatTimeoutMs
-                + Encoders.Strings.encodedLength(pressure)
+                + Encoders.LongArrays.encodedLength(workerMetrics)
                 + RunningStages.encodedLength(runningStages);
     }
 
@@ -59,7 +59,7 @@ public class RemoteShuffleWorkerHeartbeat extends BlockTransferMessage {
         Encoders.Strings.encode(buf, host);
         buf.writeInt(port);
         buf.writeLong(heartbeatTimeMs);
-        Encoders.Strings.encode(buf, pressure);
+        Encoders.LongArrays.encode(buf, workerMetrics);
         RunningStages.encode(buf, runningStages);
     }
 
@@ -67,9 +67,9 @@ public class RemoteShuffleWorkerHeartbeat extends BlockTransferMessage {
         String host = Encoders.Strings.decode(buf);
         int port = buf.readInt();
         long heartbeatTimeMs = buf.readLong();
-        String pressure = Encoders.Strings.decode(buf);
+        long[] workerMetrics = Encoders.LongArrays.decode(buf);
         RunningStage[] runningStages = RunningStages.decode(buf);
-        return new RemoteShuffleWorkerHeartbeat(host, port, heartbeatTimeMs, pressure, runningStages);
+        return new RemoteShuffleWorkerHeartbeat(host, port, heartbeatTimeMs, workerMetrics, runningStages);
     }
 
 
