@@ -3170,6 +3170,13 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
+  val RADICAL_JOIN_SIZE_ESTIMATE_ENABLED =
+    buildConf("spark.sql.radicalJoinSizeEstimate.enabled")
+      .doc("When true, Spark will use the sum of children as estimate join size, " +
+        "instead of product of children, which is huge sometimes")
+      .booleanConf
+      .createWithDefault(false)
+
   /**
    * Holds information about keys that have been deprecated.
    *
@@ -3851,6 +3858,8 @@ class SQLConf extends Serializable with Logging {
   def mirrorExecute: Boolean = getConf(SQLConf.MIRROR_EXECUTE)
 
   def partitionStatsEnabled: Boolean = getConf(SQLConf.PARTITION_STATS_ENABLED)
+
+  def radicalJoinSizeEstimate: Boolean = getConf(SQLConf.RADICAL_JOIN_SIZE_ESTIMATE_ENABLED)
 
   /** ********************** SQLConf functionality methods ************ */
 

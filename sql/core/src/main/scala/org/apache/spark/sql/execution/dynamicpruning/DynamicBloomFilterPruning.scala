@@ -89,6 +89,8 @@ object DynamicBloomFilterPruning extends Rule[LogicalPlan]
       Seq(BuildBloomFilter(filteringKey, expectedNumItems.toLong, distinctCnt.isEmpty, 0, 0)
         .toAggregateExpression()).map(e => Alias(e, e.sql)()), coalesce)
 
+    logInfo(s"Insert dynamic bloom filter successfully, small rowCount $rowCount " +
+      s"pruningKey ${pruningKey.sql} filteringKey ${filteringKey.sql} ")
     Filter(
       DynamicBloomFilterPruningSubquery(
         pruningKey,
