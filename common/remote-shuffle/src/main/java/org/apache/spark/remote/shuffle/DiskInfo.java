@@ -28,6 +28,10 @@ public class DiskInfo {
         return path;
     }
 
+    public String getDiskName() {
+        return diskName;
+    }
+
     public DiskType getType() {
         return type;
     }
@@ -36,9 +40,7 @@ public class DiskInfo {
         return sampleTime;
     }
 
-    public static class DiskMetrics implements MetricSet {
-        private final Map<String, Metric> allMetrics;
-
+    public static class DiskMetrics{
         public final IOGauge diskReadsCompleted = new IOGauge();
         public final IOGauge diskWritesCompleted = new IOGauge();
         public final IOUtilsGauge diskIOTime = new IOUtilsGauge();
@@ -47,20 +49,20 @@ public class DiskInfo {
         public final Meter diskWrite = new Meter();
         public final Meter diskUtils = new Meter();
 
-        public DiskMetrics() {
-            allMetrics = new HashMap<>();
-            allMetrics.put("read", diskRead);
-            allMetrics.put("read_5min", (Gauge<Long>) () -> (long)diskRead.getFiveMinuteRate());
-            allMetrics.put("write", diskWrite);
-            allMetrics.put("write_5min", (Gauge<Long>) () -> (long)diskWrite.getFiveMinuteRate());
-            allMetrics.put("utils", diskUtils);
-            allMetrics.put("utils_5min", (Gauge<Long>) () -> (long)diskUtils.getFiveMinuteRate());
-        }
+//        public DiskMetrics() {
+//            allMetrics = new HashMap<>();
+//            allMetrics.put("read", diskRead);
+//            allMetrics.put("read_5min", (Gauge<Long>) () -> (long)diskRead.getFiveMinuteRate());
+//            allMetrics.put("write", diskWrite);
+//            allMetrics.put("write_5min", (Gauge<Long>) () -> (long)diskWrite.getFiveMinuteRate());
+//            allMetrics.put("utils", diskUtils);
+//            allMetrics.put("utils_5min", (Gauge<Long>) () -> (long)diskUtils.getFiveMinuteRate());
+//        }
 
-        @Override
-        public Map<String, Metric> getMetrics() {
-            return allMetrics;
-        }
+//        @Override
+//        public Map<String, Metric> getMetrics() {
+//            return allMetrics;
+//        }
 
         public static String[] metricGetters = {
                 "read",

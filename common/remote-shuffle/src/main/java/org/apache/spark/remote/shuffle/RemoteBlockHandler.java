@@ -34,6 +34,9 @@ import org.apache.spark.network.shuffle.protocol.RegisterExecutor;
 import org.apache.spark.network.shuffle.protocol.remote.*;
 import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.TransportConf;
+import org.apache.spark.remote.shuffle.metric.IOStatusTracker;
+import org.apache.spark.remote.shuffle.metric.NetworkGauge;
+import org.apache.spark.remote.shuffle.metric.NetworkTracker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -97,6 +100,15 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         clientFactory = context.createClientFactory(bootstraps);
         try {
             diskManager = new DiskManager(transportConf);
+            ScheduledExecutorService metricsSampleThread = Executors.newSingleThreadScheduledExecutor(
+                    new ThreadFactoryBuilder()
+                            .setDaemon(true)
+                            .setNameFormat("worker-metrics-sample")
+                            .build());
+            metricsSampleThread.scheduleAtFixedRate(() -> {
+                NetworkTracker.collectNetworkInfo(workerMetrics);
+                IOStatusTracker.collectIOInfo(diskManager.workDirs);
+            }, 0, 30, TimeUnit.SECONDS);
             client = clientFactory.createClient(masterHost, masterPort);
             registerRemoteShuffleWorker();
         } catch (InterruptedException e) {
@@ -239,7 +251,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             if (!client.isActive()) {
                 connection();
             }
-
             client.send(
                     new RemoteShuffleWorkerHeartbeat(
                             localHost,
@@ -260,41 +271,54 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         try {
             client = clientFactory.createClient(masterHost, masterPort);
         } catch (Exception e) {
-          logger.warn("create new client orrcus an new error: ", e.getCause());
+            logger.warn("create new client orrcus an new error: ", e.getCause());
         }
     }
 
 
-    public class WorkerMetrics implements MetricSet {
-        private final Map<String, Metric> allMetrics;
+    public class WorkerMetrics {
         OperatingSystemMXBean osmxb = ManagementFactory.getOperatingSystemMXBean();
-        private final Gauge<Long> workerCpuAvailable = () -> (long) osmxb.getAvailableProcessors();
+        // CPU
         private final Gauge<Long> workerCpuLoadAverage = () -> (long) osmxb.getSystemLoadAverage();
-        private final Meter workerNetworkIn = new Meter();
-        private final Meter workerNetworkOut = new Meter();
+        private final Gauge<Long> workerCpuAvailable = () -> (long) osmxb.getAvailableProcessors();
 
+        // Network
+        public final NetworkGauge networkInGauge = new NetworkGauge(4);
+        public final NetworkGauge networkOutGauge = new NetworkGauge(4);
+        public final Meter workerNetworkIn = new Meter();
+        public final Meter workerNetworkOut = new Meter();
+
+        // Connection
         private final Counter workerAliveConnection = new Counter();
 
+//        private WorkerMetrics() {
+//            allMetrics = new HashMap<>();
+//            allMetrics.put("workerCpuLoadAverage", workerCpuLoadAverage);
+//            allMetrics.put("workerCpuAvailable", workerCpuAvailable);
+//            allMetrics.put("workerNetworkIn", workerNetworkIn);
+//            allMetrics.put("workerNetworkOut", workerNetworkOut);
+//            allMetrics.put("workerNetworkIn_5min", (Gauge<Long>) () -> (long) workerNetworkIn.getFiveMinuteRate());
+//            allMetrics.put("workerNetworkOut_5min", (Gauge<Long>) () -> (long) workerNetworkOut.getFiveMinuteRate());
+//            allMetrics.put("workerAliveConnection", workerAliveConnection);
+//        }
 
-        public WorkerMetrics() {
-            allMetrics = new HashMap<>();
-            allMetrics.put("workerCpuLoadAverage", workerCpuLoadAverage);
-            allMetrics.put("workerCpuAvailable", workerCpuAvailable);
-            allMetrics.put("workerNetworkIn", workerNetworkIn);
-            allMetrics.put("workerNetworkOut", workerNetworkOut);
-            allMetrics.put("workerNetworkIn_5min", (Gauge<Double>) workerNetworkIn::getFiveMinuteRate);
-            allMetrics.put("workerNetworkOut_5min", (Gauge<Double>) workerNetworkOut::getFiveMinuteRate);
-            allMetrics.put("workerAliveConnection", workerAliveConnection);
-        }
-
-        @Override
-        public Map<String, Metric> getMetrics() {
-            return allMetrics;
-        }
-
-        private long[] getCurrentMetrics() {
+        public long[] getCurrentMetrics() {
             int diskNums = diskManager.workDirs.length;
             long[] metrics = new long[7 + diskNums * 3 + 1];
+            metrics[0] = workerCpuLoadAverage.getValue();
+            metrics[1] = workerCpuAvailable.getValue();
+            metrics[2] = networkInGauge.getValue();
+            metrics[3] = (long) workerNetworkIn.getFiveMinuteRate();
+            metrics[4] = networkOutGauge.getValue();
+            metrics[5] = (long) workerNetworkOut.getFiveMinuteRate();
+            metrics[6] = workerAliveConnection.getCount();
+            for (int i = 0; i < diskNums; i++) {
+                DiskInfo.DiskMetrics diskMetrics = diskManager.workDirs[i].diskMetrics;
+                metrics[7+i*3] =  (long) diskMetrics.diskRead.getFiveMinuteRate();
+                metrics[8+i*3] =  (long) diskMetrics.diskWrite.getFiveMinuteRate();
+                metrics[9+i*3] =  (long) diskMetrics.diskUtils.getFiveMinuteRate();
+            }
+            metrics[7 + diskNums * 3] = diskNums;
             return metrics;
         }
 

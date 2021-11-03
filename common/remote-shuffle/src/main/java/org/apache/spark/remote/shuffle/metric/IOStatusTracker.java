@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 public class IOStatusTracker {
     public static final Logger LOG = LoggerFactory.getLogger(IOStatusTracker.class);
@@ -24,7 +25,7 @@ public class IOStatusTracker {
         }
     }
 
-    public static void collectIOInfoFromAccess(Map<String, DiskInfo> diskInfoMap) {
+    public static void collectIOInfo(DiskInfo[] diskInfos) {
         try {
             int length = 10 * 1024;
             byte[] bs = new byte[length];
@@ -37,15 +38,16 @@ public class IOStatusTracker {
                 if (line.length() == 0) {
                     continue;
                 }
-                String[] sinfos = line.trim().split("\\s+");
-                String deviceName = sinfos[2];
-                if (!diskInfoMap.containsKey("/dev/" + deviceName)) {
+                String[] infos = line.trim().split("\\s+");
+                String deviceName = infos[2];
+                Stream<DiskInfo> diskInfoStream = Arrays.stream(diskInfos).filter((diskInfo) -> diskInfo.getDiskName().equals("/dev/" + deviceName));
+                if (!diskInfoStream.findFirst().isPresent()) {
                     continue;
                 }
-                long readsCompleted = Long.parseLong(sinfos[3]);
-                long writesCompleted = Long.parseLong(sinfos[7]);
-                long ioTimeMs = Long.parseLong(sinfos[12]);
-                DiskInfo diskInfo = diskInfoMap.get("/dev/" + deviceName);
+                long readsCompleted = Long.parseLong(infos[3]);
+                long writesCompleted = Long.parseLong(infos[7]);
+                long ioTimeMs = Long.parseLong(infos[12]);
+                DiskInfo diskInfo = diskInfoStream.findFirst().get();
                 diskInfo.diskMetrics.diskReadsCompleted.update(readsCompleted, System.currentTimeMillis());
                 diskInfo.diskMetrics.diskWritesCompleted.update(writesCompleted, System.currentTimeMillis());
                 diskInfo.diskMetrics.diskIOTime.update(ioTimeMs, System.currentTimeMillis());
@@ -57,7 +59,6 @@ public class IOStatusTracker {
             LOG.error(e.getMessage());
         }
     }
-
 
 
     public static ConcurrentHashMap collectDiskInfo() {
