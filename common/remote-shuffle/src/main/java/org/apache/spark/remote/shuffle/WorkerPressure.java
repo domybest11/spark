@@ -13,20 +13,20 @@ public class WorkerPressure implements Comparable {
 
 
     /*
-        0:"workerCpuLoadAverage",
-        1:"workerCpuAvailable",
-        2:"workerNetworkIn",
-        3:"workerNetworkIn_5min",
-        4:"workerNetworkOut",
-        5:"workerNetworkOut_5min",
-        6:"workerAliveConnection"
-        7:disk_1:"read",
-        8:disk_1:"write",
-        9:disk_1:"utils"
+        0:"workerCpuLoadAverage",  cpuload (1分钟平均)
+        1:"workerCpuAvailable",    cpu 核数
+        2:"workerNetworkIn",       网卡写入量（多网卡累加值，单位字节）
+        3:"workerNetworkIn_5min",  网卡写入量（多网卡累加值 5分钟均值，单位字节）
+        4:"workerNetworkOut",      网卡写出量（多网卡累加值，单位字节）
+        5:"workerNetworkOut_5min", 网卡写出量（多网卡累加值 5分钟均值，单位字节）
+        6:"workerAliveConnection"  连接到worker进行push的连接数
+        7:disk_1:"read",           磁盘1 读取量（5分钟均值，单位字节）
+        8:disk_1:"write",          磁盘1 写出量 (5分钟均值，单位字节）
+        9:disk_1:"utils"           磁盘1 ioutils  (5分钟均值)
         ...
-        n-4:disk_diskNum:"read",
-        n-3:disk_diskNum:"write",
-        n-2:disk_diskNum:"utils"
+        n-4:disk_diskNum:"read",   磁盘n 读取量（5分钟均值，单位字节）
+        n-3:disk_diskNum:"write",  磁盘n 写出量 (5分钟均值，单位字节）
+        n-2:disk_diskNum:"utils"   磁盘n ioutils  (5分钟均值)
         n-1: diskNum
      */
     public WorkerPressure(long[] workerMetrics) {
