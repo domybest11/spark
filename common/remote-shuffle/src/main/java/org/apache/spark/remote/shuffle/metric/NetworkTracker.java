@@ -26,10 +26,9 @@ public class NetworkTracker {
         }
     }
 
-    public static synchronized void collectNetworkInfo(RemoteBlockHandler.WorkerMetrics workerMetrics) {
+    public static synchronized void collectNetworkInfo(RemoteBlockHandler.WorkerMetrics workerMetrics, int interval) {
         try {
             int length = 10 * 1024;
-            long inSize = 0, outSize = 0;
             byte[] bs = new byte[length];
             randomAccessFile.read(bs, 0, length);
             randomAccessFile.seek(0);
@@ -46,15 +45,15 @@ public class NetworkTracker {
                         || line.startsWith("eth2")
                         || line.startsWith("eth3")) {
                     String[] temp = line.split("\\s+");
-                    inSize += Long.parseLong(temp[1]); // Receive bytes,单位为Byte
-                    outSize += Long.parseLong(temp[9]); // Transmit bytes,单位为Byte
+                    long inSize = Long.parseLong(temp[1]); // Receive bytes,单位为Byte
+                    long outSize = Long.parseLong(temp[9]); // Transmit bytes,单位为Byte
                     workerMetrics.networkInGauge.update(i, inSize, System.currentTimeMillis());
                     workerMetrics.networkOutGauge.update(i, outSize, System.currentTimeMillis());
                     i++;
                 }
             }
-            workerMetrics.workerNetworkIn.mark(workerMetrics.networkInGauge.getValue());
-            workerMetrics.workerNetworkOut.mark(workerMetrics.networkOutGauge.getValue());
+            workerMetrics.workerNetworkIn.mark(workerMetrics.networkInGauge.getValue() * interval);
+            workerMetrics.workerNetworkOut.mark(workerMetrics.networkOutGauge.getValue() * interval);
         } catch (Exception e) {
             LOG.error(e.getMessage());
         }

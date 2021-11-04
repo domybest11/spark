@@ -29,7 +29,9 @@ public class NetworkGauge implements Gauge<Long> {
         long value = 0L;
         for (int i = 0; i < pre.length; i++) {
             if (pre[i] != 0) {
-                value += ((cur[i] - pre[i]) / (curTime[i] - pre[i]) * 1000);
+                if ((cur[i] - pre[i]) != 0) {
+                    value += ((cur[i] - pre[i]) * 1000 / (curTime[i] - preTime[i]));
+                }
             }
         }
         return value * 8 / 1000000;

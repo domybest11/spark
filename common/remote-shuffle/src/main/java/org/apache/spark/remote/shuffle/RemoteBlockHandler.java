@@ -100,15 +100,16 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         clientFactory = context.createClientFactory(bootstraps);
         try {
             diskManager = new DiskManager(transportConf);
+            int monitorInterval = (int) JavaUtils.timeStringAsSec(transportConf.get("spark.shuffle.remote.worker.monitor", "30s"));
             ScheduledExecutorService metricsSampleThread = Executors.newSingleThreadScheduledExecutor(
                     new ThreadFactoryBuilder()
                             .setDaemon(true)
                             .setNameFormat("worker-metrics-sample")
                             .build());
             metricsSampleThread.scheduleAtFixedRate(() -> {
-                NetworkTracker.collectNetworkInfo(workerMetrics);
-                IOStatusTracker.collectIOInfo(diskManager.workDirs);
-            }, 0, 30, TimeUnit.SECONDS);
+                NetworkTracker.collectNetworkInfo(workerMetrics, monitorInterval);
+                IOStatusTracker.collectIOInfo(diskManager.workDirs, monitorInterval);
+            }, 0, monitorInterval, TimeUnit.SECONDS);
             client = clientFactory.createClient(masterHost, masterPort);
             registerRemoteShuffleWorker();
         } catch (InterruptedException e) {
@@ -275,7 +276,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         }
     }
 
-
     public class WorkerMetrics {
         OperatingSystemMXBean osmxb = ManagementFactory.getOperatingSystemMXBean();
         // CPU
@@ -291,20 +291,9 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         // Connection
         private final Counter workerAliveConnection = new Counter();
 
-//        private WorkerMetrics() {
-//            allMetrics = new HashMap<>();
-//            allMetrics.put("workerCpuLoadAverage", workerCpuLoadAverage);
-//            allMetrics.put("workerCpuAvailable", workerCpuAvailable);
-//            allMetrics.put("workerNetworkIn", workerNetworkIn);
-//            allMetrics.put("workerNetworkOut", workerNetworkOut);
-//            allMetrics.put("workerNetworkIn_5min", (Gauge<Long>) () -> (long) workerNetworkIn.getFiveMinuteRate());
-//            allMetrics.put("workerNetworkOut_5min", (Gauge<Long>) () -> (long) workerNetworkOut.getFiveMinuteRate());
-//            allMetrics.put("workerAliveConnection", workerAliveConnection);
-//        }
-
         public long[] getCurrentMetrics() {
             int diskNums = diskManager.workDirs.length;
-            long[] metrics = new long[7 + diskNums * 3 + 1];
+            long[] metrics = new long[7 + diskNums * 6 + 1];
             metrics[0] = workerCpuLoadAverage.getValue();
             metrics[1] = workerCpuAvailable.getValue();
             metrics[2] = networkInGauge.getValue();
@@ -314,11 +303,14 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             metrics[6] = workerAliveConnection.getCount();
             for (int i = 0; i < diskNums; i++) {
                 DiskInfo.DiskMetrics diskMetrics = diskManager.workDirs[i].diskMetrics;
-                metrics[7+i*3] =  (long) diskMetrics.diskRead.getFiveMinuteRate();
-                metrics[8+i*3] =  (long) diskMetrics.diskWrite.getFiveMinuteRate();
-                metrics[9+i*3] =  (long) diskMetrics.diskUtils.getFiveMinuteRate();
+                metrics[7 + i * 6] = diskMetrics.diskReadsCompleted.getValue();
+                metrics[8 + i * 6] = (long) diskMetrics.diskRead.getFiveMinuteRate();
+                metrics[9 + i * 6] = diskMetrics.diskWritesCompleted.getValue();
+                metrics[10 + i * 6] = (long) diskMetrics.diskWrite.getFiveMinuteRate();
+                metrics[11 + i * 6] = diskMetrics.diskIOTime.getValue();
+                metrics[12 + i * 6] = (long) diskMetrics.diskUtils.getFiveMinuteRate();
             }
-            metrics[7 + diskNums * 3] = diskNums;
+            metrics[7 + diskNums * 6] = diskNums;
             return metrics;
         }
 
@@ -332,5 +324,26 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 "workerAliveConnection"
         };
     }
+
+//    public static void main(String[] args) throws Exception {
+//        WorkerMetrics workerMetrics = new WorkerMetrics();
+//        DiskInfo diskInfo = new DiskInfo("sdb","/mnt/storage00",DiskType.SSD);
+//        DiskInfo[] diskInfos = {diskInfo};
+//        while (true) {
+////            NetworkTracker.collectNetworkInfo(workerMetrics);
+//            IOStatusTracker.collectIOInfo(diskInfos);
+//            System.out.println("networkInGauge:"+workerMetrics.networkInGauge.getValue());
+//            System.out.println("workerNetworkIn1:"+workerMetrics.workerNetworkIn.getOneMinuteRate());
+//            System.out.println("networkOutGauge:"+workerMetrics.networkOutGauge.getValue());
+//            System.out.println("workerNetworkOut1:"+workerMetrics.workerNetworkOut.getOneMinuteRate());
+//            System.out.println("write:"+diskInfo.diskMetrics.diskWritesCompleted.getValue());
+//            System.out.println("write1:"+diskInfo.diskMetrics.diskWrite.getOneMinuteRate());
+//            System.out.println("read:"+diskInfo.diskMetrics.diskReadsCompleted.getValue());
+//            System.out.println("read1:"+diskInfo.diskMetrics.diskRead.getOneMinuteRate());
+//            System.out.println("ioUtils:"+diskInfo.diskMetrics.diskIOTime.getValue());
+//            System.out.println("ioUtils1:"+diskInfo.diskMetrics.diskUtils.getOneMinuteRate());
+//            Thread.sleep(30*1000);
+//        }
+//    }
 
 }

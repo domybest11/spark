@@ -9,6 +9,7 @@ public enum DiskType {
         switch (type.toUpperCase(Locale.ROOT)) {
             case "SSD" : return SSD;
             case "NVME" : return NVME;
+            case "0" : return SSD;
             default: return HDD;
         }
     }

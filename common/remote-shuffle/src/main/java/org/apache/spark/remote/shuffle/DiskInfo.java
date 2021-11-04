@@ -12,17 +12,14 @@ public class DiskInfo {
     private String diskName;
     private DiskType type;
     public DiskMetrics diskMetrics;
-    private long sampleTime;
 
-    public DiskInfo(String path, DiskType type) {
+    public DiskInfo(String diskName, String path, DiskType diskType) {
+        this.diskName = diskName;
         this.path = path;
-        this.type = type;
+        this.type = diskType;
         diskMetrics = new DiskMetrics();
     }
 
-    public void setSampleTime(long sampleTime) {
-        this.sampleTime = sampleTime;
-    }
 
     public String getPath() {
         return path;
@@ -36,9 +33,6 @@ public class DiskInfo {
         return type;
     }
 
-    public long getSampleTime() {
-        return sampleTime;
-    }
 
     public static class DiskMetrics{
         public final IOGauge diskReadsCompleted = new IOGauge();
@@ -66,8 +60,11 @@ public class DiskInfo {
 
         public static String[] metricGetters = {
                 "read",
+                "read_5min",
                 "write",
-                "utils"
+                "write_5min",
+                "utils",
+                "utils_5min"
         };
     }
 }
