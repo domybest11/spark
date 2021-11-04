@@ -17,8 +17,10 @@ public class IOGauge implements Gauge<Long> {
 
     @Override
     public Long getValue() {
-        if (cur != 0) {
-            return (cur - pre) / (curTime - preTime) * 1000;
+        if (pre != 0) {
+            if ((cur - pre) != 0) {
+                return (cur - pre) * 1000 / (curTime - preTime) ;
+            }
         }
         return 0L;
     }

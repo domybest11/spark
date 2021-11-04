@@ -1,6 +1,5 @@
 package org.apache.spark.remote.shuffle;
 
-import com.codahale.metrics.Meter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.spark.network.util.JavaUtils;
@@ -8,19 +7,13 @@ import org.apache.spark.network.util.TransportConf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.*;
 
-import static org.apache.spark.remote.shuffle.DiskInfo.DiskMetrics.metricGetters;
 
 public class DiskManager {
     private static final Logger logger = LoggerFactory.getLogger(RemoteBlockHandler.class);
@@ -30,13 +23,6 @@ public class DiskManager {
     // key: appid_attempt  value: mergePath
     private final ConcurrentHashMap<String, List<String>> localMergeDirs = new ConcurrentHashMap<>();
 
-    private final ScheduledExecutorService pressureMonitorThread =
-            Executors.newSingleThreadScheduledExecutor(
-                    new ThreadFactoryBuilder()
-                            .setDaemon(true)
-                            .setNameFormat("pressure-monitor")
-                            .build());
-
     private final ExecutorService mergedDirCleaner = Executors.newSingleThreadExecutor(
             new ThreadFactoryBuilder()
                     .setDaemon(true)
@@ -45,27 +31,35 @@ public class DiskManager {
 
     public DiskManager(TransportConf conf) throws IOException {
         this.conf = conf;
-        long monitorInterval = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.worker.monitor", "60s"));
-        this.subDirsPerLocalDir = conf.getInt("spark.diskStore.subDirectories",64);
-        String dirConf = conf.get("spark.shuffle.remote.worker.dirs", "");
-        if (StringUtils.isBlank(dirConf)) {
-            throw new IOException("Remote shuffle worker dirs is empty");
-        } else {
-            String[] dirs = dirConf.split(",");
-            workDirs = new DiskInfo[dirs.length];
-            for(int i=0; i < dirs.length; i++) {
-                if (dirs[i].contains(":")) {
-                    String[] arr = dirs[i].split(":");
-                    String path = arr[0];
-                    DiskType diskType = DiskType.toDiskType(arr[1]);
-                    workDirs[i] = new DiskInfo(path, diskType);
-                } else {
-                    workDirs[i] = new DiskInfo(dirs[i], DiskType.HDD);
+        this.subDirsPerLocalDir = conf.getInt("spark.diskStore.subDirectories", 64);
+        ProcessBuilder diskTypeProcess = new ProcessBuilder().command(
+                "lsblk", "-d", "-o", "name,rota");
+        Process proc = diskTypeProcess.start();
+        Map<String, DiskType> diskTypeMap = new HashMap<>();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (line.startsWith("s")) {
+                String[] diskInfo = line.split("\\s+");
+                if (diskInfo.length == 2) {
+                    String deviceName = diskInfo[0];
+                    DiskType diskType = DiskType.toDiskType(diskInfo[1]);
+                    diskTypeMap.put(deviceName, diskType);
                 }
             }
         }
-        pressureMonitorThread.scheduleAtFixedRate(
-                new IOMonitor(), 10, monitorInterval, TimeUnit.SECONDS);
+        reader = new BufferedReader(new FileReader("/etc/mtab"));
+        List<DiskInfo> diskInfos = new ArrayList<>();
+        while ((line = reader.readLine()) != null) {
+            String[] sinfos = line.trim().split("\\s+");
+            String deviceName = sinfos[0].replace("/dev/", "");
+            String mountPoint = sinfos[1];
+            if (mountPoint.contains("/mnt/storage")) {
+                DiskType diskType = diskTypeMap.getOrDefault(deviceName,DiskType.HDD);
+                diskInfos.add(new DiskInfo(deviceName, mountPoint, diskType));
+            }
+        }
+        workDirs = new DiskInfo[diskInfos.size()];
     }
 
     public String[] makeMergeSpace(String appId, int attemptId) {
@@ -77,8 +71,8 @@ public class DiskManager {
             String parentPath = rootDir + "/" + appKey;
             localParentDirs.add(parentPath);
             File mergeDir = new File(rootDir, appKey + "/merge_manager");
-            if(!mergeDir.exists()) {
-                for(int dirNum = 0; dirNum < subDirsPerLocalDir; dirNum++) {
+            if (!mergeDir.exists()) {
+                for (int dirNum = 0; dirNum < subDirsPerLocalDir; dirNum++) {
                     File subDir = new File(mergeDir, String.format("%02x", dirNum));
                     try {
                         if (!subDir.exists()) {
@@ -91,7 +85,7 @@ public class DiskManager {
                     }
                 }
             }
-            if(mergeDir.exists()){
+            if (mergeDir.exists()) {
                 localDirs.add(mergeDir.getAbsolutePath());
             }
         });
@@ -99,7 +93,7 @@ public class DiskManager {
         return localDirs.toArray(new String[0]);
     }
 
-    public void cleanApplication (String appId, int attemptId) {
+    public void cleanApplication(String appId, int attemptId) {
         String appKey = appId + "_" + attemptId;
         List<String> localDirs = localMergeDirs.remove(appKey);
         if (!localDirs.isEmpty()) {
@@ -107,7 +101,6 @@ public class DiskManager {
                     deleteExecutorDirs(localDirs, appKey));
         }
     }
-
 
 
     private void createDirWithPermission770(File dirToCreate) throws IOException, InterruptedException {
@@ -118,7 +111,7 @@ public class DiskManager {
             attempts += 1;
             if (attempts > maxAttempts) {
                 throw new IOException(
-                        "Failed to create directory "+ dirToCreate.getAbsolutePath() +" with permission 770 after 3 attempts!");
+                        "Failed to create directory " + dirToCreate.getAbsolutePath() + " with permission 770 after 3 attempts!");
             }
             try {
                 ProcessBuilder builder = new ProcessBuilder().command(
@@ -136,7 +129,7 @@ public class DiskManager {
     }
 
     void deleteExecutorDirs(List<String> localDirs, String appAttempt) {
-        localDirs.forEach(dir ->{
+        localDirs.forEach(dir -> {
             Path localDir = Paths.get(dir);
             try {
                 if (Files.exists(localDir)
@@ -152,53 +145,13 @@ public class DiskManager {
 
     public Boolean checkDeleteDirs(String path, String appAttempt) {
         return !StringUtils.isBlank(path) && !StringUtils.isBlank(appAttempt)
-                && path.endsWith(appAttempt) ;
+                && path.endsWith(appAttempt);
     }
 
 
     private List<DiskInfo> chooseDir() {
         // TODO: 2021/10/29 根据压力进行可用磁盘选择
         return Arrays.asList(workDirs);
-    }
-
-    public static void main(String[] args) throws IOException {
-        DiskManager x = new DiskManager(null);
-        IOMonitor ioMonitor = x.new IOMonitor();
-    }
-
-    private class IOMonitor implements Runnable {
-
-        @Override
-        public void run() {
-            // TODO: 2021/9/26 监控磁盘压力
-            logger.info("PressureMonitor");
-            // TODO: 2021/10/29 各种节点指标监控
-            ProcessBuilder iostat = new ProcessBuilder().command(
-                    "iostat", "1", "1", "-d","-x");
-            try {
-                Process proc = iostat.start();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(proc.getInputStream()));
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("s")) {
-                        String[] ioInfo = line.split("\\s+");
-                        if(ioInfo.length == 14) {
-                            String disk = ioInfo[0];
-                            long read = (long)(Double.parseDouble(ioInfo[3]));
-                            long write = (long)(Double.parseDouble(ioInfo[4]));
-                            long await = (long)(Double.parseDouble(ioInfo[9]));
-                            long util = (long)(Double.parseDouble(ioInfo[13]));
-                            ((Meter)workDirs[0].diskMetrics.getMetrics().get(metricGetters[0])).mark(read);
-                            ((Meter)workDirs[0].diskMetrics.getMetrics().get(metricGetters[1])).mark(write);
-                            ((Meter)workDirs[0].diskMetrics.getMetrics().get(metricGetters[2])).mark(await);
-                            ((Meter)workDirs[0].diskMetrics.getMetrics().get(metricGetters[3])).mark(util);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
     }
 
 }
