@@ -53,7 +53,29 @@ public class IOStatusTracker {
                 diskInfo.diskMetrics.diskRead.mark(diskInfo.diskMetrics.diskReadsCompleted.getValue() * interval);
                 diskInfo.diskMetrics.diskWrite.mark(diskInfo.diskMetrics.diskWritesCompleted.getValue() * interval);
                 diskInfo.diskMetrics.diskUtils.mark(diskInfo.diskMetrics.diskIOTime.getValue() * interval);
+                File f = new File(diskInfo.getPath());
+                diskInfo.diskMetrics.diskSpaceAvailable.update(f.getUsableSpace() / f.getTotalSpace());
             }
+
+            Process process = Runtime.getRuntime().exec("df -i");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.length() == 0) {
+                    continue;
+                }
+                String[] df = line.trim().split("\\s+");
+                String deviceName = df[0].replace("/dev/","");
+                Stream<DiskInfo> diskInfoStream = Arrays.stream(diskInfos).filter((diskInfo) -> diskInfo.getDiskName().equals(deviceName));
+                Optional<DiskInfo> diskInfoOptional = diskInfoStream.findFirst();
+                if (!diskInfoOptional.isPresent()) {
+                    continue;
+                }
+                DiskInfo diskInfo = diskInfoOptional.get();
+                int ratio = Integer.parseInt(df[4].replace("%", ""));
+                diskInfo.diskMetrics.diskInodeAvailable.update(ratio);
+            }
+
         } catch (Exception e) {
             LOG.error(e.getMessage());
         }
