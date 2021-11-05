@@ -60,6 +60,8 @@ public class DiskManager {
             }
         }
         workDirs = new DiskInfo[diskInfos.size()];
+        reader.close();
+        proc.destroy();
     }
 
     public String[] makeMergeSpace(String appId, int attemptId) {

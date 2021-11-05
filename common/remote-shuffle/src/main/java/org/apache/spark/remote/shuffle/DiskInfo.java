@@ -1,6 +1,7 @@
 package org.apache.spark.remote.shuffle;
 
 import com.codahale.metrics.*;
+import org.apache.spark.remote.shuffle.metric.AvailableGauge;
 import org.apache.spark.remote.shuffle.metric.IOGauge;
 import org.apache.spark.remote.shuffle.metric.IOUtilsGauge;
 
@@ -35,9 +36,12 @@ public class DiskInfo {
 
 
     public static class DiskMetrics{
+        public final AvailableGauge diskSpaceAvailable = new AvailableGauge();
+        public final AvailableGauge diskInodeAvailable = new AvailableGauge();
         public final IOGauge diskReadsCompleted = new IOGauge();
         public final IOGauge diskWritesCompleted = new IOGauge();
         public final IOUtilsGauge diskIOTime = new IOUtilsGauge();
+
 
         public final Meter diskRead = new Meter();
         public final Meter diskWrite = new Meter();
@@ -64,7 +68,9 @@ public class DiskInfo {
                 "write",
                 "write_5min",
                 "utils",
-                "utils_5min"
+                "utils_5min",
+                "space",
+                "inode"
         };
     }
 }

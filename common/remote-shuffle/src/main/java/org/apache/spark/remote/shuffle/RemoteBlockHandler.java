@@ -303,14 +303,17 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             metrics[6] = workerAliveConnection.getCount();
             for (int i = 0; i < diskNums; i++) {
                 DiskInfo.DiskMetrics diskMetrics = diskManager.workDirs[i].diskMetrics;
-                metrics[7 + i * 6] = diskMetrics.diskReadsCompleted.getValue();
-                metrics[8 + i * 6] = (long) diskMetrics.diskRead.getFiveMinuteRate();
-                metrics[9 + i * 6] = diskMetrics.diskWritesCompleted.getValue();
-                metrics[10 + i * 6] = (long) diskMetrics.diskWrite.getFiveMinuteRate();
-                metrics[11 + i * 6] = diskMetrics.diskIOTime.getValue();
-                metrics[12 + i * 6] = (long) diskMetrics.diskUtils.getFiveMinuteRate();
+                metrics[7 + i * 8] = diskMetrics.diskReadsCompleted.getValue();
+                metrics[8 + i * 8] = (long) diskMetrics.diskRead.getFiveMinuteRate();
+                metrics[9 + i * 8] = diskMetrics.diskWritesCompleted.getValue();
+                metrics[10 + i * 8] = (long) diskMetrics.diskWrite.getFiveMinuteRate();
+                metrics[11 + i * 8] = diskMetrics.diskIOTime.getValue();
+                metrics[12 + i * 8] = (long) diskMetrics.diskUtils.getFiveMinuteRate();
+                metrics[13 + i * 9] = diskMetrics.diskSpaceAvailable.getValue();
+                metrics[14 + i * 10] = diskMetrics.diskInodeAvailable.getValue();
+
             }
-            metrics[7 + diskNums * 6] = diskNums;
+            metrics[7 + diskNums * 8] = diskNums;
             return metrics;
         }
 
@@ -324,26 +327,5 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 "workerAliveConnection"
         };
     }
-
-//    public static void main(String[] args) throws Exception {
-//        WorkerMetrics workerMetrics = new WorkerMetrics();
-//        DiskInfo diskInfo = new DiskInfo("sdb","/mnt/storage00",DiskType.SSD);
-//        DiskInfo[] diskInfos = {diskInfo};
-//        while (true) {
-////            NetworkTracker.collectNetworkInfo(workerMetrics);
-//            IOStatusTracker.collectIOInfo(diskInfos);
-//            System.out.println("networkInGauge:"+workerMetrics.networkInGauge.getValue());
-//            System.out.println("workerNetworkIn1:"+workerMetrics.workerNetworkIn.getOneMinuteRate());
-//            System.out.println("networkOutGauge:"+workerMetrics.networkOutGauge.getValue());
-//            System.out.println("workerNetworkOut1:"+workerMetrics.workerNetworkOut.getOneMinuteRate());
-//            System.out.println("write:"+diskInfo.diskMetrics.diskWritesCompleted.getValue());
-//            System.out.println("write1:"+diskInfo.diskMetrics.diskWrite.getOneMinuteRate());
-//            System.out.println("read:"+diskInfo.diskMetrics.diskReadsCompleted.getValue());
-//            System.out.println("read1:"+diskInfo.diskMetrics.diskRead.getOneMinuteRate());
-//            System.out.println("ioUtils:"+diskInfo.diskMetrics.diskIOTime.getValue());
-//            System.out.println("ioUtils1:"+diskInfo.diskMetrics.diskUtils.getOneMinuteRate());
-//            Thread.sleep(30*1000);
-//        }
-//    }
 
 }
