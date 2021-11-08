@@ -169,6 +169,8 @@ package_client_docker:
   script:
     - docker build -f client.dockerfile -t hub.bilibili.co/compile/hadoop-base:${CI_COMMIT_TAG} .
     - docker push hub.bilibili.co/compile/hadoop-base:${CI_COMMIT_TAG}
+    - docker tag hub.bilibili.co/compile/hadoop-base:${CI_COMMIT_TAG} hub.bilibili.co/compile/hadoop-base:latest
+    - docker push hub.bilibili.co/compile/hadoop-base:latest
   dependencies:
     - hive_build
     - hive_conf_build
