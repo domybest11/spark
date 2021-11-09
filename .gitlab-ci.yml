@@ -73,7 +73,7 @@ spark_shuffleservice_build:
          "packName":"'"$DEST_FILE_NAME"'",
          "packType":"tgz"
        }'
-
+    - |
       curl -X POST 'http://uat-alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata/v3' \
         --header 'Content-Type: application/json' \
         --header 'Accept: application/json' \
