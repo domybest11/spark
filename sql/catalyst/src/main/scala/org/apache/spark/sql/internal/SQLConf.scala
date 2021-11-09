@@ -307,6 +307,35 @@ object SQLConf {
       .booleanConf
       .createWithDefault(true)
 
+  val DYNAMIC_PARTITION_PRUNING_PRUNING_SIDE_EXTRA_FILTER_RATIO =
+    buildConf("spark.sql.optimizer.dynamicPartitionPruning.pruningSideExtraFilterRatio")
+      .internal()
+      .doc("When filtering side doesn't support broadcast by join type, and doing DPP means " +
+        "running an extra query that may have significant overhead. This config will be used " +
+        "as the extra filter ratio for computing the data size of the pruning side after DPP, " +
+        "in order to evaluate if it is worth adding an extra subquery as the pruning filter.")
+      .version("3.2.0")
+      .doubleConf
+      .checkValue(ratio => ratio > 0.0 && ratio <= 1.0, "The ratio value must be in (0.0, 1.0].")
+      .createWithDefault(0.04)
+
+  val DYNAMIC_BLOOM_FILTER_JOIN_PRUNING_ENABLED =
+    buildConf("spark.sql.optimizer.dynamicBloomFilterJoinPruning.enabled")
+      .doc("When true, we will generates a bloom filter predicate for a join key column. " +
+        "Note that, dynamic bloom filter join pruning only works with exchange reuse enabled.")
+      .version("3.3.0")
+      .booleanConf
+      .createWithDefault(true)
+
+  val DYNAMIC_BLOOM_FILTER_JOIN_PRUNING_MAX_BLOOM_FILTER_ENTRIES =
+    buildConf("spark.sql.optimizer.dynamicBloomFilterJoinPruning.maxBloomFilterEntries")
+      .doc("The maximum number of bloom filter entries allowed when building dynamic bloom " +
+        "filter join pruning.")
+      .version("3.3.0")
+      .longConf
+      .checkValue(_ > 0, "the value of max bloom filter entries must be greater than 0")
+      .createWithDefault(100000000L)
+
   val COMPRESS_CACHED = buildConf("spark.sql.inMemoryColumnarStorage.compressed")
     .doc("When set to true Spark SQL will automatically select a compression codec for each " +
       "column based on statistics of the data.")
@@ -3141,6 +3170,13 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
+  val RADICAL_JOIN_SIZE_ESTIMATE_ENABLED =
+    buildConf("spark.sql.radicalJoinSizeEstimate.enabled")
+      .doc("When true, Spark will use the sum of children as estimate join size, " +
+        "instead of product of children, which is huge sometimes")
+      .booleanConf
+      .createWithDefault(false)
+
   /**
    * Holds information about keys that have been deprecated.
    *
@@ -3273,6 +3309,18 @@ class SQLConf extends Serializable with Logging {
 
   def dynamicPartitionPruningReuseBroadcastOnly: Boolean =
     getConf(DYNAMIC_PARTITION_PRUNING_REUSE_BROADCAST_ONLY)
+
+  def dynamicPartitionPruningPruningSideExtraFilterRatio: Double =
+    getConf(DYNAMIC_PARTITION_PRUNING_PRUNING_SIDE_EXTRA_FILTER_RATIO)
+
+  def dynamicBloomFilterJoinPruningEnabled: Boolean =
+    getConf(DYNAMIC_BLOOM_FILTER_JOIN_PRUNING_ENABLED) && exchangeReuseEnabled
+
+  def dynamicBloomFilterJoinPruningMaxBloomFilterEntries: Long =
+    getConf(DYNAMIC_BLOOM_FILTER_JOIN_PRUNING_MAX_BLOOM_FILTER_ENTRIES)
+
+  def dynamicPruningEnabled: Boolean = dynamicPartitionPruningEnabled ||
+    dynamicBloomFilterJoinPruningEnabled
 
   def stateStoreProviderClass: String = getConf(STATE_STORE_PROVIDER_CLASS)
 
@@ -3810,6 +3858,8 @@ class SQLConf extends Serializable with Logging {
   def mirrorExecute: Boolean = getConf(SQLConf.MIRROR_EXECUTE)
 
   def partitionStatsEnabled: Boolean = getConf(SQLConf.PARTITION_STATS_ENABLED)
+
+  def radicalJoinSizeEstimate: Boolean = getConf(SQLConf.RADICAL_JOIN_SIZE_ESTIMATE_ENABLED)
 
   /** ********************** SQLConf functionality methods ************ */
 
