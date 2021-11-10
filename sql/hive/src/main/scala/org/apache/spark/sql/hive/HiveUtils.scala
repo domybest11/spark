@@ -412,7 +412,7 @@ private[spark] object HiveUtils extends Logging {
             "Unable to locate hive jars to connect to metastore. " +
               s"Please set ${HIVE_METASTORE_JARS.key}.")
         }
-        loadedJars
+        loadedJars.sortWith((l, r) => l.getProtocol < r.getProtocol)
       }
 
       logInfo(
