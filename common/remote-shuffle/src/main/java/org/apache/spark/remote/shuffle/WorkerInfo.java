@@ -9,6 +9,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Objects;
 
 
@@ -19,6 +21,9 @@ public class WorkerInfo {
     private int port;
     private long latestHeartbeatTime;
     private WorkerPressure pressure;
+    private long startTime;
+    public LinkedList<Double> historyScores = new LinkedList<Double>();
+    private Double score = 0.0;
 
     private TransportClientFactory clientFactory;
 
@@ -30,6 +35,19 @@ public class WorkerInfo {
         this.port = port;
         this.clientFactory = clientFactory;
         this.latestHeartbeatTime = System.currentTimeMillis();
+        this.startTime = System.currentTimeMillis();
+    }
+
+    public void setScore(Double score) {
+        this.score = score;
+    }
+
+    public Double getScore() {
+        return score;
+    }
+
+    public boolean chechStartTime(long time) {
+       return startTime - time > 60_1000L;
     }
 
     public void setClientFactory(TransportClientFactory clientFactory) {

@@ -1,15 +1,18 @@
 package org.apache.spark.remote.shuffle;
 
+import java.util.ArrayList;
+
 public class WorkerPressure implements Comparable {
 
-    private long cpuLoadAverage;
-    private long cpuAvailable;
-    private long networkInBytes;
-    private long networkInBytes5min;
-    private long networkOutBytes;
-    private long networkOutBytes5min;
-    private long aliveConnection;
-    private long diskInfo[][];
+    public long cpuLoadAverage;
+    public long cpuAvailable;
+    public long networkInBytes;
+    public long networkInBytes5min;
+    public long networkOutBytes;
+    public long networkOutBytes5min;
+    public long aliveConnection;
+    public ArrayList<DiskMetric> diskMetrics;
+    public long diskInfo[][];
 
 
     /*
@@ -38,8 +41,12 @@ public class WorkerPressure implements Comparable {
         networkOutBytes5min = workerMetrics[5];
         aliveConnection = workerMetrics[6];
         int num = (int) workerMetrics[workerMetrics.length-1];
-        diskInfo = new long[num][3];
-
+        diskInfo = new long[num][8];
+        for(int i = 0; i < num; i++) {
+            for(int j = 0; j < 8; j++) {
+                diskInfo[i][j] = workerMetrics[7 + i * 8 + j];
+            }
+        }
     }
 
     // TODO: 2021/11/1 根据指标进行available判断
