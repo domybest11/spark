@@ -7,6 +7,8 @@ import org.apache.log4j.spi.LoggingEvent;
 import org.apache.log4j.spi.ThrowableInformation;
 import org.apache.spark.collector.FailureJobCollector;
 import org.apache.spark.metrics.event.LogErrorWrapEvent;
+import org.apache.spark.util.ErrorRecord;
+import org.apache.spark.util.KafkaProducerUtil;
 import org.apache.spark.util.Utils;
 
 import java.io.IOException;
@@ -51,6 +53,15 @@ public class CustomRollingFileAppender extends RollingFileAppender {
                 event.getMessage().toString(), Utils.exceptionString(throwableInformation.getThrowable())));
       } else if (event.getMessage() != null &&
           event.getMessage().toString().startsWith("Error in query")) {
+        String userName = Utils.getCurrentUserName();
+        ErrorRecord record = new ErrorRecord(setting.getProperty("spark.trace.id"),
+                setting.getProperty("spark.app.name"),
+                "error",
+                setting.getProperty("spark.trace.id"),
+                userName,
+                System.currentTimeMillis(),
+                event.getMessage().toString());
+        KafkaProducerUtil.report(record);
         failureJobCollector.getLogErrorQueue()
             .offer(new LogErrorWrapEvent("Spark", "Error",
                 setting.getProperty("spark.app.name"), setting.getProperty("spark.trace.id"),

@@ -76,7 +76,7 @@ private[spark] class KafkaProducerUtil(conf: SparkConf) extends Logging {
     }
   }
 
-  def report(key: String, value: String): Unit = {
+  def send(key: String, value: String): Unit = {
     val record: ProducerRecord[String, Array[Byte]] = if (StringUtils.isBlank(key)) {
       new ProducerRecord(METRIC_TOPIC, null, null, value.getBytes())
     } else {
@@ -102,7 +102,7 @@ object KafkaProducerUtil extends Logging {
     try {
       val json = mapper.writeValueAsString(record)
       val className = record.getClass.getSimpleName
-      kafkaProducer.report(className, json)
+      kafkaProducer.send(className, json)
     } catch {
       case e: Exception =>
         logWarning("convert2ProducerRecord error", e)
@@ -147,7 +147,10 @@ private[spark] class ExecutionDataRecord(
     val filesSizeRead: Long = 0,
     val numFilesWrite: Long = 0,
     val filesSizeWrite: Long = 0,
-    val dynamicPart: Long = 0) extends Record
+    val dynamicPart: Long = 0,
+    val mergeNumFiles: Long = 0,
+    val mergeNumOutputBytes: Long = 0,
+    val mergeNumOutputRows: Long = 0) extends Record
 
 private[spark] class JobDataRecord(
    val appId: String,
@@ -306,6 +309,15 @@ private[spark] class ExceptionRecord(
    val user: String,
    val errorType: String,
    val info: Exception) extends Record
+
+private[spark] class ErrorRecord(
+    val appId: String,
+    val appName: String,
+    val eventType: String,
+    val traceId: String,
+    val user: String,
+    val time: Long,
+    val message: String) extends Record
 
 object ExceptionType {
   val SHUFFLE_FAIL = "SHUFFLE_FAIL"
