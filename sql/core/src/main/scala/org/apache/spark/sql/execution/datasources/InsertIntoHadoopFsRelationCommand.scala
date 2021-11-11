@@ -252,8 +252,9 @@ case class InsertIntoHadoopFsRelationCommand(
             statsTrackers = Seq(basicWriteJobStatsTracker(hadoopConf)),
             options = options) - "staticPart"
         } catch {
-          case cause: SparkException =>
+          case cause: Exception =>
             if (canMerge) {
+              logInfo(s"delete merge path $qualifiedOutputPath")
               fs.delete(qualifiedOutputPath, true)
             }
             throw cause
@@ -373,8 +374,8 @@ case class InsertIntoHadoopFsRelationCommand(
             }
           }
         } finally {
+          logInfo(s"delete merge path $qualifiedOutputPath")
           fs.delete(qualifiedOutputPath, true)
-          logInfo("delete temp path " + qualifiedOutputPath)
         }
       }
 
