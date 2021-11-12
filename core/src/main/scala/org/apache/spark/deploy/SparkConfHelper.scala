@@ -19,6 +19,7 @@ class SparkConfHelper(sparkConf: SparkConf) extends Logging {
 
   private val rules = Seq(
     ExecutorMemoryRule(sparkConf),
+    DataSourceGrayScaleRelease(sparkConf),
     AllocationRatioRule(sparkConf))
 
   def execute: Unit = {

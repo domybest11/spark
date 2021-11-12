@@ -69,7 +69,7 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
           sendPeriodlyKafka
         } catch {
           case e: Exception =>
-            logWarning(s"send sql metric to kafka periodically occurred errors: ${e.getMessage}")
+//            logWarning(s"send sql metric to kafka periodically occurred errors: ${e.getMessage}")
         }
     }, MILLISECONDS_ONE_MINUTE, MILLISECONDS_ONE_MINUTE, TimeUnit.MILLISECONDS)
     sendOnceMetricKafkaThread.start()
@@ -101,7 +101,7 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
           .assembleExecutionInfo(executionInfo, "periodly").get
       } catch {
         case e: Exception =>
-          logWarning(s"assemble the sqlAppStatusStore occurred errors: ${e.getMessage}")
+//          logWarning(s"assemble the sqlAppStatusStore occurred errors: ${e.getMessage}")
           return
       }
       try {
@@ -118,7 +118,7 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
         kafkaSink.report(reportWrap)
       } catch {
         case e: Exception =>
-          logWarning(s"send sql metrics to Kafka periodically occurred errors: ${e.getMessage}")
+//          logWarning(s"send sql metrics to Kafka periodically occurred errors: ${e.getMessage}")
           return
       }
       logDebug("ended to send sql metrics to Kafka periodically")
@@ -140,7 +140,7 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
         .assembleExecutionInfo(executionInfo, "once").get
     } catch {
       case e: Exception =>
-        logWarning(s"assemble the sql executionInfo occurred errors: ${e.getMessage}")
+//        logWarning(s"assemble the sql executionInfo occurred errors: ${e.getMessage}")
         return
     }
     try {
@@ -157,7 +157,7 @@ class SqlAppStatusScheduler(sparkContext: SparkContext) extends Logging{
         kafkaSink.report(reportWrap)
     } catch {
       case e: Exception =>
-        logWarning(s"send an sql metrics to Kafka occurred errors: ${e.getMessage}")
+//        logWarning(s"send an sql metrics to Kafka occurred errors: ${e.getMessage}")
         return
     }
     logDebug("ended to send an sql metrics to Kafka")

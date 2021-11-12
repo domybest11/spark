@@ -25,9 +25,9 @@ import org.apache.spark.internal.config.PUSH_BASED_SHUFFLE_ENABLED
 import org.apache.spark.scheduler.{JobFailed, JobSucceeded, SparkListener, SparkListenerBlockManagerAdded, SparkListenerBlockManagerRemoved, SparkListenerBlockUpdated, SparkListenerEnvironmentUpdate, SparkListenerEvent, SparkListenerExecutorAdded, SparkListenerExecutorExcluded, SparkListenerExecutorExcludedForStage, SparkListenerExecutorMetricsUpdate, SparkListenerExecutorRemoved, SparkListenerExecutorReportInfo, SparkListenerExecutorUnexcluded, SparkListenerJobEnd, SparkListenerJobStart, SparkListenerNodeExcluded, SparkListenerNodeExcludedForStage, SparkListenerNodeUnexcluded, SparkListenerResourceProfileAdded, SparkListenerSpeculativeTaskSubmitted, SparkListenerStageCompleted, SparkListenerStageExecutorMetrics, SparkListenerStageSubmitted, SparkListenerTaskEnd, SparkListenerTaskGettingResult, SparkListenerTaskStart, SparkListenerUnpersistRDD, SparkListenerUnschedulableTaskSetAdded, SparkListenerUnschedulableTaskSetRemoved, StageInfo}
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.sql.execution.ui.{SparkListenerDriverAccumUpdates, SparkListenerSQLExecutionEnd, SparkListenerSQLExecutionStart}
+import org.apache.spark.status.api.v1
 import org.apache.spark.util.{AccumulatorContext, ExceptionRecord, ExecutionDataRecord, JobDataRecord, KafkaProducerUtil, StageDataRecord, TaskAvgMetrics, TaskMaxMetrics, Utils}
 import org.apache.spark.util.ExceptionType.SHUFFLE_FAIL
-import org.apache.spark.status.api.v1
 
 import scala.collection.mutable.HashMap
 
@@ -51,7 +51,10 @@ class SqlMarioListener(sc: SparkContext,
   val filesSizeRead = Some("size of files read")
   val numFilesWrite = Some("number of written files")
   val filesSizeWrite = Some("written output")
-  val dynamicPart = Some("number of dynamic part")
+  val numPart = Some("number of dynamic part")
+  val mergeNumFiles = Some("merge written files")
+  val mergeNumOutputBytes = Some("merge written size")
+  val mergeNumOutputRows = Some("merge of output rows")
 
   private val sqlStages = new ConcurrentHashMap[(Int, Int), SqlStage]()
   private val sqlJobs = new HashMap[Int, SqlJob]()
@@ -577,7 +580,10 @@ class SqlMarioListener(sc: SparkContext,
         filesSizeRead = sqlMetrics.getOrElse((event.executionId, filesSizeRead), 0),
         numFilesWrite = sqlMetrics.getOrElse((event.executionId, numFilesWrite), 0),
         filesSizeWrite = sqlMetrics.getOrElse((event.executionId, filesSizeWrite), 0),
-        dynamicPart = sqlMetrics.getOrElse((event.executionId, dynamicPart), 0)
+        dynamicPart = sqlMetrics.getOrElse((event.executionId, numPart), 0),
+        mergeNumFiles = sqlMetrics.getOrElse((event.executionId, mergeNumFiles), 0),
+        mergeNumOutputBytes = sqlMetrics.getOrElse((event.executionId, mergeNumOutputBytes), 0),
+        mergeNumOutputRows = sqlMetrics.getOrElse((event.executionId, mergeNumOutputRows), 0)
       ))
     }
     sqlMetrics.foreach(sqlMetric => {
