@@ -46,8 +46,8 @@ public class WorkerInfo {
         return score;
     }
 
-    public boolean chechStartTime(long time) {
-       return startTime - time > 60_1000L;
+    public boolean isShortTime(long time) {
+       return startTime - time < 5_60_1000L;
     }
 
     public void setClientFactory(TransportClientFactory clientFactory) {

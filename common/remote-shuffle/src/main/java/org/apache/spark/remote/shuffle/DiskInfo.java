@@ -47,20 +47,6 @@ public class DiskInfo {
         public final Meter diskWrite = new Meter();
         public final Meter diskUtils = new Meter();
 
-//        public DiskMetrics() {
-//            allMetrics = new HashMap<>();
-//            allMetrics.put("read", diskRead);
-//            allMetrics.put("read_5min", (Gauge<Long>) () -> (long)diskRead.getFiveMinuteRate());
-//            allMetrics.put("write", diskWrite);
-//            allMetrics.put("write_5min", (Gauge<Long>) () -> (long)diskWrite.getFiveMinuteRate());
-//            allMetrics.put("utils", diskUtils);
-//            allMetrics.put("utils_5min", (Gauge<Long>) () -> (long)diskUtils.getFiveMinuteRate());
-//        }
-
-//        @Override
-//        public Map<String, Metric> getMetrics() {
-//            return allMetrics;
-//        }
 
         public static String[] metricGetters = {
                 "read",

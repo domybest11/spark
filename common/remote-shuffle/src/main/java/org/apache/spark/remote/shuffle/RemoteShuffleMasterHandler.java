@@ -40,9 +40,12 @@ public class RemoteShuffleMasterHandler {
     private TransportContext transportContext;
     private TransportServer server;
     private TransportClientFactory clientFactory;
-    private Double busyScore = Double.parseDouble(conf.get("spark.shuffle.master.busyScore","0.6"));
-    private Double blackScore = Double.parseDouble(conf.get("spark.shuffle.master.blackScore","0.3"));
+    private Double busyScore = Double.parseDouble(conf.get("spark.shuffle.worker.busyScore","0.6"));
+    private Double blackScore = Double.parseDouble(conf.get("spark.shuffle.worker.blackScore","0.3"));
     private int wellTime = Integer.parseInt(conf.get("spark.shuffle.worker.wellTime","5"));
+    private Double diskIoUtilThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskIOUtils","0.9"));
+    private Double diskSpaceThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskSpace","0.1"));
+    private Double diskInodeThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskInode","0.1"));
 
     public DB db;
     private static final LevelDBProvider.StoreVersion CURRENT_VERSION = new LevelDBProvider.StoreVersion(1, 0);
@@ -286,9 +289,9 @@ public class RemoteShuffleMasterHandler {
                 String address = host + ":" + port;
                 RunningStage[] runningStages = workHeartbeat.getRunningStages();
                 WorkerPressure pressure = new WorkerPressure(workHeartbeat.getWorkerMetric());
-                double score = computeWorkerScore(pressure);
                 WorkerInfo workerInfo = workersMap.compute(address, (id, w) -> {
                  if (w != null) {
+                     double score = computeWorkerScore(pressure, w.isShortTime(System.currentTimeMillis()));
                      LinkedList<Double> historyScores = w.historyScores;
                      int size = historyScores.size();
                      if (size > wellTime) {
@@ -301,14 +304,16 @@ public class RemoteShuffleMasterHandler {
                      saveMasterStateDB(address, w, WORKERS_PREFIX);
                      return w;
                  } else {
+                     double score = computeWorkerScore(pressure, true);
                      WorkerInfo worker = new WorkerInfo(clientFactory, host, port);
+                     worker.setScore(score);
+                     worker.historyScores.add(score);
                      worker.setLatestHeartbeatTime(workHeartbeat.getHeartbeatTimeMs());
                      worker.setPressure(pressure);
                      saveMasterStateDB(address, worker, WORKERS_PREFIX);
                      return worker;
                  }
                 });
-                // 计算得分，根据得分存入不同集合。如果该节点五次都大于busyScore，移除对应的集合
                 updateBusyAndBlackWorkers(workerInfo);
                 Arrays.stream(runningStages).forEach(runningStage -> {
                     String appId = runningStage.getApplicationId();
@@ -390,12 +395,29 @@ public class RemoteShuffleMasterHandler {
         private List<WorkerInfo> getMergerWorkers(String appId, int attempt, int shuffleId, int numPartitions, int tasksPerExecutor, int maxExecutors) {
             int numMergersDesired = Math.min(Math.max(1, (int)Math.ceil(numPartitions * 1.0 / tasksPerExecutor)), maxExecutors);
             List<WorkerInfo> workerInfos = workersMap.values().stream().filter(
-                    workerInfo -> workerInfo.getPressure().available()
+                    worker -> !busyWorkers.contains(worker) || !blackWorkers.contains(worker)
             ).collect(Collectors.toList());
             int capacity = workerInfos.size();
           if (numMergersDesired <= capacity) {
                 Collections.shuffle(workerInfos);
-                return workerInfos.subList(0, numMergersDesired);
+                List<WorkerInfo> targetWorkers = workerInfos.subList(0, numMergersDesired);
+                List<WorkerInfo> busyWorkers = workersMap.values().stream()
+                        .filter(worker -> workerInfos.contains(worker) && filterBadGagueWorker(worker))
+                        .collect(Collectors.toList());
+                long delta = targetWorkers.size() - busyWorkers.size();
+                if (delta > 0) {
+                    targetWorkers.removeAll(busyWorkers);
+                    Iterator<WorkerInfo> iterator = workersMap.values().iterator();
+                    int count = 0;
+                    while (iterator.hasNext() && count < delta) {
+                        WorkerInfo worker = iterator.next();
+                        if (!busyWorkers.contains(worker) && !filterBadGagueWorker(worker)) {
+                            targetWorkers.add(worker);
+                            count++;
+                        }
+                    }
+                }
+                return targetWorkers;
             } else {
                 return workerInfos;
             }
@@ -472,6 +494,16 @@ public class RemoteShuffleMasterHandler {
         DISKSPACEAVAILABLE("diskSpaceAvailable", 0.5, 0.0, 100.0),
         DISKINODEAVAILABLE("diskInodeAvailable", 0.5, 0.0, 100.0);
 
+        public static List<WorkerMertric> getShortTimeWorkerMertric() {
+            return  Arrays.asList(CPULOADAVERAGE, CPUAVAILABLE, NETWORKINBYTES, NETWORKOUTBYTES, ALIVECONNECTION,
+                    DISKREAD, DISKWRITE, DISKIOUTILS, DISKSPACEAVAILABLE, DISKINODEAVAILABLE);
+        }
+
+        public static List<WorkerMertric> getWorkerMertric() {
+            return  Arrays.asList(CPULOADAVERAGE, CPUAVAILABLE, NETWORKINBYTES5MIN, NETWORKOUTBYTES5MIN, ALIVECONNECTION,
+                    DISKREAD5MIN, DISKWRITE5MIN, DISKIOUTILS5MIN, DISKSPACEAVAILABLE, DISKINODEAVAILABLE);
+        }
+
         private String name ;
         private Double weight ;
         private Double max ;
@@ -496,29 +528,63 @@ public class RemoteShuffleMasterHandler {
         return score;
     }
 
-    public double computeWorkerScore(WorkerPressure pressure) {
+    public double computeWorkerScore(WorkerPressure pressure, boolean shortTime) {
         List<Double> metrics = new ArrayList();
-        metrics.add(maxMinNormalization(WorkerMertric.CPULOADAVERAGE.max, WorkerMertric.CPULOADAVERAGE.min, pressure.cpuLoadAverage));
-        metrics.add(maxMinNormalization(WorkerMertric.CPUAVAILABLE.max, WorkerMertric.CPUAVAILABLE.min, pressure.cpuAvailable));
-        metrics.add(maxMinNormalization(WorkerMertric.NETWORKINBYTES.max, WorkerMertric.NETWORKINBYTES.min, pressure.networkInBytes));
-        metrics.add(maxMinNormalization(WorkerMertric.NETWORKINBYTES5MIN.max, WorkerMertric.NETWORKINBYTES5MIN.min, pressure.networkInBytes5min));
-        metrics.add(maxMinNormalization(WorkerMertric.NETWORKOUTBYTES.max, WorkerMertric.NETWORKOUTBYTES.min, pressure.networkOutBytes));
-        metrics.add(maxMinNormalization(WorkerMertric.NETWORKOUTBYTES5MIN.max, WorkerMertric.NETWORKOUTBYTES5MIN.min, pressure.networkOutBytes5min));
-        metrics.add(maxMinNormalization(WorkerMertric.ALIVECONNECTION.max, WorkerMertric.ALIVECONNECTION.min, pressure.aliveConnection));
         long[][] diskInfos = pressure.diskInfo;
-        for(int i = 0; i < diskInfos.length; i++) {
-            metrics.add(maxMinNormalization(WorkerMertric.DISKREAD.max, WorkerMertric.DISKREAD.min, diskInfos[i][0]));
-            metrics.add(maxMinNormalization(WorkerMertric.DISKREAD5MIN.max, WorkerMertric.DISKREAD5MIN.min, diskInfos[i][1]));
-            metrics.add(maxMinNormalization(WorkerMertric.DISKWRITE.max, WorkerMertric.DISKWRITE.min, diskInfos[i][2]));
-            metrics.add(maxMinNormalization(WorkerMertric.DISKWRITE5MIN.max, WorkerMertric.DISKWRITE5MIN.min, diskInfos[i][3]));
-            metrics.add(maxMinNormalization(WorkerMertric.DISKIOUTILS.max, WorkerMertric.DISKIOUTILS.min, diskInfos[i][4]));
-            metrics.add(maxMinNormalization(WorkerMertric.DISKIOUTILS5MIN.max, WorkerMertric.DISKIOUTILS5MIN.min, diskInfos[i][5]));
-            metrics.add(maxMinNormalization(WorkerMertric.DISKSPACEAVAILABLE.max, WorkerMertric.DISKSPACEAVAILABLE.min, diskInfos[i][6]));
-            metrics.add(maxMinNormalization(WorkerMertric.DISKINODEAVAILABLE.max, WorkerMertric.DISKINODEAVAILABLE.min, diskInfos[i][7]));
+        if (shortTime) {
+            metrics.add(maxMinNormalization(WorkerMertric.CPULOADAVERAGE.max, WorkerMertric.CPULOADAVERAGE.min, pressure.cpuLoadAverage));
+            metrics.add(maxMinNormalization(WorkerMertric.CPUAVAILABLE.max, WorkerMertric.CPUAVAILABLE.min, pressure.cpuAvailable));
+            metrics.add(maxMinNormalization(WorkerMertric.NETWORKINBYTES.max, WorkerMertric.NETWORKINBYTES.min, pressure.networkInBytes));
+            metrics.add(maxMinNormalization(WorkerMertric.NETWORKOUTBYTES.max, WorkerMertric.NETWORKOUTBYTES.min, pressure.networkOutBytes));
+            metrics.add(maxMinNormalization(WorkerMertric.ALIVECONNECTION.max, WorkerMertric.ALIVECONNECTION.min, pressure.aliveConnection));
+            for(int i = 0; i < diskInfos.length; i++) {
+                metrics.add(maxMinNormalization(WorkerMertric.DISKREAD.max, WorkerMertric.DISKREAD.min, diskInfos[i][0]));
+                metrics.add(maxMinNormalization(WorkerMertric.DISKWRITE.max, WorkerMertric.DISKWRITE.min, diskInfos[i][2]));
+                metrics.add(maxMinNormalization(WorkerMertric.DISKIOUTILS.max, WorkerMertric.DISKIOUTILS.min, diskInfos[i][4]));
+                metrics.add(maxMinNormalization(WorkerMertric.DISKSPACEAVAILABLE.max, WorkerMertric.DISKSPACEAVAILABLE.min, diskInfos[i][6]));
+                metrics.add(maxMinNormalization(WorkerMertric.DISKINODEAVAILABLE.max, WorkerMertric.DISKINODEAVAILABLE.min, diskInfos[i][7]));
+            }
+        } else {
+            metrics.add(maxMinNormalization(WorkerMertric.CPULOADAVERAGE.max, WorkerMertric.CPULOADAVERAGE.min, pressure.cpuLoadAverage));
+            metrics.add(maxMinNormalization(WorkerMertric.CPUAVAILABLE.max, WorkerMertric.CPUAVAILABLE.min, pressure.cpuAvailable));
+            metrics.add(maxMinNormalization(WorkerMertric.NETWORKINBYTES5MIN.max, WorkerMertric.NETWORKINBYTES5MIN.min, pressure.networkInBytes5min));
+            metrics.add(maxMinNormalization(WorkerMertric.NETWORKOUTBYTES5MIN.max, WorkerMertric.NETWORKOUTBYTES5MIN.min, pressure.networkOutBytes5min));
+            metrics.add(maxMinNormalization(WorkerMertric.ALIVECONNECTION.max, WorkerMertric.ALIVECONNECTION.min, pressure.aliveConnection));
+            for(int i = 0; i < diskInfos.length; i++) {
+                metrics.add(maxMinNormalization(WorkerMertric.DISKREAD5MIN.max, WorkerMertric.DISKREAD5MIN.min, diskInfos[i][1]));
+                metrics.add(maxMinNormalization(WorkerMertric.DISKWRITE5MIN.max, WorkerMertric.DISKWRITE5MIN.min, diskInfos[i][3]));
+                metrics.add(maxMinNormalization(WorkerMertric.DISKIOUTILS5MIN.max, WorkerMertric.DISKIOUTILS5MIN.min, diskInfos[i][5]));
+                metrics.add(maxMinNormalization(WorkerMertric.DISKSPACEAVAILABLE.max, WorkerMertric.DISKSPACEAVAILABLE.min, diskInfos[i][6]));
+                metrics.add(maxMinNormalization(WorkerMertric.DISKINODEAVAILABLE.max, WorkerMertric.DISKINODEAVAILABLE.min, diskInfos[i][7]));
+            }
         }
         Double[] values = metrics.stream().toArray(Double[]::new);
-        double[] weights = Arrays.stream(WorkerMertric.values()).mapToDouble(workerMertric -> workerMertric.weight).toArray();
+        double[] weights;
+        if (shortTime) {
+            weights = WorkerMertric.getShortTimeWorkerMertric().stream().mapToDouble(workerMertric -> workerMertric.weight).toArray();
+        } else {
+            weights = WorkerMertric.getWorkerMertric().stream().mapToDouble(workerMertric -> workerMertric.weight).toArray();
+        }
         return computeSigama(weights, ArrayUtils.toPrimitive(values));
+    }
+
+    public boolean filterBadGagueWorker(WorkerInfo worker) {
+        WorkerPressure pressure = worker.getPressure();
+        long[][] diskInfos = pressure.diskInfo;
+        double half = Math.ceil(1.0 * diskInfos.length / 2);
+        int ioUtilCount = 0;
+        int diskSpaceCount = 0;
+        int diskInodeCount = 0;
+        for (int i = 0; i < diskInfos.length; i++) {
+            if (1.0 * diskInfos[i][4] / 100 > diskIoUtilThreshold) ioUtilCount++ ;
+            if (1.0 * diskInfos[i][6] / 100 < diskSpaceThreshold) diskSpaceCount++ ;
+            if (1.0 * diskInfos[i][7] / 100 < diskInodeThreshold) diskInodeCount++ ;
+        }
+        if (ioUtilCount > half || diskSpaceCount > half || diskInodeCount > half){
+            return true;
+        } else {
+            return false;
+        }
     }
 
     public void updateBusyAndBlackWorkers(WorkerInfo worker) {

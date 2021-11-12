@@ -61,7 +61,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     private final int masterPort;
     private final String localHost;
     private final int localPort;
-    private final TransportConf transportConf;
+    private TransportConf transportConf;
     private TransportClientFactory clientFactory;
     private TransportClient client;
     private final int MAX_ATTEMPTS = 3;

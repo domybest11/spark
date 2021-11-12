@@ -13,13 +13,18 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 
 public class DiskManager {
     private static final Logger logger = LoggerFactory.getLogger(RemoteBlockHandler.class);
-    private final TransportConf conf;
+    private TransportConf conf;
     private final int subDirsPerLocalDir;
     public final DiskInfo[] workDirs;
+    private Double diskIoUtilThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskIOUtils","0.9"));
+    private Double diskSpaceThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskSpace","0.1"));
+    private Double diskInodeThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskInode","0.1"));
+    private int retainDiskNum = Integer.parseInt(conf.get("spark.shuffle.worker.RetainDiskNum","5"));
     // key: appid_attempt  value: mergePath
     private final ConcurrentHashMap<String, List<String>> localMergeDirs = new ConcurrentHashMap<>();
 
@@ -152,8 +157,23 @@ public class DiskManager {
 
 
     private List<DiskInfo> chooseDir() {
-        // TODO: 2021/10/29 根据压力进行可用磁盘选择
-        return Arrays.asList(workDirs);
+        List<DiskInfo> diskInfos = Arrays.asList(workDirs);
+        Iterator<DiskInfo> iterator = diskInfos.iterator();
+        while (iterator.hasNext()) {
+            DiskInfo diskInfo = iterator.next();
+            double diskIOUtils = 1.0 * diskInfo.diskMetrics.diskIOTime.getValue() / 100;
+            double diskSpaceAvailable = 1.0 * diskInfo.diskMetrics.diskSpaceAvailable.getValue() / 100;
+            double diskInodeAvailable = 1.0 * diskInfo.diskMetrics.diskInodeAvailable.getValue() / 100;
+            if (diskIOUtils > diskIoUtilThreshold ||
+                    diskSpaceAvailable < diskSpaceThreshold || diskInodeAvailable < diskInodeThreshold) {
+                iterator.remove();
+            }
+        }
+        if (diskInfos.size() < retainDiskNum) {
+            return Arrays.asList(workDirs);
+        } else {
+            return diskInfos;
+        }
     }
 
 }

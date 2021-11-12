@@ -11,7 +11,6 @@ public class WorkerPressure implements Comparable {
     public long networkOutBytes;
     public long networkOutBytes5min;
     public long aliveConnection;
-    public ArrayList<DiskMetric> diskMetrics;
     public long diskInfo[][];
 
 
