@@ -2262,4 +2262,18 @@ package object config {
       .version("3.1.1")
       .booleanConf
       .createWithDefault(false)
+
+  private[spark] val OBSERVER_ENABLE =
+    ConfigBuilder("spark.app.observer.enable")
+      .doc("When true, read hdfs through observer nn")
+      .version("3.1.1")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val OBSERVER_INTERVAL_MS =
+    ConfigBuilder("spark.app.observer.interval.ms")
+      .doc("When read hdfs through observer nn, msync interval.")
+      .version("3.1.1")
+      .longConf
+      .createWithDefault(1000L)
 }
