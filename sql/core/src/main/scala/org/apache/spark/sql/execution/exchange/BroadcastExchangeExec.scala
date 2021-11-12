@@ -148,6 +148,7 @@ case class BroadcastExchangeExec[T: ClassTag](
     val beforeCollect = System.nanoTime()
     // Use executeCollect/executeCollectIterator to avoid conversion to Scala types
     val (numRows, input) = child.executeCollectIterator()
+    longMetric("numOutputRows") += numRows
     if (numRows >= 512000000) {
       throw new SparkException(
         s"Cannot broadcast the table with more than 512 millions rows: $numRows rows")
