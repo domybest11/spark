@@ -3164,7 +3164,7 @@ private[spark] class CallerContext(
   val observerItvContext: String = if (enableObserver) {
     "$" + s"ObserverItv:$observerItv"
   } else {
-    null
+    ""
   }
 
   private val context = prepareContext("SPARK_" +
