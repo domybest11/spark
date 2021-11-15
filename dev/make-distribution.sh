@@ -166,7 +166,7 @@ echo "Spark $VERSION$GITREVSTRING built for Hadoop $SPARK_HADOOP_VERSION" > "$DI
 echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 
 # Download hudi jar
-wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/hudi/hudi-spark-bundle_2.12-0.5.1-incubating.jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/hudi/hudi-spark-bundle_2.12-0.9.0.jar
 
 # Download iceberg jar
 wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://nexus.bilibili.co/content/repositories/releases/org/apache/iceberg/iceberg-spark3-runtime/0.11.1-bili-0.4.1/iceberg-spark3-runtime-0.11.1-bili-0.4.1.jar
