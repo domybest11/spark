@@ -287,17 +287,19 @@ public class RemoteShuffleMasterHandler {
                 callback.onSuccess(ByteBuffer.allocate(0));
                 logger.info("handle register worker time: {}ms", System.currentTimeMillis() - start);
             } else if (msgObj instanceof RemoteShuffleWorkerHeartbeat) {
-                logger.info("handle RemoteShuffleServiceHeartbeat");
                 long start = System.currentTimeMillis();
                 RemoteShuffleWorkerHeartbeat workHeartbeat = (RemoteShuffleWorkerHeartbeat) msgObj;
                 String host = workHeartbeat.getHost();
                 int port = workHeartbeat.getPort();
                 String address = host + ":" + port;
+                logger.info("handle RemoteShuffleServiceHeartbeat from ip: {}", address);
                 RunningStage[] runningStages = workHeartbeat.getRunningStages();
                 WorkerPressure pressure = new WorkerPressure(workHeartbeat.getWorkerMetric());
                 WorkerInfo workerInfo = workersMap.compute(address, (id, w) -> {
                  if (w != null) {
                      double score = computeWorkerScore(pressure, w.isShortTime(System.currentTimeMillis()));
+                     logger.info("worker from ip: {}, pressure: {}", address, workHeartbeat.getWorkerMetric());
+                     logger.info("worker from ip: {}, score: {}", address, score);
                      LinkedList<Double> historyScores = w.historyScores;
                      int size = historyScores.size();
                      if (size > wellTime) {
@@ -602,7 +604,7 @@ public class RemoteShuffleMasterHandler {
             busyWorkers.add(worker);
         } else {
          long count = historyScores.stream().filter(s -> s.doubleValue() > busyScore).count();
-         if (count == wellTime) {
+         if (count >= wellTime) {
              blackWorkers.remove(worker);
              busyWorkers.remove(worker);
          }

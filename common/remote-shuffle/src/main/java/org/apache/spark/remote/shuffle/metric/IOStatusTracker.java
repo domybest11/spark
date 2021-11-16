@@ -54,7 +54,7 @@ public class IOStatusTracker {
                 diskInfo.diskMetrics.diskWrite.mark(diskInfo.diskMetrics.diskWritesCompleted.getValue() * interval);
                 diskInfo.diskMetrics.diskUtils.mark(diskInfo.diskMetrics.diskIOTime.getValue() * interval);
                 File f = new File(diskInfo.getPath());
-                diskInfo.diskMetrics.diskSpaceAvailable.update(f.getUsableSpace() / f.getTotalSpace());
+                diskInfo.diskMetrics.diskSpaceAvailable.update((long)(1.0 * f.getUsableSpace() / f.getTotalSpace() * 100));
             }
 
             Process process = Runtime.getRuntime().exec("df -i");

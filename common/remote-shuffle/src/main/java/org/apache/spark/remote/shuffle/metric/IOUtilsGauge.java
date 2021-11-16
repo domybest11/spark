@@ -19,7 +19,7 @@ public class IOUtilsGauge implements Gauge<Long> {
     public Long getValue() {
         if (pre != 0) {
             if ((cur - pre) != 0) {
-                return (cur - pre) * 198 / (curTime - preTime);
+                return (long)(1.0 * (cur - pre) / (curTime - preTime) * 100);
             }
         }
         return 0L;

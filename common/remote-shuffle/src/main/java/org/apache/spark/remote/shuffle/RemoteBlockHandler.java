@@ -131,7 +131,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                     logger.warn("Failed to connect to remote shuffle server, will retry {} more times after waiting 10 seconds...", i - 1, e);
                     Thread.sleep(10 * 1000L);
                 } else {
-                    throw new IOException("Unable to register with remote shuffle server due to : " + e.getMessage(), e);
+                    logger.error("Unable to register with remote shuffle server due to: {}", e.getCause());
                 }
             }
         }
@@ -249,21 +249,19 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             List<RunningStage> currentRunningStages = new ArrayList<>();
             appStageMap.values().forEach(stageMap -> currentRunningStages.addAll(stageMap.values()));
             logger.info("worker send heartbeat");
-                if (!client.isActive()) {
-                    connection();
-                }
-            long[]  workerMetric = workerMetrics.getCurrentMetrics();
-            RunningStage[] runningStages = currentRunningStages.toArray(new RunningStage[0]);
-                RemoteShuffleWorkerHeartbeat workerHeartbeat =
+            if (!client.isActive()) {
+                 connection();
+            }
+            long[] workerMetric = workerMetrics.getCurrentMetrics();
+            logger.info("worker pressure: {}", workerMetric);
+            client.send(
                         new RemoteShuffleWorkerHeartbeat(
-                                localHost,
-                                localPort,
-                                System.currentTimeMillis(),
-                                workerMetric,
-                                runningStages
-                                );
-                ByteBuffer byteBuffer = workerHeartbeat.toByteBuffer();
-                client.send(byteBuffer);
+                        localHost,
+                        localPort,
+                        System.currentTimeMillis(),
+                        workerMetric,
+                        currentRunningStages.toArray(new RunningStage[0])
+                ).toByteBuffer());
         }
     }
 
