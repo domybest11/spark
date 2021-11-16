@@ -18,21 +18,33 @@ package org.apache.spark.remote.shuffle;/*
 import com.google.common.collect.Lists;
 import org.apache.spark.network.TransportContext;
 import org.apache.spark.network.client.TransportClientFactory;
+import org.apache.spark.network.shuffle.protocol.remote.RemoteShuffleWorkerHeartbeat;
+import org.apache.spark.network.shuffle.protocol.remote.RunningStage;
 import org.apache.spark.network.util.MapConfigProvider;
 import org.apache.spark.network.util.TransportConf;
 import org.junit.Assert;
 import org.junit.Test;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+
+import java.nio.ByteBuffer;
+import java.util.*;
 
 
 public class RemoteShuffleMasterHandlerSuite {
 
     @Test
     public void testMasterRecovery() throws Exception {
-
+        long[] lon = new long[2];
+        RunningStage[] runningStages = new RunningStage[0];
+        List<RunningStage> currentRunningStages = new ArrayList<>();
+        RemoteShuffleWorkerHeartbeat workerHeartbeat =
+                new RemoteShuffleWorkerHeartbeat(
+                        "local",
+                        0,
+                        System.currentTimeMillis(),
+                        lon,
+                        currentRunningStages.toArray(new RunningStage[0])
+                );
+        ByteBuffer byteBuffer = workerHeartbeat.toByteBuffer();
         Map<String, String> config = new HashMap<>();
         config.put("spark.shuffle.master.recovery.path", "/Users/jiadongdong/Downloads/testDB");
         MapConfigProvider map = new MapConfigProvider(config);

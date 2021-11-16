@@ -40,12 +40,12 @@ public class RemoteShuffleMasterHandler {
     private TransportContext transportContext;
     private TransportServer server;
     private TransportClientFactory clientFactory;
-    private Double busyScore = Double.parseDouble(conf.get("spark.shuffle.worker.busyScore","0.6"));
-    private Double blackScore = Double.parseDouble(conf.get("spark.shuffle.worker.blackScore","0.3"));
-    private int wellTime = Integer.parseInt(conf.get("spark.shuffle.worker.wellTime","5"));
-    private Double diskIoUtilThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskIOUtils","0.9"));
-    private Double diskSpaceThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskSpace","0.1"));
-    private Double diskInodeThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskInode","0.1"));
+    private Double busyScore;
+    private Double blackScore;
+    private int wellTime;
+    private Double diskIoUtilThreshold;
+    private Double diskSpaceThreshold;
+    private Double diskInodeThreshold;
 
     public DB db;
     private static final LevelDBProvider.StoreVersion CURRENT_VERSION = new LevelDBProvider.StoreVersion(1, 0);
@@ -76,6 +76,12 @@ public class RemoteShuffleMasterHandler {
         this.port = port;
         this.conf = conf;
         this.applicationExpireTimeout = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.application.expire","600s")) * 1000;
+        this.busyScore = Double.parseDouble(conf.get("spark.shuffle.worker.busyScore","0.8"));
+        this.blackScore = Double.parseDouble(conf.get("spark.shuffle.worker.blackScore","0.9"));
+        this.wellTime = Integer.parseInt(conf.get("spark.shuffle.worker.wellTime","5"));
+        this.diskIoUtilThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskIOUtils","0.9"));
+        this.diskSpaceThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskSpace","0.1"));
+        this.diskInodeThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskInode","0.1"));
         String filePath = conf.get("spark.shuffle.master.recovery.path", null);
         if (filePath != null) {
             File file = new File(filePath);
@@ -590,9 +596,9 @@ public class RemoteShuffleMasterHandler {
     public void updateBusyAndBlackWorkers(WorkerInfo worker) {
         double score = worker.getScore();
         LinkedList<Double> historyScores = worker.historyScores;
-        if (score < blackScore) {
+        if (score > blackScore) {
             blackWorkers.add(worker);
-        } else if (score < busyScore) {
+        } else if (score > busyScore) {
             busyWorkers.add(worker);
         } else {
          long count = historyScores.stream().filter(s -> s.doubleValue() > busyScore).count();

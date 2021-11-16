@@ -249,17 +249,21 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             List<RunningStage> currentRunningStages = new ArrayList<>();
             appStageMap.values().forEach(stageMap -> currentRunningStages.addAll(stageMap.values()));
             logger.info("worker send heartbeat");
-            if (!client.isActive()) {
-                connection();
-            }
-            client.send(
-                    new RemoteShuffleWorkerHeartbeat(
-                            localHost,
-                            localPort,
-                            System.currentTimeMillis(),
-                            workerMetrics.getCurrentMetrics(),
-                            currentRunningStages.toArray(new RunningStage[0])).toByteBuffer()
-            );
+                if (!client.isActive()) {
+                    connection();
+                }
+            long[]  workerMetric = workerMetrics.getCurrentMetrics();
+            RunningStage[] runningStages = currentRunningStages.toArray(new RunningStage[0]);
+                RemoteShuffleWorkerHeartbeat workerHeartbeat =
+                        new RemoteShuffleWorkerHeartbeat(
+                                localHost,
+                                localPort,
+                                System.currentTimeMillis(),
+                                workerMetric,
+                                runningStages
+                                );
+                ByteBuffer byteBuffer = workerHeartbeat.toByteBuffer();
+                client.send(byteBuffer);
         }
     }
 
@@ -293,7 +297,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
         public long[] getCurrentMetrics() {
             int diskNums = diskManager.workDirs.length;
-            long[] metrics = new long[7 + diskNums * 6 + 1];
+            long[] metrics = new long[7 + diskNums * 8 + 1];
             metrics[0] = workerCpuLoadAverage.getValue();
             metrics[1] = workerCpuAvailable.getValue();
             metrics[2] = networkInGauge.getValue();
@@ -309,8 +313,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 metrics[10 + i * 8] = (long) diskMetrics.diskWrite.getFiveMinuteRate();
                 metrics[11 + i * 8] = diskMetrics.diskIOTime.getValue();
                 metrics[12 + i * 8] = (long) diskMetrics.diskUtils.getFiveMinuteRate();
-                metrics[13 + i * 9] = diskMetrics.diskSpaceAvailable.getValue();
-                metrics[14 + i * 10] = diskMetrics.diskInodeAvailable.getValue();
+                metrics[13 + i * 8] = diskMetrics.diskSpaceAvailable.getValue();
+                metrics[14 + i * 8] = diskMetrics.diskInodeAvailable.getValue();
 
             }
             metrics[7 + diskNums * 8] = diskNums;

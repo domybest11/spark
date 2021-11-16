@@ -21,10 +21,10 @@ public class DiskManager {
     private TransportConf conf;
     private final int subDirsPerLocalDir;
     public final DiskInfo[] workDirs;
-    private Double diskIoUtilThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskIOUtils","0.9"));
-    private Double diskSpaceThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskSpace","0.1"));
-    private Double diskInodeThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskInode","0.1"));
-    private int retainDiskNum = Integer.parseInt(conf.get("spark.shuffle.worker.RetainDiskNum","5"));
+    private Double diskIoUtilThreshold;
+    private Double diskSpaceThreshold;
+    private Double diskInodeThreshold;
+    private int retainDiskNum;
     // key: appid_attempt  value: mergePath
     private final ConcurrentHashMap<String, List<String>> localMergeDirs = new ConcurrentHashMap<>();
 
@@ -36,7 +36,12 @@ public class DiskManager {
 
     public DiskManager(TransportConf conf) throws IOException {
         this.conf = conf;
+        this.diskIoUtilThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskIOUtils","0.9"));
+        this.diskSpaceThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskSpace","0.1"));
+        this.diskInodeThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskInode","0.1"));
+        this.retainDiskNum = Integer.parseInt(conf.get("spark.shuffle.worker.RetainDiskNum","5"));
         this.subDirsPerLocalDir = conf.getInt("spark.diskStore.subDirectories", 64);
+        this.retainDiskNum = Integer.parseInt(conf.get("spark.shuffle.worker.RetainDiskNum","5"));
         ProcessBuilder diskTypeProcess = new ProcessBuilder().command(
                 "lsblk", "-d", "-o", "name,rota");
         Process proc = diskTypeProcess.start();
@@ -64,7 +69,7 @@ public class DiskManager {
                 diskInfos.add(new DiskInfo(deviceName, mountPoint, diskType));
             }
         }
-        workDirs = new DiskInfo[diskInfos.size()];
+        workDirs = diskInfos.toArray(new DiskInfo[0]);
         reader.close();
         proc.destroy();
     }
