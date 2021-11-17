@@ -33,7 +33,7 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)
   private[this] val maxRetries = RpcUtils.numRetries(conf)
   private[this] val retryWaitMs = RpcUtils.retryWaitMs(conf)
   private[this] val defaultAskTimeout = RpcUtils.askRpcTimeout(conf)
-
+  private[this] val yarnAskTimeout = RpcUtils.askYarnTimeout(conf)
   /**
    * return the address for the [[RpcEndpointRef]]
    */
@@ -72,6 +72,8 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)
    * This method only sends the message once and never retries.
    */
   def ask[T: ClassTag](message: Any): Future[T] = ask(message, defaultAskTimeout)
+
+  def ask[T: ClassTag](message: Any, askType: String): Future[T] = ask(message, yarnAskTimeout)
 
   /**
    * Send a message to the corresponding [[RpcEndpoint.receiveAndReply]] and get its result within a

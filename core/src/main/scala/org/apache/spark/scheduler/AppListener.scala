@@ -78,7 +78,7 @@ private[spark] class AppListener(
 
   override def onOtherEvent(event: SparkListenerEvent): Unit = event match {
     case e: SparkListenerRuleExecute => onRuleExecute(e)
-    case e: SparkListenerRequestYarnTime => onYarnRequest(e)
+//    case e: SparkListenerRequestYarnTime => onYarnRequest(e)
     case _ =>
   }
 

@@ -701,11 +701,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       doRequestTotalExecutors(requestedTotalExecutorsPerResourceProfile.toMap)
     }
 
-    val start = System.currentTimeMillis()
-    val flag = defaultAskTimeout.awaitResult(response)
-    val end = System.currentTimeMillis()
-    listenerBus.post(SparkListenerRequestYarnTime(end - start))
-    flag
+    defaultAskTimeout.awaitResult(response)
   }
 
   /**
@@ -746,11 +742,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       this.rpHostToLocalTaskCount = hostToLocalTaskCount
       doRequestTotalExecutors(requestedTotalExecutorsPerResourceProfile.toMap)
     }
-    val start = System.currentTimeMillis()
-    val flag = defaultAskTimeout.awaitResult(response)
-    val end = System.currentTimeMillis()
-    listenerBus.post(SparkListenerRequestYarnTime(end - start))
-    flag
+    defaultAskTimeout.awaitResult(response)
   }
 
   /**
@@ -851,11 +843,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       )(ThreadUtils.sameThread)
     }
 
-    val start = System.currentTimeMillis()
-    val flag = defaultAskTimeout.awaitResult(response)
-    val end = System.currentTimeMillis()
-    listenerBus.post(SparkListenerRequestYarnTime(end - start))
-    flag
+    defaultAskTimeout.awaitResult(response)
   }
 
   /**

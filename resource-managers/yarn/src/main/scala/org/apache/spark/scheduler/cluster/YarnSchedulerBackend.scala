@@ -159,14 +159,15 @@ private[spark] abstract class YarnSchedulerBackend(
    */
   override def doRequestTotalExecutors(
       resourceProfileToTotalExecs: Map[ResourceProfile, Int]): Future[Boolean] = {
-    yarnSchedulerEndpointRef.ask[Boolean](prepareRequestExecutors(resourceProfileToTotalExecs))
+    yarnSchedulerEndpointRef
+      .ask[Boolean](prepareRequestExecutors(resourceProfileToTotalExecs), "request")
   }
 
   /**
    * Request that the ApplicationMaster kill the specified executors.
    */
   override def doKillExecutors(executorIds: Seq[String]): Future[Boolean] = {
-    yarnSchedulerEndpointRef.ask[Boolean](KillExecutors(executorIds))
+    yarnSchedulerEndpointRef.ask[Boolean](KillExecutors(executorIds), "kill")
   }
 
   override def sufficientResourcesRegistered(): Boolean = {
