@@ -872,7 +872,10 @@ private[spark] class SparkSubmit extends Logging {
     }
     sparkConf.set(SUBMIT_PYTHON_FILES, formattedPyFiles.split(",").toSeq)
     val sparkConfHelper = new SparkConfHelper(sparkConf)
+    val start = System.currentTimeMillis()
     sparkConfHelper.applySparkConf
+    val end = System.currentTimeMillis()
+    logInfo("Execute HBO rule cost time: " + (end - start) + "ms")
 
     (childArgs.toSeq, childClasspath.toSeq, sparkConf, childMainClass)
   }

@@ -127,7 +127,7 @@ private[spark] class ApplicationDataRecord(
     val sparkVersion: String,
     val traceId: String,
     val maxRequestYarnTime: Long = 0,
-    val ruleNames: HashMap[String, Int] = null) extends Record
+    val ruleNames: HashMap[String, Int] = HashMap.empty[String, Int]) extends Record
 
 private[spark] class ExecutionDataRecord(
     val appId: String,

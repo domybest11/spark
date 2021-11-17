@@ -20,7 +20,8 @@ class SparkConfHelper(sparkConf: SparkConf) extends Logging {
   private val rules = Seq(
     ExecutorMemoryRule(sparkConf),
     DataSourceGrayScaleRelease(sparkConf),
-    AllocationRatioRule(sparkConf))
+    AllocationRatioRule(sparkConf),
+    RepartitionBeforeWriteTableRule(sparkConf))
 
   def execute: Unit = {
     rules.foreach(r => r.apply(this))
@@ -36,7 +37,7 @@ class SparkConfHelper(sparkConf: SparkConf) extends Logging {
 
   def getMetricByKey(key: String): Option[AnyRef] = {
     if (metrics == null) {
-      return null
+      return None
     }
     Option(metrics.get(key))
   }
