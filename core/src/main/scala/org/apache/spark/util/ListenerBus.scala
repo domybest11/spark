@@ -54,6 +54,12 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
     Long.MaxValue
   }
 
+  private lazy val logSlowEventVerbose = if (env != null) {
+    env.conf.get(config.LISTENER_BUS_LOG_SLOW_EVENT_VERBOSE)
+  } else {
+    false
+  }
+
   /**
    * Returns a CodaHale metrics Timer for measuring the listener's event processing time.
    * This method is intended to be overridden by subclasses.
@@ -130,8 +136,13 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
         if (maybeTimerContext != null) {
           val elapsed = maybeTimerContext.stop()
           if (logSlowEventEnabled && elapsed > logSlowEventThreshold) {
-            logInfo(s"Process of event ${redactEvent(event)} by listener ${listenerName} took " +
-              s"${elapsed / 1000000000d}s.")
+            if (logSlowEventVerbose) {
+              logInfo(s"Process of event ${redactEvent(event)} " +
+                s"by listener $listenerName took ${elapsed / 1000000000d}s.")
+            } else {
+              logInfo(s"Process of event ${event.getClass.getCanonicalName} " +
+                s"by listener $listenerName took ${elapsed / 1000000000d}s.")
+            }
           }
         }
       }

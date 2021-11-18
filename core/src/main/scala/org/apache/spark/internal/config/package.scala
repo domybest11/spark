@@ -963,6 +963,15 @@ package object config {
       .timeConf(TimeUnit.NANOSECONDS)
       .createWithDefaultString("1s")
 
+  private[spark] val LISTENER_BUS_LOG_SLOW_EVENT_VERBOSE =
+    ConfigBuilder("spark.scheduler.listenerbus.logSlowEvent.verbose")
+      .internal()
+      .doc("Print detail event info which may be lengthy" +
+        s"Log the event if ${LISTENER_BUS_LOG_SLOW_EVENT_ENABLED.key} is true.")
+      .version("3.0.0")
+      .booleanConf
+      .createWithDefault(false)
+
   // This property sets the root namespace for metrics reporting
   private[spark] val METRICS_NAMESPACE = ConfigBuilder("spark.metrics.namespace")
     .version("2.1.0")
