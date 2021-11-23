@@ -55,7 +55,8 @@ private[spark] class AppCostReporter(conf: SparkConf) {
       case None => conf.getOption("spark.trace.id")
     }
 
-    if (finalTraceId.isDefined && enableTraceReporter && Option(lancerUrl).isDefined) {
+    if (finalTraceId.isDefined && !finalTraceId.get.equals("") &&
+      enableTraceReporter && Option(lancerUrl).isDefined) {
       val triggerTime = System.currentTimeMillis()
       val commonParams = Map("app" -> app, "recordSource" -> source, "traceId" -> finalTraceId.get)
       val paramJson = Serialization.write(commonParams ++ params)
