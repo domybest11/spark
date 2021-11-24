@@ -90,7 +90,7 @@ class CoalesceShufflePartitionsSuite extends SparkFunSuite with BeforeAndAfterAl
     }
 
     test(s"determining the number of reducers: aggregate operator$testNameNote") {
-      val test = { spark: SparkSession =>
+      val test: SparkSession => Unit = { spark: SparkSession =>
         val df =
           spark
             .range(0, 1000, 1, numInputPartitions)
@@ -109,14 +109,13 @@ class CoalesceShufflePartitionsSuite extends SparkFunSuite with BeforeAndAfterAl
         val shuffleReaders = finalPlan.collect {
           case r @ CoalescedShuffleReader() => r
         }
-        assert(shuffleReaders.length === 1)
+
         minNumPostShufflePartitions match {
           case Some(numPartitions) =>
-            shuffleReaders.foreach { reader =>
-              assert(reader.outputPartitioning.numPartitions === numPartitions)
-            }
+            assert(shuffleReaders.isEmpty)
 
           case None =>
+            assert(shuffleReaders.length === 1)
             shuffleReaders.foreach { reader =>
               assert(reader.outputPartitioning.numPartitions === 3)
             }
@@ -127,7 +126,7 @@ class CoalesceShufflePartitionsSuite extends SparkFunSuite with BeforeAndAfterAl
     }
 
     test(s"determining the number of reducers: join operator$testNameNote") {
-      val test = { spark: SparkSession =>
+      val test: SparkSession => Unit = { spark: SparkSession =>
         val df1 =
           spark
             .range(0, 1000, 1, numInputPartitions)
@@ -156,14 +155,13 @@ class CoalesceShufflePartitionsSuite extends SparkFunSuite with BeforeAndAfterAl
         val shuffleReaders = finalPlan.collect {
           case r @ CoalescedShuffleReader() => r
         }
-        assert(shuffleReaders.length === 2)
+
         minNumPostShufflePartitions match {
           case Some(numPartitions) =>
-            shuffleReaders.foreach { reader =>
-              assert(reader.outputPartitioning.numPartitions === numPartitions)
-            }
+            assert(shuffleReaders.isEmpty)
 
           case None =>
+            assert(shuffleReaders.length === 2)
             shuffleReaders.foreach { reader =>
               assert(reader.outputPartitioning.numPartitions === 2)
             }
@@ -208,14 +206,13 @@ class CoalesceShufflePartitionsSuite extends SparkFunSuite with BeforeAndAfterAl
         val shuffleReaders = finalPlan.collect {
           case r @ CoalescedShuffleReader() => r
         }
-        assert(shuffleReaders.length === 2)
+
         minNumPostShufflePartitions match {
           case Some(numPartitions) =>
-            shuffleReaders.foreach { reader =>
-              assert(reader.outputPartitioning.numPartitions === numPartitions)
-            }
+            assert(shuffleReaders.isEmpty)
 
           case None =>
+            assert(shuffleReaders.length === 2)
             shuffleReaders.foreach { reader =>
               assert(reader.outputPartitioning.numPartitions === 2)
             }
@@ -260,14 +257,13 @@ class CoalesceShufflePartitionsSuite extends SparkFunSuite with BeforeAndAfterAl
         val shuffleReaders = finalPlan.collect {
           case r @ CoalescedShuffleReader() => r
         }
-        assert(shuffleReaders.length === 2)
+
         minNumPostShufflePartitions match {
           case Some(numPartitions) =>
-            shuffleReaders.foreach { reader =>
-              assert(reader.outputPartitioning.numPartitions === numPartitions)
-            }
+            assert(shuffleReaders.isEmpty)
 
           case None =>
+            assert(shuffleReaders.length === 2)
             shuffleReaders.foreach { reader =>
               assert(reader.outputPartitioning.numPartitions === 3)
             }

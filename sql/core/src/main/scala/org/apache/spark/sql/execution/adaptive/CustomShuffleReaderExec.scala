@@ -34,11 +34,14 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  *
  * @param child           It is usually `ShuffleQueryStageExec`, but can be the shuffle exchange
  *                        node during canonicalization.
- * @param partitionSpecs  The partition specs that defines the arrangement.
+ * @param partitionSpecs  The partition specs that defines the arrangement, requires at least one
+ *                        partition.
  */
 case class CustomShuffleReaderExec private(
     child: SparkPlan,
     partitionSpecs: Seq[ShufflePartitionSpec]) extends UnaryExecNode {
+  assert(partitionSpecs.nonEmpty, "CustomShuffleReaderExec requires at least one partition")
+
   // If this reader is to read shuffle files locally, then all partition specs should be
   // `PartialMapperPartitionSpec`.
   if (partitionSpecs.exists(_.isInstanceOf[PartialMapperPartitionSpec])) {
@@ -52,8 +55,7 @@ case class CustomShuffleReaderExec private(
     // If it is a local shuffle reader with one mapper per task, then the output partitioning is
     // the same as the plan before shuffle.
     // TODO this check is based on assumptions of callers' behavior but is sufficient for now.
-    if (partitionSpecs.nonEmpty &&
-        partitionSpecs.forall(_.isInstanceOf[PartialMapperPartitionSpec]) &&
+    if (partitionSpecs.forall(_.isInstanceOf[PartialMapperPartitionSpec]) &&
         partitionSpecs.map(_.asInstanceOf[PartialMapperPartitionSpec].mapIndex).toSet.size ==
           partitionSpecs.length) {
       child match {
@@ -94,7 +96,8 @@ case class CustomShuffleReaderExec private(
     partitionSpecs.exists(_.isInstanceOf[PartialReducerPartitionSpec])
 
   def isLocalReader: Boolean =
-    partitionSpecs.exists(_.isInstanceOf[PartialMapperPartitionSpec])
+    partitionSpecs.exists(_.isInstanceOf[PartialMapperPartitionSpec]) ||
+      partitionSpecs.exists(_.isInstanceOf[CoalescedMapperPartitionSpec])
 
   private def shuffleStage = child match {
     case stage: ShuffleQueryStageExec => Some(stage)
@@ -102,11 +105,11 @@ case class CustomShuffleReaderExec private(
   }
 
   @transient private lazy val partitionDataSizes: Option[Seq[Long]] = {
-    if (partitionSpecs.nonEmpty && !isLocalReader && shuffleStage.get.mapStats.isDefined) {
-      val bytesByPartitionId = shuffleStage.get.mapStats.get.bytesByPartitionId
+    if (!isLocalReader && shuffleStage.get.mapStats.isDefined) {
       Some(partitionSpecs.map {
-        case CoalescedPartitionSpec(startReducerIndex, endReducerIndex) =>
-          startReducerIndex.until(endReducerIndex).map(bytesByPartitionId).sum
+        case p: CoalescedPartitionSpec =>
+          assert(p.dataSize.isDefined)
+          p.dataSize.get
         case p: PartialReducerPartitionSpec => p.dataSize
         case p => throw new IllegalStateException("unexpected " + p)
       })

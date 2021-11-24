@@ -96,10 +96,11 @@ case class AdaptiveSparkPlanExec(
   @transient private val queryStageOptimizerRules: Seq[Rule[SparkPlan]] = Seq(
     PlanAdaptiveDynamicPruningFilters(this),
     ReuseAdaptiveSubquery(context.subqueryCache),
-    CoalesceShufflePartitions(context.session),
-    // The following two rules need to make use of 'CustomShuffleReaderExec.partitionSpecs'
-    // added by `CoalesceShufflePartitions`. So they must be executed after it.
+    // Skew join does not handle `CustomShuffleReader` so needs to be applied first.
     OptimizeSkewedJoin,
+    CoalesceShufflePartitions(context.session),
+    // `OptimizeLocalShuffleReader` needs to make use of 'CustomShuffleReaderExec.partitionSpecs'
+    // added by `CoalesceShufflePartitions`, and must be executed after it.
     OptimizeLocalShuffleReader
   )
 
@@ -128,6 +129,27 @@ case class AdaptiveSparkPlanExec(
   }
 
   @transient private val costEvaluator = SimpleCostEvaluator
+
+  private def optimizeQueryStage(plan: SparkPlan, rules: Seq[Rule[SparkPlan]]): SparkPlan = {
+    val optimized = rules.foldLeft(plan) { case (latestPlan, rule) =>
+      val applied = rule.apply(latestPlan)
+      val result = rule match {
+        case c: CustomShuffleReaderRule if c.mayAddExtraShuffles =>
+          if (ValidateRequirements.validate(applied)) {
+            applied
+          } else {
+            logDebug(s"Rule ${rule.ruleName} is not applied due to additional shuffles " +
+              "will be introduced.")
+            latestPlan
+          }
+        case _ => applied
+      }
+      planChangeLogger.logRule(rule.ruleName, latestPlan, result)
+      result
+    }
+    planChangeLogger.logBatch("AQE Query Stage Optimization", plan, optimized)
+    optimized
+  }
 
   @transient private val initialPlan = context.session.withActive {
     applyPhysicalRules(
@@ -265,10 +287,7 @@ case class AdaptiveSparkPlanExec(
       }
 
       // Run the final plan when there's no more unfinished stages.
-      currentPhysicalPlan = applyPhysicalRules(
-        result.newPlan,
-        finalStageOptimizerRules,
-        Some((planChangeLogger, "AQE Final Query Stage Optimization")))
+      currentPhysicalPlan = optimizeQueryStage(result.newPlan, finalStageOptimizerRules)
       isFinalPlan = true
       executionId.foreach(onUpdatePlan(_, Seq(currentPhysicalPlan)))
       currentPhysicalPlan
@@ -471,8 +490,7 @@ case class AdaptiveSparkPlanExec(
   }
 
   private def newQueryStage(e: Exchange): QueryStageExec = {
-    val optimizedPlan = applyPhysicalRules(
-      e.child, queryStageOptimizerRules, Some((planChangeLogger, "AQE Query Stage Optimization")))
+    val optimizedPlan = optimizeQueryStage(e.child, queryStageOptimizerRules)
     val queryStage = e match {
       case s: ShuffleExchangeLike =>
         val newShuffle = applyPhysicalRules(
