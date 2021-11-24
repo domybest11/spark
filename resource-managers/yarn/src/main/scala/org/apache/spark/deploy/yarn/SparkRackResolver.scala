@@ -17,8 +17,11 @@
 
 package org.apache.spark.deploy.yarn
 
+import java.util.concurrent.TimeUnit
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.ExecutionContext
 
 import com.google.common.base.Strings
 import org.apache.hadoop.conf.Configuration
@@ -29,6 +32,9 @@ import org.apache.hadoop.yarn.util.RackResolver
 import org.apache.log4j.{Level, Logger}
 
 import org.apache.spark.internal.Logging
+import org.apache.spark.util.ThreadUtils
+
+
 
 /**
  * Re-implement YARN's [[RackResolver]] for hadoop releases without YARN-9332.
@@ -72,7 +78,17 @@ private[spark] class SparkRackResolver(conf: Configuration) extends Logging {
     }
     val nodes = new ArrayBuffer[Node]
     // dnsToSwitchMapping is thread-safe
-    val rNameList = dnsToSwitchMapping.resolve(hostNames.toList.asJava).asScala
+    val rseFuture = SparkRackResolver.sparkRackResolverExecutor.submit(
+      () => dnsToSwitchMapping.resolve(hostNames.toList.asJava).asScala
+    )
+
+    val rNameList = try {
+      rseFuture.get(5, TimeUnit.SECONDS)
+    } catch {
+      case ex: Exception =>
+        Seq.empty[String]
+    }
+
     if (rNameList == null || rNameList.isEmpty) {
       hostNames.foreach(nodes += new NodeBase(_, NetworkTopology.DEFAULT_RACK))
       logInfo(s"Got an error when resolving hostNames. " +
@@ -116,4 +132,6 @@ object SparkRackResolver extends Logging {
     instance
   }
 
+  private val sparkRackResolverExecutor = ExecutionContext.fromExecutorService(
+    ThreadUtils.newDaemonSingleThreadExecutor("spark-rack-resolver"))
 }

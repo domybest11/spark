@@ -21,6 +21,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, HashMap, Set}
 
 import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.net.NetworkTopology
 import org.apache.hadoop.yarn.api.records.ContainerId
 import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest
 
@@ -140,7 +141,9 @@ private[yarn] class LocalityPreferredContainerPlacementStrategy(
         // still be allocated with new container request.
         val hosts = preferredLocalityRatio.filter(_._2 > 0).keys.toArray
         val racks = resolver.resolve(hosts).map(_.getNetworkLocation)
-          .filter(_ != null).toSet
+          .filter(location =>
+            location != null && !location.equalsIgnoreCase(NetworkTopology.DEFAULT_RACK)
+          ).toSet
         containerLocalityPreferences += ContainerLocalityPreferences(hosts, racks.toArray)
 
         // Minus 1 each time when the host is used. When the current ratio is 0,
