@@ -180,6 +180,9 @@ wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sd
 # Copy jar
 cp "$SPARK_HOME"/assembly/target/scala*/jars/* "$DISTDIR/jars/"
 
+# Cpoy ranger jar
+cp "$SPARK_HOME"/spark-ranger/spark-ranger-1.0-SNAPSHOT.jar "$DISTDIR/jars/"
+
 # Only create the yarn directory if the yarn artifacts were built.
 if [ -f "$SPARK_HOME"/common/network-yarn/target/scala*/spark-*-yarn-shuffle.jar ]; then
   mkdir "$DISTDIR/yarn"
