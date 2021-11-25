@@ -83,7 +83,7 @@ install_mvn() {
     fi
 
     install_app \
-      "${APACHE_MIRROR}/maven/maven-3/${MVN_VERSION}/binaries" \
+      "http://bazel-cabin.bilibili.co/maven/maven-3/${MVN_VERSION}/binaries" \
       "apache-maven-${MVN_VERSION}-bin.tar.gz" \
       "apache-maven-${MVN_VERSION}/bin/mvn"
 
