@@ -31,6 +31,7 @@ import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReferences
 import org.apache.spark.sql.catalyst.expressions.codegen._
 import org.apache.spark.sql.catalyst.plans.physical._
+import org.apache.spark.sql.execution.command.DataWritingCommandExec
 import org.apache.spark.sql.execution.metric.SQLMetrics
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 import org.apache.spark.sql.types.{LongType, StructType}
@@ -663,8 +664,13 @@ case class UnionExec(children: Seq[SparkPlan]) extends SparkPlan {
     }
   }
 
-  protected override def doExecute(): RDD[InternalRow] =
-    sparkContext.union(children.map(_.execute()))
+  protected override def doExecute(): RDD[InternalRow] = {
+    if (children.forall(_.isInstanceOf[DataWritingCommandExec])) {
+      sparkContext.union(children.par.map(_.execute()).seq)
+    } else {
+      sparkContext.union(children.map(_.execute()))
+    }
+  }
 }
 
 /**
