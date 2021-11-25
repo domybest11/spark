@@ -433,6 +433,12 @@ object SQLConf {
     .bytesConf(ByteUnit.BYTE)
     .createWithDefaultString("25MB")
 
+  val LIMIT_INIT_PART_NUM = buildConf("spark.sql.limit.initPartNum")
+    .internal()
+    .doc("The number is the number of initialization tasks that limit the query.")
+    .longConf
+    .createWithDefault(50)
+
   val LIMIT_SCALE_UP_FACTOR = buildConf("spark.sql.limit.scaleUpFactor")
     .internal()
     .doc("Minimal increase rate in number of partitions between attempts when executing a take " +
@@ -3578,6 +3584,8 @@ class SQLConf extends Serializable with Logging {
   def enableFallBackToSMJ: Boolean = getConf(ENABLE_FALL_BACK_TO_SMJ)
 
   def autoBroadcastJoinThreshold: Long = getConf(AUTO_BROADCASTJOIN_THRESHOLD)
+
+  def limitInitPartNum: Long = getConf(LIMIT_INIT_PART_NUM)
 
   def limitScaleUpFactor: Int = getConf(LIMIT_SCALE_UP_FACTOR)
 
