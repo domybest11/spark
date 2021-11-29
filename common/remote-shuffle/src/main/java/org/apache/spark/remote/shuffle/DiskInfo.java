@@ -36,7 +36,7 @@ public class DiskInfo {
 
 
     public static class DiskMetrics{
-        public final AvailableGauge diskSpaceAvailable = new AvailableGauge();
+        public final AvailableGauge diskSpaceUsed = new AvailableGauge();
         public final AvailableGauge diskInodeAvailable = new AvailableGauge();
         public final IOGauge diskReadsCompleted = new IOGauge();
         public final IOGauge diskWritesCompleted = new IOGauge();

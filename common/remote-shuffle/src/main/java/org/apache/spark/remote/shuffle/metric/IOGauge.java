@@ -19,7 +19,7 @@ public class IOGauge implements Gauge<Long> {
     public Long getValue() {
         if (pre != 0) {
             if ((cur - pre) != 0) {
-                return (cur - pre) * 1000 / (curTime - preTime) ;
+                return (long)(1.0 * (cur - pre) / (curTime - preTime) * 1000);
             }
         }
         return 0L;

@@ -110,7 +110,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 NetworkTracker.collectNetworkInfo(workerMetrics, monitorInterval);
                 IOStatusTracker.collectIOInfo(diskManager.workDirs, monitorInterval);
             }, 0, monitorInterval, TimeUnit.SECONDS);
-            client = clientFactory.createClient(masterHost, masterPort);
+            heartbeatThread.scheduleAtFixedRate(
+                new Heartbeat(), 10, heartbeatInterval, TimeUnit.SECONDS);
             registerRemoteShuffleWorker();
         } catch (InterruptedException e) {
             throw new IOException(e);
@@ -121,9 +122,10 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         ByteBuffer registerWorker = new RegisterWorker(localHost, localPort).toByteBuffer();
         for (int i = 0; ; i++) {
             try {
+                if (null == client || !client.isActive()) {
+                    connection();
+                }
                 client.sendRpcSync(registerWorker, 3000L);
-                heartbeatThread.scheduleAtFixedRate(
-                        new Heartbeat(), 10, heartbeatInterval, TimeUnit.SECONDS);
                 logger.info("Registered remote shuffle worker successfully");
                 return;
             } catch (Exception e) {
@@ -131,7 +133,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                     logger.warn("Failed to connect to remote shuffle server, will retry {} more times after waiting 10 seconds...", i - 1, e);
                     Thread.sleep(10 * 1000L);
                 } else {
-                    logger.error("Unable to register with remote shuffle server due to: {}", e.getCause());
+                    logger.warn("Unable to register with remote shuffle server due to: {}", e.getCause());
+                    return;
                 }
             }
         }
@@ -139,6 +142,9 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
     private void unregisterRemoteShuffleWorker() {
         ByteBuffer unregisterWorker = new UnregisterWorker(localHost, localPort).toByteBuffer();
+        if (!client.isActive()) {
+            connection();
+        }
         client.send(unregisterWorker);
     }
 
@@ -186,7 +192,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 RegisterExecutor msg = (RegisterExecutor) msgObj;
                 checkAuth(client, msg.appId);
                 blockManager.registerExecutor(msg.appId, msg.execId, msg.executorInfo);
-                // 这里不在使用mergeManager注册工作目录
                 callback.onSuccess(ByteBuffer.wrap(new byte[0]));
                 logger.info("Registered executor {} of appId {} with executorInfo {} from host {}",
                         msg.execId,
@@ -218,7 +223,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
     private void registerExecutor(String appId, int attemptId) {
         Map<String, String> mergedMetaMap = new HashMap<>();
-        mergedMetaMap.put(MERGE_DIR_KEY, "merge_manager_" + attemptId);
+        mergedMetaMap.put(MERGE_DIR_KEY, "merge_manager");
         mergedMetaMap.put(ATTEMPT_ID_KEY, String.valueOf(attemptId));
         ObjectMapper mapper = new ObjectMapper();
         String jsonString = null;
@@ -249,19 +254,23 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             List<RunningStage> currentRunningStages = new ArrayList<>();
             appStageMap.values().forEach(stageMap -> currentRunningStages.addAll(stageMap.values()));
             logger.info("worker send heartbeat");
-            if (!client.isActive()) {
-                 connection();
+            if (null == client || !client.isActive()) {
+                connection();
             }
             long[] workerMetric = workerMetrics.getCurrentMetrics();
-            logger.info("worker pressure: {}", workerMetric);
-            client.send(
-                        new RemoteShuffleWorkerHeartbeat(
+            try {
+                logger.info("worker pressure: {}", workerMetric);
+                client.send(
+                    new RemoteShuffleWorkerHeartbeat(
                         localHost,
                         localPort,
                         System.currentTimeMillis(),
                         workerMetric,
                         currentRunningStages.toArray(new RunningStage[0])
-                ).toByteBuffer());
+                    ).toByteBuffer());
+            } catch (Exception e) {
+                    logger.warn("Unable to send heartbeat to remote shuffle server due to: {}", e.getCause());
+            }
         }
     }
 
@@ -291,7 +300,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         public final Meter workerNetworkOut = new Meter();
 
         // Connection
-        private final Counter workerAliveConnection = new Counter();
+        private final Counter workerAliveConnection = metrics.activeConnections;
 
         public long[] getCurrentMetrics() {
             int diskNums = diskManager.workDirs.length;
@@ -311,9 +320,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 metrics[10 + i * 8] = (long) diskMetrics.diskWrite.getFiveMinuteRate();
                 metrics[11 + i * 8] = diskMetrics.diskIOTime.getValue();
                 metrics[12 + i * 8] = (long) diskMetrics.diskUtils.getFiveMinuteRate();
-                metrics[13 + i * 8] = diskMetrics.diskSpaceAvailable.getValue();
+                metrics[13 + i * 8] = diskMetrics.diskSpaceUsed.getValue();
                 metrics[14 + i * 8] = diskMetrics.diskInodeAvailable.getValue();
-
             }
             metrics[7 + diskNums * 8] = diskNums;
             return metrics;

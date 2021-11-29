@@ -19,7 +19,7 @@ public class WorkerInfo {
     private static final Logger logger = LoggerFactory.getLogger(WorkerInfo.class);
     private String host;
     private int port;
-    private long latestHeartbeatTime;
+    public long latestHeartbeatTime;
     private WorkerPressure pressure;
     private long startTime;
     public LinkedList<Double> historyScores = new LinkedList<Double>();

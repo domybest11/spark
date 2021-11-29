@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 
 
 public class DiskManager {
-    private static final Logger logger = LoggerFactory.getLogger(RemoteBlockHandler.class);
+    private static final Logger logger = LoggerFactory.getLogger(DiskManager.class);
     private TransportConf conf;
     private final int subDirsPerLocalDir;
     public final DiskInfo[] workDirs;
@@ -37,8 +37,8 @@ public class DiskManager {
     public DiskManager(TransportConf conf) throws IOException {
         this.conf = conf;
         this.diskIoUtilThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskIOUtils","0.9"));
-        this.diskSpaceThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskSpace","0.1"));
-        this.diskInodeThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskInode","0.1"));
+        this.diskSpaceThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskSpaceUsed","0.9"));
+        this.diskInodeThreshold = Double.parseDouble(conf.get("spark.shuffle.worker.diskInodeUsed","0.9"));
         this.retainDiskNum = Integer.parseInt(conf.get("spark.shuffle.worker.RetainDiskNum","5"));
         this.subDirsPerLocalDir = conf.getInt("spark.diskStore.subDirectories", 64);
         this.retainDiskNum = Integer.parseInt(conf.get("spark.shuffle.worker.RetainDiskNum","5"));
@@ -108,7 +108,7 @@ public class DiskManager {
     public void cleanApplication(String appId, int attemptId) {
         String appKey = appId + "_" + attemptId;
         List<String> localDirs = localMergeDirs.remove(appKey);
-        if (!localDirs.isEmpty()) {
+        if (null != localDirs && !localDirs.isEmpty()) {
             mergedDirCleaner.execute(() ->
                     deleteExecutorDirs(localDirs, appKey));
         }
@@ -162,15 +162,15 @@ public class DiskManager {
 
 
     private List<DiskInfo> chooseDir() {
-        List<DiskInfo> diskInfos = Arrays.asList(workDirs);
+        List<DiskInfo> diskInfos = new ArrayList<>(Arrays.asList(workDirs));
         Iterator<DiskInfo> iterator = diskInfos.iterator();
         while (iterator.hasNext()) {
             DiskInfo diskInfo = iterator.next();
             double diskIOUtils = 1.0 * diskInfo.diskMetrics.diskIOTime.getValue() / 100;
-            double diskSpaceAvailable = 1.0 * diskInfo.diskMetrics.diskSpaceAvailable.getValue() / 100;
+            double diskSpaceUsed = 1.0 * diskInfo.diskMetrics.diskSpaceUsed.getValue() / 100;
             double diskInodeAvailable = 1.0 * diskInfo.diskMetrics.diskInodeAvailable.getValue() / 100;
             if (diskIOUtils > diskIoUtilThreshold ||
-                    diskSpaceAvailable < diskSpaceThreshold || diskInodeAvailable < diskInodeThreshold) {
+                    diskSpaceUsed > diskSpaceThreshold || diskInodeAvailable > diskInodeThreshold) {
                 iterator.remove();
             }
         }

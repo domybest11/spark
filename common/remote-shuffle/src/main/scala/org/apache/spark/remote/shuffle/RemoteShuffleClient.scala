@@ -72,6 +72,9 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
   def startApplication(appId: String,
                        appAttemptId: Option[String],
                        reportInterval: Long): Unit = {
+    if (!client.isActive) {
+      connection()
+    }
     client.sendRpc(
       new RegisterApplication(
         appId,
@@ -92,6 +95,9 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
   }
 
   def stopApplication(appId: String, appAttemptId: Option[String]): Unit = {
+    if (!client.isActive) {
+      connection()
+    }
     client.send(
       new UnregisterApplication(appId, Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer
     )

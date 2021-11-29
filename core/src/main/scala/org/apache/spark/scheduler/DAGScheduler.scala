@@ -1358,7 +1358,8 @@ private[spark] class DAGScheduler(
   private def prepareShuffleServicesForShuffleMapStage(stage: ShuffleMapStage): Unit = {
     assert(stage.shuffleDep.shuffleMergeEnabled && !stage.shuffleDep.shuffleMergeFinalized)
     if (stage.shuffleDep.getMergerLocs.isEmpty) {
-      val mergerLocs = if (sc.getConf.get(config.SHUFFLE_REMOTE_SERVICE_ENABLED)) {
+      val remoteShuffle = sc.remoteShuffleClient;
+      val mergerLocs = if (sc.getConf.get(config.SHUFFLE_REMOTE_SERVICE_ENABLED) && remoteShuffle.isDefined) {
         val res = new ArrayBuffer[BlockManagerId]()
         val tasksPerExecutor = sc.resourceProfileManager
           .resourceProfileFromId(stage.resourceProfileId).maxTasksPerExecutor(sc.conf)
@@ -1367,7 +1368,7 @@ private[spark] class DAGScheduler(
         } else {
           sc.getConf.get(config.EXECUTOR_INSTANCES).getOrElse(0)
         }
-        sc.remoteShuffleClient.map(client => {
+        remoteShuffle.map(client => {
           val workers = client.getShufflePushMergerLocations(
             sc.applicationId,
             sc.applicationAttemptId,

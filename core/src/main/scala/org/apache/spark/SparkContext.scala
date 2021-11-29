@@ -689,10 +689,15 @@ class SparkContext(config: SparkConf) extends Logging {
         _applicationAttemptId,
         _conf,
         remoteClient)
-      remoteListener.start()
-      listenerBus.addToStatusQueue(remoteListener)
-      _remoteShuffle = Some(remoteClient)
-      _remoteShuffleListener = Some(remoteListener)
+      val startStatus = remoteListener.start()
+      if (startStatus) {
+        listenerBus.addToStatusQueue(remoteListener)
+        _remoteShuffle = Some(remoteClient)
+        _remoteShuffleListener = Some(remoteListener)
+      } else {
+        _remoteShuffle = None
+        _remoteShuffleListener = None
+      }
     } else {
       _remoteShuffle = None
       _remoteShuffleListener = None

@@ -1,6 +1,7 @@
 package org.apache.spark.network.shuffle.protocol.remote;
 
 import io.netty.buffer.ByteBuf;
+import org.apache.spark.network.protocol.Encoders;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 
 public class CleanApplication extends BlockTransferMessage {
@@ -22,16 +23,24 @@ public class CleanApplication extends BlockTransferMessage {
 
     @Override
     public int encodedLength() {
-        return 0;
+        return Encoders.Strings.encodedLength(appId)
+            + 4;
     }
 
     @Override
     public void encode(ByteBuf buf) {
-
+        Encoders.Strings.encode(buf, appId);
+        buf.writeInt(attempt);
     }
 
     @Override
     protected Type type() {
-        return null;
+        return Type.CLEAN_APPLICATION;
+    }
+
+    public static CleanApplication decode(ByteBuf buf) {
+        String appId = Encoders.Strings.decode(buf);
+        int attempt = buf.readInt();
+        return new CleanApplication(appId, attempt);
     }
 }

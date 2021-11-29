@@ -19,10 +19,10 @@ package org.apache.spark.deploy.shuffle
 import java.util.concurrent.CountDownLatch
 
 import org.apache.spark.SparkConf
-import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.deploy.RemoteShuffleMasterHandler
+import org.apache.spark.internal.{Logging, config}
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.util.TransportConf
-import org.apache.spark.remote.shuffle.RemoteShuffleMasterHandler
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 
 object RemoteShuffleMaster extends Logging {

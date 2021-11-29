@@ -31,9 +31,16 @@ private[spark] class RemoteShuffleListener(
 
   private val reportInterval = sparkConf.get(SHUFFLE_REMOTE_REPORT_INTERVAL)
 
-  def start(): Unit = {
-    shuffleClient.start()
-    logInfo(s"remote shuffle service driver client start success")
+  def start(): Boolean = {
+    try {
+      shuffleClient.start()
+      logInfo(s"remote shuffle service driver client start success")
+      true
+    } catch {
+      case e: Exception =>
+        logWarning("remote shuffle service driver client start Failed", e)
+        false
+    }
   }
 
   def stop(): Unit = {
