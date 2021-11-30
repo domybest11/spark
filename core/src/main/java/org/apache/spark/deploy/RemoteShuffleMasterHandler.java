@@ -112,7 +112,7 @@ public class RemoteShuffleMasterHandler {
         this.port = port;
         this.conf = conf;
         this.applicationExpireTimeout = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.application.expire","600s")) * 1000;
-        this.workerExpireTimeout = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.worker.expire","600s")) * 1000;
+        this.workerExpireTimeout = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.worker.expire","300s")) * 1000;
         this.busyScore = Double.parseDouble(conf.get("spark.shuffle.worker.busyScore","0.9"));
         this.blackScore = Double.parseDouble(conf.get("spark.shuffle.worker.blackScore","0.95"));
         this.wellTime = Integer.parseInt(conf.get("spark.shuffle.worker.wellTime","5"));

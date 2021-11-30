@@ -90,7 +90,7 @@ public class DiskManager {
                         if (!subDir.exists()) {
                             // Only one container will create this directory. The filesystem will handle
                             // any race conditions.
-                            createDirWithPermission770(subDir);
+                            createDirWithPermission775(subDir);
                         }
                     } catch (IOException | InterruptedException e) {
                         e.printStackTrace();
@@ -115,7 +115,7 @@ public class DiskManager {
     }
 
 
-    private void createDirWithPermission770(File dirToCreate) throws IOException, InterruptedException {
+    private void createDirWithPermission775(File dirToCreate) throws IOException, InterruptedException {
         int attempts = 0;
         int maxAttempts = 3;
         File created = null;
@@ -123,18 +123,18 @@ public class DiskManager {
             attempts += 1;
             if (attempts > maxAttempts) {
                 throw new IOException(
-                        "Failed to create directory " + dirToCreate.getAbsolutePath() + " with permission 770 after 3 attempts!");
+                        "Failed to create directory " + dirToCreate.getAbsolutePath() + " with permission 774 after 3 attempts!");
             }
             try {
                 ProcessBuilder builder = new ProcessBuilder().command(
-                        "mkdir", "-p", "-m770", dirToCreate.getAbsolutePath());
+                        "mkdir", "-p", "-m775", dirToCreate.getAbsolutePath());
                 Process proc = builder.start();
                 int exitCode = proc.waitFor();
                 if (dirToCreate.exists()) {
                     created = dirToCreate;
                 }
             } catch (SecurityException e) {
-                logger.warn("Failed to create directory " + dirToCreate.getAbsolutePath() + " with permission 770", e);
+                logger.warn("Failed to create directory " + dirToCreate.getAbsolutePath() + " with permission 774", e);
                 created = null;
             }
         }
