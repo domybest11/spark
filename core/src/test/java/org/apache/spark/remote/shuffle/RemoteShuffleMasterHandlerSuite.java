@@ -96,28 +96,28 @@ public class RemoteShuffleMasterHandlerSuite {
         System.out.println(diskInfos.size());
 
         long[] metrics = new long[]{96, 48, 3851, 2300, 3971, 2109, 0,
-                0, 42, 280, 138, 26, 18, 15, 1,
-                0, 0, 263, 113, 29, 15, 12, 1,
-                0, 0, 234, 119, 40, 20, 1, 1,
-                0, 0, 218, 185, 37, 28, 1, 1,
-                0, 0, 350, 137, 62, 23, 1, 1,
-                0, 0, 281, 136, 48, 24, 1, 1,
-                0, 0, 140, 115, 22, 20, 1, 1,
-                0, 0, 150, 110, 26, 18, 1, 1,
-                0, 0, 173, 105, 32, 20, 1, 1,
-                0, 0, 240, 109, 41, 19, 1, 1,
-                0, 0, 212, 123, 38, 21, 1, 1,
-                0, 0, 176, 106, 39, 18, 1, 1,
-                0, 0, 250, 112, 40, 19, 1, 1,
-                0, 0, 436, 142, 67, 22, 1, 1,
+                0, 42, 280, 138, 26, 18, 15, 1, 0,
+                0, 0, 263, 113, 29, 15, 12, 1, 0,
+                0, 0, 234, 119, 40, 20, 1, 1, 0,
+                0, 0, 218, 185, 37, 28, 1, 1, 1,
+                0, 0, 350, 137, 62, 23, 1, 1, 1,
+                0, 0, 281, 136, 48, 24, 1, 1, 1,
+                0, 0, 140, 115, 22, 20, 1, 1, 1,
+                0, 0, 150, 110, 26, 18, 1, 1, 1,
+                0, 0, 173, 105, 32, 20, 1, 1, 1,
+                0, 0, 240, 109, 41, 19, 1, 1, 1,
+                0, 0, 212, 123, 38, 21, 1, 1, 1,
+                0, 0, 176, 106, 39, 18, 1, 1, 1,
+                0, 0, 250, 112, 40, 19, 1, 1, 1,
+                0, 0, 436, 142, 67, 22, 1, 1, 1,
                 14};
         WorkerPressure pressure = new WorkerPressure(metrics);
         Map<String, String> config = new HashMap<>();
         MapConfigProvider map = new MapConfigProvider(config);
         TransportConf conf = new TransportConf("shuffle", map);
         RemoteShuffleMasterHandler handler = new RemoteShuffleMasterHandler("", 0, conf);
-        double score = handler.computeWorkerScore(pressure, true);
-        Assert.assertEquals(0.91, score);
+        double score = handler.computeWorkerScore(pressure, false);
+        Assert.assertEquals(0.16, score);
     }
 
 

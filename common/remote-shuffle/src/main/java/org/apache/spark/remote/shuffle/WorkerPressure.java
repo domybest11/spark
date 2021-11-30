@@ -40,10 +40,10 @@ public class WorkerPressure implements Comparable {
         networkOutBytes5min = workerMetrics[5];
         aliveConnection = workerMetrics[6];
         int num = (int) workerMetrics[workerMetrics.length-1];
-        diskInfo = new long[num][8];
+        diskInfo = new long[num][9];
         for(int i = 0; i < num; i++) {
-            for(int j = 0; j < 8; j++) {
-                diskInfo[i][j] = workerMetrics[7 + i * 8 + j];
+            for(int j = 0; j < 9; j++) {
+                diskInfo[i][j] = workerMetrics[7 + i * 9 + j];
             }
         }
     }

@@ -314,16 +314,17 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             metrics[6] = workerAliveConnection.getCount();
             for (int i = 0; i < diskNums; i++) {
                 DiskInfo.DiskMetrics diskMetrics = diskManager.workDirs[i].diskMetrics;
-                metrics[7 + i * 8] = diskMetrics.diskReadsCompleted.getValue();
-                metrics[8 + i * 8] = (long) diskMetrics.diskRead.getFiveMinuteRate();
-                metrics[9 + i * 8] = diskMetrics.diskWritesCompleted.getValue();
-                metrics[10 + i * 8] = (long) diskMetrics.diskWrite.getFiveMinuteRate();
-                metrics[11 + i * 8] = diskMetrics.diskIOTime.getValue();
-                metrics[12 + i * 8] = (long) diskMetrics.diskUtils.getFiveMinuteRate();
-                metrics[13 + i * 8] = diskMetrics.diskSpaceUsed.getValue();
-                metrics[14 + i * 8] = diskMetrics.diskInodeAvailable.getValue();
+                metrics[7 + i * 9] = diskMetrics.diskReadsCompleted.getValue();
+                metrics[8 + i * 9] = (long) diskMetrics.diskRead.getFiveMinuteRate();
+                metrics[9 + i * 9] = diskMetrics.diskWritesCompleted.getValue();
+                metrics[10 + i * 9] = (long) diskMetrics.diskWrite.getFiveMinuteRate();
+                metrics[11 + i * 9] = diskMetrics.diskIOTime.getValue();
+                metrics[12 + i * 9] = (long) diskMetrics.diskUtils.getFiveMinuteRate();
+                metrics[13 + i * 9] = diskMetrics.diskSpaceUsed.getValue();
+                metrics[14 + i * 9] = diskMetrics.diskInodeAvailable.getValue();
+                metrics[15 + i * 9] = diskManager.workDirs[i].getType().ordinal();
             }
-            metrics[7 + diskNums * 8] = diskNums;
+            metrics[7 + diskNums * 9] = diskNums;
             return metrics;
         }
 

@@ -572,10 +572,17 @@ public class RemoteShuffleMasterHandler {
         NETWORKOUTBYTES("networkOutBytes", 0.1, 0.0, 10240.0),
         NETWORKOUTBYTES5MIN("networkOutBytes5min", 0.1, 0.0, 10240.0),
         ALIVECONNECTION("aliveConnection", 0.1, 0.0, 10000.0),
-        DISKREAD("diskReadIOps", 0.1, 0.0, 1500.0),
-        DISKREAD5MIN("diskReadIOps5min", 0.1, 0.0, 1500.0),
-        DISKWRITE("diskWriteIOps", 0.1, 0.0, 1500.0),
-        DISKWRITE5MIN("diskWriteIOps5min", 0.1, 0.0, 1500.0),
+        //HDD
+        HDDDISKREAD("diskReadIOps", 0.1, 0.0, 300.0),
+        HDDDISKREAD5MIN("diskReadIOps5min", 0.1, 0.0, 300.0),
+        HDDDISKWRITE("diskWriteIOps", 0.1, 0.0, 300.0),
+        HDDDISKWRITE5MIN("diskWriteIOps5min", 0.1, 0.0, 300.0),
+        //SSD
+        SSDDISKREAD("diskReadIOps", 0.1, 0.0, 2500.0),
+        SSDDISKREAD5MIN("diskReadIOps5min", 0.1, 0.0, 2500.0),
+        SSDDISKWRITE("diskWriteIOps", 0.1, 0.0, 2500.0),
+        SSDDISKWRITE5MIN("diskWriteIOps5min", 0.1, 0.0, 2500.0),
+
         DISKIOUTILS("diskIOUtils", 0.1, 0.0, 100.0),
         DISKIOUTILS5MIN("diskIOUtils5min", 0.1, 0.0, 100.0),
         DISKSPACEUSED("diskSpaceUsed", 0.1, 0.0, 100.0),
@@ -583,12 +590,12 @@ public class RemoteShuffleMasterHandler {
 
         public static List<WorkerMertric> getShortTimeWorkerMertric() {
             return  Arrays.asList(CPULOADAVERAGE, CPUAVAILABLE, NETWORKINBYTES, NETWORKOUTBYTES, ALIVECONNECTION,
-                    DISKREAD, DISKWRITE, DISKIOUTILS, DISKSPACEUSED, DISKINODEAUSED);
+                    HDDDISKREAD, HDDDISKWRITE, DISKIOUTILS, DISKSPACEUSED, DISKINODEAUSED);
         }
 
         public static List<WorkerMertric> getWorkerMertric() {
             return  Arrays.asList(CPULOADAVERAGE, CPUAVAILABLE, NETWORKINBYTES5MIN, NETWORKOUTBYTES5MIN, ALIVECONNECTION,
-                    DISKREAD5MIN, DISKWRITE5MIN, DISKIOUTILS5MIN, DISKSPACEUSED, DISKINODEAUSED);
+                    HDDDISKREAD5MIN, HDDDISKWRITE5MIN, DISKIOUTILS5MIN, DISKSPACEUSED, DISKINODEAUSED);
         }
 
         private String name ;
@@ -619,8 +626,12 @@ public class RemoteShuffleMasterHandler {
     public double computeWorkerScore(WorkerPressure pressure, boolean shortTime) {
         List<Double> metrics = new ArrayList();
         long[][] diskInfos = pressure.diskInfo;
-        double diskReadIOps = 0.0;
-        double diskWriteIOps = 0.0;
+        int ssdCount = 0;
+        int hddCount = 0;
+        double hddDiskReadIOps = 0.0;
+        double hddDiskWriteIOps = 0.0;
+        double ssdDiskReadIOps = 0.0;
+        double ssdDiskWriteIOps = 0.0;
         double diskIOUtils = 0.0;
         double diskSpaceUsed = 0.0;
         double diskInodeUsed = 0.0;
@@ -631,8 +642,14 @@ public class RemoteShuffleMasterHandler {
             metrics.add(maxMinNormalization(WorkerMertric.NETWORKINBYTES.max, WorkerMertric.NETWORKINBYTES.min, pressure.networkInBytes));
             metrics.add(maxMinNormalization(WorkerMertric.NETWORKOUTBYTES.max, WorkerMertric.NETWORKOUTBYTES.min, pressure.networkOutBytes));
             for(int i = 0; i < diskInfos.length; i++) {
-                diskReadIOps += diskInfos[i][0];
-                diskWriteIOps += diskInfos[i][2];
+                if (diskInfos[i][8] == 0) {
+                    ssdDiskReadIOps += diskInfos[i][0];
+                    ssdDiskWriteIOps += diskInfos[i][2];
+                    ssdCount++;
+                } else {
+                   hddDiskReadIOps += diskInfos[i][0];
+                   hddDiskWriteIOps += diskInfos[i][2];
+                }
                 diskIOUtils += diskInfos[i][4];
                 diskSpaceUsed += diskInfos[i][6];
                 diskInodeUsed += diskInfos[i][7];
@@ -641,15 +658,45 @@ public class RemoteShuffleMasterHandler {
             metrics.add(maxMinNormalization(WorkerMertric.NETWORKINBYTES5MIN.max, WorkerMertric.NETWORKINBYTES5MIN.min, pressure.networkInBytes5min));
             metrics.add(maxMinNormalization(WorkerMertric.NETWORKOUTBYTES5MIN.max, WorkerMertric.NETWORKOUTBYTES5MIN.min, pressure.networkOutBytes5min));
             for(int i = 0; i < diskInfos.length; i++) {
-                diskReadIOps += diskInfos[i][1];
-                diskWriteIOps += diskInfos[i][3];
+                if (diskInfos[i][8] == 0) {
+                    ssdDiskReadIOps += diskInfos[i][1];
+                    ssdDiskWriteIOps += diskInfos[i][3];
+                    ssdCount++;
+                } else {
+                    hddDiskReadIOps += diskInfos[i][1];
+                    hddDiskWriteIOps += diskInfos[i][3];
+                }
                 diskIOUtils += diskInfos[i][5];
                 diskSpaceUsed += diskInfos[i][6];
                 diskInodeUsed += diskInfos[i][7];
             }
         }
-        metrics.add(maxMinNormalization(WorkerMertric.DISKREAD.max, WorkerMertric.DISKREAD.min, 1.0 * diskReadIOps / diskInfos.length));
-        metrics.add(maxMinNormalization(WorkerMertric.DISKWRITE.max, WorkerMertric.DISKWRITE.min, 1.0 * diskWriteIOps / diskInfos.length));
+        hddCount = diskInfos.length - ssdCount;
+        double hddDiskReadMaxMin = 0;
+        double ssdDiskReadMaxMin = 0;
+        if (hddCount != 0) {
+            hddDiskReadMaxMin =
+                    maxMinNormalization(WorkerMertric.HDDDISKREAD.max, WorkerMertric.HDDDISKREAD.min, 1.0 * hddDiskReadIOps / hddCount);
+        }
+        if (ssdCount != 0) {
+            ssdDiskReadMaxMin =
+                    maxMinNormalization(WorkerMertric.SSDDISKREAD.max, WorkerMertric.SSDDISKREAD.min, 1.0 * ssdDiskReadIOps / ssdCount);
+        }
+        double avgDiskReadMaxMin = 1.0 * (hddDiskReadMaxMin + ssdDiskReadMaxMin) / 2;
+
+        double hddDiskWriteMaxMin = 0;
+        double ssdDiskWriteMaxMin = 0;
+        if (hddCount != 0) {
+            hddDiskWriteMaxMin =
+                    maxMinNormalization(WorkerMertric.HDDDISKWRITE.max, WorkerMertric.HDDDISKWRITE.min, 1.0 * hddDiskWriteIOps / hddCount);
+        }
+        if (ssdCount != 0) {
+            ssdDiskWriteMaxMin =
+                    maxMinNormalization(WorkerMertric.SSDDISKWRITE.max, WorkerMertric.SSDDISKWRITE.min, 1.0 * ssdDiskWriteIOps / ssdCount);
+        }
+        double avgDiskWriteMaxMin = 1.0 * (hddDiskWriteMaxMin + ssdDiskWriteMaxMin) / 2;
+        metrics.add(avgDiskReadMaxMin);
+        metrics.add(avgDiskWriteMaxMin);
         metrics.add(maxMinNormalization(WorkerMertric.DISKIOUTILS.max, WorkerMertric.DISKIOUTILS.min, 1.0 * diskIOUtils / diskInfos.length));
         metrics.add(maxMinNormalization(WorkerMertric.DISKSPACEUSED.max, WorkerMertric.DISKSPACEUSED.min, 1.0 * diskSpaceUsed / diskInfos.length));
         metrics.add(maxMinNormalization(WorkerMertric.DISKINODEAUSED.max, WorkerMertric.DISKINODEAUSED.min, 1.0 * diskInodeUsed / diskInfos.length));
