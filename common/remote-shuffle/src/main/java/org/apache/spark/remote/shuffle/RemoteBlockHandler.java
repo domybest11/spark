@@ -251,14 +251,14 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     private class Heartbeat implements Runnable {
         @Override
         public void run() {
-            List<RunningStage> currentRunningStages = new ArrayList<>();
-            appStageMap.values().forEach(stageMap -> currentRunningStages.addAll(stageMap.values()));
-            logger.info("worker send heartbeat");
-            if (null == client || !client.isActive()) {
-                connection();
-            }
-            long[] workerMetric = workerMetrics.getCurrentMetrics();
             try {
+                List<RunningStage> currentRunningStages = new ArrayList<>();
+                appStageMap.values().forEach(stageMap -> currentRunningStages.addAll(stageMap.values()));
+                logger.info("worker send heartbeat");
+                if (null == client || !client.isActive()) {
+                    connection();
+                }
+                long[] workerMetric = workerMetrics.getCurrentMetrics();
                 logger.info("worker pressure: {}", workerMetric);
                 client.send(
                     new RemoteShuffleWorkerHeartbeat(
@@ -276,11 +276,11 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
 
     public void connection() {
-        TransportContext context = new TransportContext(
-                transportConf, new NoOpRpcHandler(), true, true);
-        List<TransportClientBootstrap> bootstraps = Lists.newArrayList();
-        clientFactory = context.createClientFactory(bootstraps);
         try {
+            TransportContext context = new TransportContext(
+                    transportConf, new NoOpRpcHandler(), true, true);
+            List<TransportClientBootstrap> bootstraps = Lists.newArrayList();
+            clientFactory = context.createClientFactory(bootstraps);
             client = clientFactory.createClient(masterHost, masterPort);
         } catch (Exception e) {
             logger.warn("create new client orrcus an new error: ", e.getCause());
@@ -304,7 +304,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
 
         public long[] getCurrentMetrics() {
             int diskNums = diskManager.workDirs.length;
-            long[] metrics = new long[7 + diskNums * 8 + 1];
+            long[] metrics = new long[7 + diskNums * 9 + 1];
             metrics[0] = workerCpuLoadAverage.getValue();
             metrics[1] = workerCpuAvailable.getValue();
             metrics[2] = networkInGauge.getValue();

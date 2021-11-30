@@ -72,40 +72,50 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
   def startApplication(appId: String,
                        appAttemptId: Option[String],
                        reportInterval: Long): Unit = {
-    if (!client.isActive) {
-      connection()
-    }
-    client.sendRpc(
-      new RegisterApplication(
-        appId,
-        Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer,
-      new RpcResponseCallback {
-        override def onSuccess(response: ByteBuffer): Unit = {
-          heartbeatThread.scheduleAtFixedRate(() => {
-            sendHeartbeat(appId, Integer.valueOf(appAttemptId.getOrElse("-1")))
-          }, 30, reportInterval, TimeUnit.SECONDS)
-          logger.info("Registered application to remote shuffle master successfully")
-        }
-
-        override def onFailure(e: Throwable): Unit = {
-          logger.error("Unable to register application to remote shuffle master")
-        }
+    try {
+      if (null == client || !client.isActive) {
+        connection()
       }
-    )
+      client.sendRpc(
+        new RegisterApplication(
+          appId,
+          Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer,
+        new RpcResponseCallback {
+          override def onSuccess(response: ByteBuffer): Unit = {
+            heartbeatThread.scheduleAtFixedRate(() => {
+              sendHeartbeat(appId, Integer.valueOf(appAttemptId.getOrElse("-1")))
+            }, 30, reportInterval, TimeUnit.SECONDS)
+            logger.info("Registered application to remote shuffle master successfully")
+          }
+
+          override def onFailure(e: Throwable): Unit = {
+            logger.error("Unable to register application to remote shuffle master")
+          }
+        }
+      )
+  } catch {
+    case e: Exception =>
+      logger.warn("Start application error: " + e.getCause)
+  }
   }
 
   def stopApplication(appId: String, appAttemptId: Option[String]): Unit = {
-    if (!client.isActive) {
-      connection()
-    }
-    client.send(
-      new UnregisterApplication(appId, Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer
-    )
+    try {
+      if (null == client || !client.isActive) {
+        connection()
+      }
+      client.send(
+        new UnregisterApplication(appId, Integer.valueOf(appAttemptId.getOrElse("-1"))).toByteBuffer
+      )
+  } catch {
+    case e: Exception =>
+      logger.warn("Stop application error: " + e.getCause)
+  }
   }
 
   private def sendHeartbeat(appId: String, appAttemptId: Int): Unit = {
     try {
-      if (!client.isActive) {
+      if (null == client || !client.isActive) {
         connection()
       }
       client.send(
@@ -117,7 +127,8 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
       )
       logger.info("Send application heartbeat success")
     } catch {
-      case e: Exception => e.printStackTrace()
+      case e: Exception =>
+        logger.warn("Send application heartbeat error: " + e.getCause)
     }
   }
 
@@ -137,14 +148,20 @@ class RemoteShuffleClient(transportConf: TransportConf, masterHost: String, mast
       tasksPerExecutor,
       maxExecutors
     )
-    if (!client.isActive) {
-      connection()
+    try {
+      if (null == client || !client.isActive) {
+        connection()
+      }
+      val response = client.sendRpcSync(getPushMergerLocations.toByteBuffer, 3000L)
+      val msgObj = BlockTransferMessage.Decoder.fromByteBuffer(response)
+      val result = msgObj.asInstanceOf[MergerWorkers].getWorkerInfos
+      logger.info("Shuffle {} get push merger location size: {}", shuffleId, result.size)
+      result
+    } catch {
+    case e: Exception =>
+      logger.warn("getShufflePushMergerLocations error: " + e.getCause)
+      Seq.empty
     }
-    val response = client.sendRpcSync(getPushMergerLocations.toByteBuffer, 1000L)
-    val msgObj = BlockTransferMessage.Decoder.fromByteBuffer(response)
-    val result = msgObj.asInstanceOf[MergerWorkers].getWorkerInfos
-    logger.info("Shuffle {} get push merger location size: {}", shuffleId, result.size)
-    result
   }
 
 }

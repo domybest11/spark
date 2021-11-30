@@ -354,7 +354,7 @@ public class RemoteShuffleMasterHandler {
                         return workerInfo;
                     });
                     callback.onSuccess(ByteBuffer.allocate(0));
-                    logger.info("handle register worker time: {}ms", System.currentTimeMillis() - start);
+                    logger.info("handle register worker from ip: {}, time: {}ms", address, System.currentTimeMillis() - start);
                    } finally {
                     responseDelayContext.stop();
                    }
