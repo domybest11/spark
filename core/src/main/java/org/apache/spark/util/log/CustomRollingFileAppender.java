@@ -54,7 +54,7 @@ public class CustomRollingFileAppender extends RollingFileAppender {
       } else if (event.getMessage() != null &&
           event.getMessage().toString().startsWith("Error in query")) {
         String userName = Utils.getCurrentUserName();
-        ErrorRecord record = new ErrorRecord(setting.getProperty("spark.trace.id"),
+        ErrorRecord record = new ErrorRecord(setting.getProperty("spark.app.id"),
                 setting.getProperty("spark.app.name"),
                 "error",
                 setting.getProperty("spark.trace.id"),

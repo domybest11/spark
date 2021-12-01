@@ -108,7 +108,8 @@ object SQLExecution extends Logging {
             sparkPlanInfo = SparkPlanInfo.fromSparkPlan(queryExecution.executedPlan),
             time = System.currentTimeMillis(),
             SerializationUtils.clone(sc.getLocalProperties),
-            sc.getLocalProperty("spark.trace.sqlIdentifier")))
+            sc.getLocalProperty("spark.trace.sqlIdentifier"),
+            sc.getLocalProperty("spark.sql.session.user")))
           body
         } catch {
           case e: Throwable =>
