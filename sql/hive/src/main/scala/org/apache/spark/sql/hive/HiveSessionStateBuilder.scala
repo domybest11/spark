@@ -20,11 +20,10 @@ package org.apache.spark.sql.hive
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.analysis.{Analyzer, ResolveSessionCatalog}
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogWithListener
-import org.apache.spark.sql.catalyst.optimizer.Optimizer
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.execution.{SparkOptimizer, SparkPlanner}
+import org.apache.spark.sql.execution.SparkPlanner
 import org.apache.spark.sql.execution.aggregate.ResolveEncodersInScalaAgg
 import org.apache.spark.sql.execution.analysis.DetectAmbiguousSelfJoin
 import org.apache.spark.sql.execution.command.CommandCheck
@@ -119,15 +118,9 @@ class HiveSessionStateBuilder(
    *
    * Note: this depends on `catalog` and `experimentalMethods` fields.
    */
-  override protected def optimizer: Optimizer = {
-    new SparkOptimizer(catalogManager, catalog, experimentalMethods) {
-      override def extendedOperatorOptimizationRules: Seq[Rule[LogicalPlan]] =
-        super.extendedOperatorOptimizationRules ++ customOperatorOptimizationRules ++
-          Seq(DeterminePartitionedTableStats(session))
-
-    }
+  override def customOperatorOptimizationRules: Seq[Rule[LogicalPlan]] = {
+    super.customOperatorOptimizationRules ++ Seq(DeterminePartitionedTableStats(session))
   }
-
 
   /**
    * Planner that takes into account Hive-specific strategies.
