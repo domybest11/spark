@@ -137,8 +137,8 @@ object OptimizeLocalShuffleReader extends CustomShuffleReaderRule {
   def canUseLocalShuffleReader(plan: SparkPlan): Boolean = plan match {
     case s: ShuffleQueryStageExec =>
       s.mapStats.isDefined && supportLocalReader(s.shuffle)
-    case CustomShuffleReaderExec(s: ShuffleQueryStageExec, partitionSpecs) =>
-      s.mapStats.isDefined && partitionSpecs.nonEmpty && supportLocalReader(s.shuffle) &&
+    case CustomShuffleReaderExec(s: ShuffleQueryStageExec, _) =>
+      s.mapStats.isDefined && supportLocalReader(s.shuffle) &&
         s.shuffle.shuffleOrigin == ENSURE_REQUIREMENTS
     case _ => false
   }
