@@ -206,7 +206,17 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
       StreamCallbackWithID wrappedCallback = new StreamCallbackWithID() {
         @Override
         public void onData(String streamId, ByteBuffer buf) throws IOException {
-          streamHandler.onData(streamId, buf);
+          try {
+            streamHandler.onData(streamId, buf);
+          } catch (BlockPushNonFatalFailure ex) {
+            callback.onSuccess(ex.getResponse());
+            streamHandler.onFailure(streamId, ex);
+          } catch (Exception ex) {
+            IOException ioExc = new IOException("Failure post-processing complete stream;" +
+                    " failing this rpc and leaving channel active", ex);
+            callback.onFailure(ioExc);
+            streamHandler.onFailure(streamId, ioExc);
+          }
         }
 
         @Override

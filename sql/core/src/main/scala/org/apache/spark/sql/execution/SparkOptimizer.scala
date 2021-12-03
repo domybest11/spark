@@ -26,7 +26,7 @@ import org.apache.spark.sql.connector.catalog.CatalogManager
 import org.apache.spark.sql.execution.datasources.PruneFileSourcePartitions
 import org.apache.spark.sql.execution.datasources.SchemaPruning
 import org.apache.spark.sql.execution.datasources.v2.V2ScanRelationPushDown
-import org.apache.spark.sql.execution.dynamicpruning.{CleanupDynamicPruningFilters, PartitionPruning}
+import org.apache.spark.sql.execution.dynamicpruning.{CleanupDynamicPruningFilters, DynamicBloomFilterPruning, PartitionPruning}
 import org.apache.spark.sql.execution.python.{ExtractGroupingPythonUDFFromAggregate, ExtractPythonUDFFromAggregate, ExtractPythonUDFs}
 
 class SparkOptimizer(
@@ -45,6 +45,9 @@ class SparkOptimizer(
       PartitionPruning,
       OptimizeSubqueries) :+
     Batch("Pushdown Filters from PartitionPruning", fixedPoint,
+      PushDownPredicates) :+
+    Batch("BloomFilterPruning", Once, DynamicBloomFilterPruning) :+
+    Batch("Pushdown Filters from BloomFilterPruning", fixedPoint,
       PushDownPredicates) :+
     Batch("Cleanup filters that cannot be pushed down", Once,
       CleanupDynamicPruningFilters,

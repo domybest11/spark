@@ -75,10 +75,7 @@ class SqlAppStoreStatusStoreV1(
         })
         val inputUnit = if (inputBytes > 0) Utils.bytesToString(inputBytes) else "0B"
         val outputUnit = if (outputBytes > 0) Utils.bytesToString(outputBytes) else "0B"
-        var traceId = conf.get("spark.trace.id", "")
-        if (traceId.isEmpty) {
-          traceId = ""
-        }
+        val traceId = conf.get("spark.trace.id", "")
         // scalastyle:off
          costMessage = s"使用资源消耗情况(${SqlTextTruncate.getSqlIdentifier(statement).get}), 内存: ${memorySeconds}(m*s)," +
           s" CPU: ${vcoreSeconds}(c*s), 读数据量: ${inputUnit}, 写数据量: ${outputUnit}"

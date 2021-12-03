@@ -166,10 +166,10 @@ echo "Spark $VERSION$GITREVSTRING built for Hadoop $SPARK_HADOOP_VERSION" > "$DI
 echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 
 # Download hudi jar
-wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/hudi/hudi-spark-bundle_2.12-0.5.1-incubating.jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/hudi/hudi-spark-bundle_2.12-0.9.0.jar
 
 # Download iceberg jar
-wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/iceberg/iceberg-spark3-runtime-0.11.1-bili-0.3.jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://nexus.bilibili.co/content/repositories/releases/org/apache/iceberg/iceberg-spark3-runtime/0.11.1-bili-0.4.1/iceberg-spark3-runtime-0.11.1-bili-0.4.1.jar
 
 # Download lineage jar
 wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/spark-3.1/SparkLineageCollector-1.0-SNAPSHOT.jar
@@ -179,6 +179,9 @@ wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sd
 
 # Copy jar
 cp "$SPARK_HOME"/assembly/target/scala*/jars/* "$DISTDIR/jars/"
+
+# Cpoy ranger jar
+cp "$SPARK_HOME"/spark-ranger/spark-ranger-1.0-SNAPSHOT.jar "$DISTDIR/jars/"
 
 # Only create the yarn directory if the yarn artifacts were built.
 if [ -f "$SPARK_HOME"/common/network-yarn/target/scala*/spark-*-yarn-shuffle.jar ]; then

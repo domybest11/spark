@@ -307,6 +307,35 @@ object SQLConf {
       .booleanConf
       .createWithDefault(true)
 
+  val DYNAMIC_PARTITION_PRUNING_PRUNING_SIDE_EXTRA_FILTER_RATIO =
+    buildConf("spark.sql.optimizer.dynamicPartitionPruning.pruningSideExtraFilterRatio")
+      .internal()
+      .doc("When filtering side doesn't support broadcast by join type, and doing DPP means " +
+        "running an extra query that may have significant overhead. This config will be used " +
+        "as the extra filter ratio for computing the data size of the pruning side after DPP, " +
+        "in order to evaluate if it is worth adding an extra subquery as the pruning filter.")
+      .version("3.2.0")
+      .doubleConf
+      .checkValue(ratio => ratio > 0.0 && ratio <= 1.0, "The ratio value must be in (0.0, 1.0].")
+      .createWithDefault(0.04)
+
+  val DYNAMIC_BLOOM_FILTER_JOIN_PRUNING_ENABLED =
+    buildConf("spark.sql.optimizer.dynamicBloomFilterJoinPruning.enabled")
+      .doc("When true, we will generates a bloom filter predicate for a join key column. " +
+        "Note that, dynamic bloom filter join pruning only works with exchange reuse enabled.")
+      .version("3.3.0")
+      .booleanConf
+      .createWithDefault(true)
+
+  val DYNAMIC_BLOOM_FILTER_JOIN_PRUNING_MAX_BLOOM_FILTER_ENTRIES =
+    buildConf("spark.sql.optimizer.dynamicBloomFilterJoinPruning.maxBloomFilterEntries")
+      .doc("The maximum number of bloom filter entries allowed when building dynamic bloom " +
+        "filter join pruning.")
+      .version("3.3.0")
+      .longConf
+      .checkValue(_ > 0, "the value of max bloom filter entries must be greater than 0")
+      .createWithDefault(100000000L)
+
   val COMPRESS_CACHED = buildConf("spark.sql.inMemoryColumnarStorage.compressed")
     .doc("When set to true Spark SQL will automatically select a compression codec for each " +
       "column based on statistics of the data.")
@@ -404,6 +433,12 @@ object SQLConf {
     .bytesConf(ByteUnit.BYTE)
     .createWithDefaultString("25MB")
 
+  val LIMIT_INIT_PART_NUM = buildConf("spark.sql.limit.initPartNum")
+    .internal()
+    .doc("The number is the number of initialization tasks that limit the query.")
+    .longConf
+    .createWithDefault(50)
+
   val LIMIT_SCALE_UP_FACTOR = buildConf("spark.sql.limit.scaleUpFactor")
     .internal()
     .doc("Minimal increase rate in number of partitions between attempts when executing a take " +
@@ -436,6 +471,7 @@ object SQLConf {
       .doc("(Deprecated since Spark 3.0)")
       .version("1.6.0")
       .bytesConf(ByteUnit.BYTE)
+      .checkValue(_ > 0, "advisoryPartitionSizeInBytes must be positive")
       .createWithDefaultString("64MB")
 
   val ADAPTIVE_EXECUTION_ENABLED = buildConf("spark.sql.adaptive.enabled")
@@ -482,10 +518,33 @@ object SQLConf {
       .booleanConf
       .createWithDefault(true)
 
+  val COALESCE_PARTITIONS_PARALLELISM_FIRST =
+    buildConf("spark.sql.adaptive.coalescePartitions.parallelismFirst")
+      .doc("When true, Spark does not respect the target size specified by " +
+        s"'${ADVISORY_PARTITION_SIZE_IN_BYTES.key}' (default 64MB) when coalescing contiguous " +
+        "shuffle partitions, but adaptively calculate the target size according to the default " +
+        "parallelism of the Spark cluster. The calculated size is usually smaller than the " +
+        "configured target size. This is to maximize the parallelism and avoid performance " +
+        "regression when enabling adaptive query execution. It's recommended to set this config " +
+        "to false and respect the configured target size.")
+      .version("3.2.0")
+      .booleanConf
+      .createWithDefault(true)
+
+  val COALESCE_PARTITIONS_MIN_PARTITION_SIZE =
+    buildConf("spark.sql.adaptive.coalescePartitions.minPartitionSize")
+      .doc("The minimum size of shuffle partitions after coalescing. This is useful when the " +
+        "adaptively calculated target size is too small during partition coalescing.")
+      .version("3.2.0")
+      .bytesConf(ByteUnit.BYTE)
+      .checkValue(_ > 0, "minPartitionSize must be positive")
+      .createWithDefaultString("1MB")
+
   val COALESCE_PARTITIONS_MIN_PARTITION_NUM =
     buildConf("spark.sql.adaptive.coalescePartitions.minPartitionNum")
-      .doc("The suggested (not guaranteed) minimum number of shuffle partitions after " +
-        "coalescing. If not set, the default value is the default parallelism of the " +
+      .internal()
+      .doc("(deprecated) The suggested (not guaranteed) minimum number of shuffle partitions " +
+        "after coalescing. If not set, the default value is the default parallelism of the " +
         "Spark cluster. This configuration only has an effect when " +
         s"'${ADAPTIVE_EXECUTION_ENABLED.key}' and " +
         s"'${COALESCE_PARTITIONS_ENABLED.key}' are both true.")
@@ -496,7 +555,7 @@ object SQLConf {
 
   val COALESCE_PARTITIONS_INITIAL_PARTITION_NUM =
     buildConf("spark.sql.adaptive.coalescePartitions.initialPartitionNum")
-      .doc("The initial number of shuffle partitions before coalescing. By default it equals to " +
+      .doc("The initial number of shuffle partitions before coalescing. If not set, it equals to " +
         s"${SHUFFLE_PARTITIONS.key}. This configuration only has an effect when " +
         s"'${ADAPTIVE_EXECUTION_ENABLED.key}' and '${COALESCE_PARTITIONS_ENABLED.key}' " +
         "are both true.")
@@ -531,8 +590,8 @@ object SQLConf {
   val SKEW_JOIN_ENABLED =
     buildConf("spark.sql.adaptive.skewJoin.enabled")
       .doc(s"When true and '${ADAPTIVE_EXECUTION_ENABLED.key}' is true, Spark dynamically " +
-        "handles skew in sort-merge join by splitting (and replicating if needed) skewed " +
-        "partitions.")
+        "handles skew in shuffled join (sort-merge and shuffled hash) by splitting (and " +
+        "replicating if needed) skewed partitions.")
       .version("3.0.0")
       .booleanConf
       .createWithDefault(true)
@@ -556,6 +615,15 @@ object SQLConf {
       .version("3.0.0")
       .bytesConf(ByteUnit.BYTE)
       .createWithDefaultString("256MB")
+
+  val SKEW_JOIN_OPTIMIZE_FORCE =
+    buildConf("spark.sql.adaptive.skewJoin.optimizeJoinForce.enabled")
+      .doc("When using OptimizeSkewedJoin rule, it may result in extra shuffles, which may" +
+        "cause less cost than OptimizeSkewedJoin rule. Provide an option to still use " +
+        "OptimizeSkewedJoin rule.")
+      .version("3.0.0")
+      .booleanConf
+      .createWithDefault(false)
 
   val NON_EMPTY_PARTITION_RATIO_FOR_BROADCAST_JOIN =
     buildConf("spark.sql.adaptive.nonEmptyPartitionRatioForBroadcastJoin")
@@ -3132,6 +3200,13 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
+  val RADICAL_JOIN_SIZE_ESTIMATE_ENABLED =
+    buildConf("spark.sql.radicalJoinSizeEstimate.enabled")
+      .doc("When true, Spark will use the sum of children as estimate join size, " +
+        "instead of product of children, which is huge sometimes")
+      .booleanConf
+      .createWithDefault(false)
+
   /**
    * Holds information about keys that have been deprecated.
    *
@@ -3166,7 +3241,9 @@ object SQLConf {
         "Avoid to depend on this optimization to prevent a potential correctness issue. " +
           "If you must use, use 'SparkSessionExtensions' instead to inject it as a custom rule."),
       DeprecatedConfig(CONVERT_CTAS.key, "3.1",
-        s"Set '${LEGACY_CREATE_HIVE_TABLE_BY_DEFAULT.key}' to false instead.")
+        s"Set '${LEGACY_CREATE_HIVE_TABLE_BY_DEFAULT.key}' to false instead."),
+      DeprecatedConfig(COALESCE_PARTITIONS_MIN_PARTITION_NUM.key, "3.2",
+        s"Use '${COALESCE_PARTITIONS_MIN_PARTITION_SIZE.key}' instead.")
     )
 
     Map(configs.map { cfg => cfg.key -> cfg } : _*)
@@ -3264,6 +3341,18 @@ class SQLConf extends Serializable with Logging {
 
   def dynamicPartitionPruningReuseBroadcastOnly: Boolean =
     getConf(DYNAMIC_PARTITION_PRUNING_REUSE_BROADCAST_ONLY)
+
+  def dynamicPartitionPruningPruningSideExtraFilterRatio: Double =
+    getConf(DYNAMIC_PARTITION_PRUNING_PRUNING_SIDE_EXTRA_FILTER_RATIO)
+
+  def dynamicBloomFilterJoinPruningEnabled: Boolean =
+    getConf(DYNAMIC_BLOOM_FILTER_JOIN_PRUNING_ENABLED) && exchangeReuseEnabled
+
+  def dynamicBloomFilterJoinPruningMaxBloomFilterEntries: Long =
+    getConf(DYNAMIC_BLOOM_FILTER_JOIN_PRUNING_MAX_BLOOM_FILTER_ENTRIES)
+
+  def dynamicPruningEnabled: Boolean = dynamicPartitionPruningEnabled ||
+    dynamicBloomFilterJoinPruningEnabled
 
   def stateStoreProviderClass: String = getConf(STATE_STORE_PROVIDER_CLASS)
 
@@ -3495,6 +3584,8 @@ class SQLConf extends Serializable with Logging {
   def enableFallBackToSMJ: Boolean = getConf(ENABLE_FALL_BACK_TO_SMJ)
 
   def autoBroadcastJoinThreshold: Long = getConf(AUTO_BROADCASTJOIN_THRESHOLD)
+
+  def limitInitPartNum: Long = getConf(LIMIT_INIT_PART_NUM)
 
   def limitScaleUpFactor: Int = getConf(LIMIT_SCALE_UP_FACTOR)
 
@@ -3801,6 +3892,8 @@ class SQLConf extends Serializable with Logging {
   def mirrorExecute: Boolean = getConf(SQLConf.MIRROR_EXECUTE)
 
   def partitionStatsEnabled: Boolean = getConf(SQLConf.PARTITION_STATS_ENABLED)
+
+  def radicalJoinSizeEstimate: Boolean = getConf(SQLConf.RADICAL_JOIN_SIZE_ESTIMATE_ENABLED)
 
   /** ********************** SQLConf functionality methods ************ */
 

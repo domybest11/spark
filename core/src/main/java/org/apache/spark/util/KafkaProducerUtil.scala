@@ -27,6 +27,7 @@ import org.apache.kafka.clients.producer.{Callback, ProducerConfig, ProducerReco
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.status.api.v1.JacksonMessageWriter
+import scala.collection.mutable.HashMap
 
 private[spark] class KafkaProducerUtil(conf: SparkConf) extends Logging {
 //  conf.get("spark.topic", "lancer_bigdata_spark_spark")
@@ -75,7 +76,7 @@ private[spark] class KafkaProducerUtil(conf: SparkConf) extends Logging {
     }
   }
 
-  def report(key: String, value: String): Unit = {
+  def send(key: String, value: String): Unit = {
     val record: ProducerRecord[String, Array[Byte]] = if (StringUtils.isBlank(key)) {
       new ProducerRecord(METRIC_TOPIC, null, null, value.getBytes())
     } else {
@@ -100,7 +101,8 @@ object KafkaProducerUtil extends Logging {
   def report(record: Record): Unit = {
     try {
       val json = mapper.writeValueAsString(record)
-      kafkaProducer.report(null, json)
+      val className = record.getClass.getSimpleName
+      kafkaProducer.send(className, json)
     } catch {
       case e: Exception =>
         logWarning("convert2ProducerRecord error", e)
@@ -124,10 +126,8 @@ private[spark] class ApplicationDataRecord(
     val user: String,
     val sparkVersion: String,
     val traceId: String,
-    var executionDataRecord: Option[ExecutionDataRecord] = None,
-    var jobDataRecord: Option[JobDataRecord] = None,
-    var stageDataRecord: Option[StageDataRecord] = None,
-    var exceptionRecord: Option[ExceptionRecord] = None) extends Record
+    val maxRequestYarnTime: Long = 0,
+    val ruleNames: HashMap[String, Int] = HashMap.empty[String, Int]) extends Record
 
 private[spark] class ExecutionDataRecord(
     val appId: String,
@@ -141,7 +141,16 @@ private[spark] class ExecutionDataRecord(
     val detail: String = "",
     val executePlan: String = "",
     val startTime: Long = 0,
-    val endTime: Long = 0) extends Record
+    val endTime: Long = 0,
+    val numFilesRead: Long = 0,
+    val numPartitionsRead: Long = 0,
+    val filesSizeRead: Long = 0,
+    val numFilesWrite: Long = 0,
+    val filesSizeWrite: Long = 0,
+    val dynamicPart: Long = 0,
+    val mergeNumFiles: Long = 0,
+    val mergeNumOutputBytes: Long = 0,
+    val mergeNumOutputRows: Long = 0) extends Record
 
 private[spark] class JobDataRecord(
    val appId: String,
@@ -300,6 +309,15 @@ private[spark] class ExceptionRecord(
    val user: String,
    val errorType: String,
    val info: Exception) extends Record
+
+private[spark] class ErrorRecord(
+    val appId: String,
+    val appName: String,
+    val eventType: String,
+    val traceId: String,
+    val user: String,
+    val time: Long,
+    val message: String) extends Record
 
 object ExceptionType {
   val SHUFFLE_FAIL = "SHUFFLE_FAIL"

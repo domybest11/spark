@@ -28,6 +28,7 @@ import org.apache.hadoop.mapreduce.lib.output.{FileOutputCommitter, FileOutputFo
 import org.apache.spark.SparkException
 import org.apache.spark.internal.io.FileCommitProtocol
 import org.apache.spark.rdd.{RDD, UnionPartition, UnionRDD}
+import org.apache.spark.scheduler.SparkListenerRuleExecute
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable, CatalogTablePartition}
@@ -38,10 +39,12 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.command._
+import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.internal.SQLConf.PartitionOverwriteMode
 import org.apache.spark.sql.merge.MergeUtils
 import org.apache.spark.sql.util.SchemaUtils
+import org.apache.spark.util.SerializableConfiguration
 
 
 
@@ -249,8 +252,9 @@ case class InsertIntoHadoopFsRelationCommand(
             statsTrackers = Seq(basicWriteJobStatsTracker(hadoopConf)),
             options = options) - "staticPart"
         } catch {
-          case cause: SparkException =>
+          case cause: Exception =>
             if (canMerge) {
+              logInfo(s"delete merge path $qualifiedOutputPath")
               fs.delete(qualifiedOutputPath, true)
             }
             throw cause
@@ -271,14 +275,18 @@ case class InsertIntoHadoopFsRelationCommand(
             val rePartitionNum = MergeUtils.getTargetFileNum(qualifiedOutputPath, hadoopConf, avgConditionSize, outputAverageSize)
             logInfo(s"[mergeFile] static $qualifiedOutputPath rePartionNum is: " + rePartitionNum)
             if (rePartitionNum > 0) {
+              sparkSession.sparkContext.listenerBus.post(SparkListenerRuleExecute("MergeFiles"))
               val committer2 = FileCommitProtocol.instantiate(
                 sparkSession.sessionState.conf.fileCommitProtocolClass,
                 jobId = java.util.UUID.randomUUID().toString,
                 outputPath = finalOutputPath.toString)
               val sourceRdd = MergeUtils.getRdd(sparkSession, qualifiedOutputPath, dataAttr, fileFormat, options).coalesce(rePartitionNum)
+              val metrics: Map[String, SQLMetric] = MergeWriteJobStatsTracker.metrics
+              val serializableHadoopConf = new SerializableConfiguration(hadoopConf)
+              val statsTracker = new MergeWriteJobStatsTracker(serializableHadoopConf, metrics)
               FileFormatWriter.writeHiveTableRDD(sparkSession, sourceRdd, fileFormat, committer2,
                 FileFormatWriter.OutputSpec(finalOutputPath.toString, Map.empty, dataAttr), hadoopConf, Seq.empty,
-                statsTrackers = Seq.empty, options)
+                statsTrackers = Seq(statsTracker), options)
               logInfo("[mergeFile] merge static dir finished")
             } else {
               logInfo(s"direct rename $qualifiedOutputPath's files")
@@ -293,6 +301,7 @@ case class InsertIntoHadoopFsRelationCommand(
             }
             val mergeRule = MergeUtils.generateDynamicMergeRule(fs, qualifiedOutputPath, hadoopConf, avgConditionSize, outputAverageSize, directRenamePathList)
             if (mergeRule.nonEmpty) {
+              sparkSession.sparkContext.listenerBus.post(SparkListenerRuleExecute("MergeFiles"))
               val committerJobPair = new ArrayBuffer[(FileCommitProtocol, Job)]()
               val rdds = mergeRule.map { r =>
                 val finalPartPath = r.path.toString.replace("/" + mergeDir, "")
@@ -323,9 +332,12 @@ case class InsertIntoHadoopFsRelationCommand(
                 logInfo(s"partition index ${up.index} correspond with rdd ${up.parentRddIndex} writer data into ${finalPath}")
                 (up.index, (withCommitter, finalPath))
               }.toMap
+              val metrics: Map[String, SQLMetric] = MergeWriteJobStatsTracker.metrics
+              val serializableHadoopConf = new SerializableConfiguration(hadoopConf)
+              val statsTracker = new MergeWriteJobStatsTracker(serializableHadoopConf, metrics)
               FileFormatWriter.writerPartitionHiveTableRDD(sparkSession, union, fileFormat, map4Committer, committerJobPair,
                 FileFormatWriter.OutputSpec(
-                  "", Map.empty, dataAttr), hadoopConf, Seq.empty, Seq.empty, options)
+                  "", Map.empty, dataAttr), hadoopConf, Seq.empty, Seq(statsTracker), options)
               logInfo("[mergeFile] merge dynamic partition finished")
             }
           }
@@ -362,8 +374,8 @@ case class InsertIntoHadoopFsRelationCommand(
             }
           }
         } finally {
+          logInfo(s"delete merge path $qualifiedOutputPath")
           fs.delete(qualifiedOutputPath, true)
-          logInfo("delete temp path " + qualifiedOutputPath)
         }
       }
 

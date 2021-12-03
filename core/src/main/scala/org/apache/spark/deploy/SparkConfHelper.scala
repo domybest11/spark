@@ -7,7 +7,7 @@ import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.HttpClientUtils
 
-class SparkConfHelper(sparkConf: SparkConf) extends Logging{
+class SparkConfHelper(sparkConf: SparkConf) extends Logging {
 
   private val EFFECTIVE_RULES = "spark.deploy.autoConfEffectiveRules"
 
@@ -17,9 +17,11 @@ class SparkConfHelper(sparkConf: SparkConf) extends Logging{
   private lazy val jobTag = sparkConf.getOption("spark.deploy.jobTag")
   private lazy val metrics = HttpClientUtils.getInstance().getJobHistoryMetric(jobTag.get)
 
-  private val rules = Seq(ExecutorMemoryRule(sparkConf),
-                            DataSourceGrayScaleRelease(sparkConf),
-                            AllocationRatioRule(sparkConf))
+  private val rules = Seq(
+    ExecutorMemoryRule(sparkConf),
+    DataSourceGrayScaleRelease(sparkConf),
+    AllocationRatioRule(sparkConf),
+    RepartitionBeforeWriteTableRule(sparkConf))
 
   def execute: Unit = {
     rules.foreach(r => r.apply(this))
@@ -35,7 +37,7 @@ class SparkConfHelper(sparkConf: SparkConf) extends Logging{
 
   def getMetricByKey(key: String): Option[AnyRef] = {
     if (metrics == null) {
-      return null
+      return None
     }
     Option(metrics.get(key))
   }

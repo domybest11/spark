@@ -341,7 +341,7 @@ class SQLAppStatusListener(
 
   private def onExecutionStart(event: SparkListenerSQLExecutionStart): Unit = {
     val SparkListenerSQLExecutionStart(executionId, description, details,
-      physicalPlanDescription, sparkPlanInfo, time, properties, sqlText) = event
+      physicalPlanDescription, sparkPlanInfo, time, properties, sqlText, user) = event
     val traceId = Option(properties).flatMap { p => Option(p.getProperty(TRACE_ID_KEY)) }
     val ignored = properties.getProperty(TRACE_IGNORED_KEY, "false").toBoolean
     val sqlIdentifier = getSqlIdentifier(sqlText)

@@ -247,6 +247,12 @@ package object config {
       .timeConf(TimeUnit.MILLISECONDS)
       .createWithDefaultString("10s")
 
+  private[spark] val EXECUTOR_HEARTBEAT_INITIAL =
+    ConfigBuilder("spark.executor.heartbeatInitial")
+      .version("3.2.0")
+      .timeConf(TimeUnit.MILLISECONDS)
+      .createWithDefaultString("3s")
+
   private[spark] val EXECUTOR_HEARTBEAT_MAX_FAILURES =
     ConfigBuilder("spark.executor.heartbeat.maxFailures")
       .internal()
@@ -1002,6 +1008,15 @@ package object config {
       .version("3.0.0")
       .timeConf(TimeUnit.NANOSECONDS)
       .createWithDefaultString("1s")
+
+  private[spark] val LISTENER_BUS_LOG_SLOW_EVENT_VERBOSE =
+    ConfigBuilder("spark.scheduler.listenerbus.logSlowEvent.verbose")
+      .internal()
+      .doc("Print detail event info which may be lengthy" +
+        s"Log the event if ${LISTENER_BUS_LOG_SLOW_EVENT_ENABLED.key} is true.")
+      .version("3.0.0")
+      .booleanConf
+      .createWithDefault(false)
 
   // This property sets the root namespace for metrics reporting
   private[spark] val METRICS_NAMESPACE = ConfigBuilder("spark.metrics.namespace")
@@ -2302,4 +2317,24 @@ package object config {
       .version("3.1.1")
       .booleanConf
       .createWithDefault(false)
+
+  private[spark] val OBSERVER_ENABLE =
+    ConfigBuilder("spark.app.observer.enable")
+      .doc("When true, read hdfs through observer nn")
+      .version("3.1.1")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val OBSERVER_INTERVAL_MS =
+    ConfigBuilder("spark.app.observer.interval.ms")
+      .doc("When read hdfs through observer nn, msync interval.")
+      .version("3.1.1")
+      .longConf
+      .createWithDefault(1000L)
+
+  private[spark] val REPARTITION_WRITE_FILE_SIZE_RATIO =
+    ConfigBuilder("spark.sql.repartition.file.size.limitRatio")
+      .version("3.1.1")
+      .doubleConf
+      .createWithDefault(1.0)
 }

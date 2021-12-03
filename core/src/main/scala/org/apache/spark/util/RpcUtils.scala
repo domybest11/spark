@@ -51,6 +51,10 @@ private[spark] object RpcUtils {
     RpcTimeout(conf, Seq(RPC_ASK_TIMEOUT.key, NETWORK_TIMEOUT.key), "120s")
   }
 
+  def askYarnTimeout(conf: SparkConf): RpcTimeout = {
+    RpcTimeout(conf, Seq(YARN_ASK_TIMEOUT.key), "120s")
+  }
+
   /** Returns the default Spark timeout to use for RPC remote endpoint lookup. */
   def lookupRpcTimeout(conf: SparkConf): RpcTimeout = {
     RpcTimeout(conf, Seq(RPC_LOOKUP_TIMEOUT.key, NETWORK_TIMEOUT.key), "120s")

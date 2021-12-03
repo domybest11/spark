@@ -20,6 +20,7 @@ package org.apache.spark.sql.catalyst.plans.logical.statsEstimation
 import org.apache.spark.sql.catalyst.expressions.AttributeMap
 import org.apache.spark.sql.catalyst.plans.{LeftAnti, LeftSemi}
 import org.apache.spark.sql.catalyst.plans.logical._
+import org.apache.spark.sql.internal.SQLConf
 
 /**
  * An [[LogicalPlanVisitor]] that computes a single dimension for plan stats: size in bytes.
@@ -104,7 +105,11 @@ object SizeInBytesOnlyStatsPlanVisitor extends LogicalPlanVisitor[Statistics] {
         // LeftSemi and LeftAnti won't ever be bigger than left
         p.left.stats
       case _ =>
-        default(p)
+        if (SQLConf.get.radicalJoinSizeEstimate) {
+          Statistics(sizeInBytes = p.children.map(_.stats.sizeInBytes).filter(_ > 0L).sum)
+        } else {
+          default(p)
+        }
     }
   }
 

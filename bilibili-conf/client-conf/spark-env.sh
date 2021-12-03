@@ -3,8 +3,8 @@
 export SPARK_HOME=/data/service/spark3.1
 export SPARK_YARN_MODE=true
 export PATH=$PATH:$SPARK_HOME/bin
-export YARN_CONF_DIR=/etc/hadoop
-export HADOOP_CONF_DIR=/etc/hadoop
+export YARN_CONF_DIR=${HADOOP_CONF_DIR:-/etc/hadoop}
+export HADOOP_CONF_DIR=${HADOOP_CONF_DIR:-/etc/hadoop}
 export SPARK_DIST_CLASSPATH="$SPARK_DIST_CLASSPATH:${LZO_CLASSPATH}"
 
 export CONF_USE_CONF=true

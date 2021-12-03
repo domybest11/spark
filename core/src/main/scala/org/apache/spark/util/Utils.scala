@@ -3158,6 +3158,15 @@ private[spark] class CallerContext(
     appId.getOrElse("")
   }
 
+  val observerItv: Long = if (conf.isDefined) conf.get.get(OBSERVER_INTERVAL_MS) else 1000
+  val enableObserver: Boolean = if (conf.isDefined) conf.get.get(OBSERVER_ENABLE) else false
+
+  val observerItvContext: String = if (enableObserver) {
+    "$" + s"ObserverItv:$observerItv"
+  } else {
+    ""
+  }
+
   private val context = prepareContext("SPARK_" +
     from +
     appId.map("_" + _).getOrElse("") +
@@ -3167,7 +3176,7 @@ private[spark] class CallerContext(
     stageAttemptId.map("_" + _).getOrElse("") +
     taskId.map("_TId_" + _).getOrElse("") +
     taskAttemptNumber.map("_" + _).getOrElse("") +
-    upstreamCallerContext.map("_" + _).getOrElse("")) + "$" + s"JobId:$jobInfo"
+    upstreamCallerContext.map("_" + _).getOrElse("")) + "$" + s"JobId:$jobInfo" + observerItvContext
 
   private def prepareContext(context: String): String = {
     // The default max size of Hadoop caller context is 128

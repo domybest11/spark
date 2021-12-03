@@ -55,10 +55,15 @@ trait BroadcastExchangeLike extends Exchange {
   def relationFuture: Future[broadcast.Broadcast[Any]]
 
   /**
-   * For registering callbacks on `relationFuture`.
-   * Note that calling this method may not start the execution of broadcast job.
+   * The asynchronous job that materializes the broadcast. It's used for registering callbacks on
+   * `relationFuture`. Note that calling this method may not start the execution of broadcast job.
+   * It also does the preparations work, such as waiting for the subqueries.
    */
-  def completionFuture: scala.concurrent.Future[broadcast.Broadcast[Any]]
+  final def submitBroadcastJob: scala.concurrent.Future[broadcast.Broadcast[Any]] = executeQuery {
+    completionFuture
+  }
+
+  protected def completionFuture: scala.concurrent.Future[broadcast.Broadcast[Any]]
 
   /**
    * Returns the runtime statistics after broadcast materialization.
@@ -143,6 +148,7 @@ case class BroadcastExchangeExec[T: ClassTag](
     val beforeCollect = System.nanoTime()
     // Use executeCollect/executeCollectIterator to avoid conversion to Scala types
     val (numRows, input) = child.executeCollectIterator()
+    longMetric("numOutputRows") += numRows
     if (numRows >= 512000000) {
       throw new SparkException(
         s"Cannot broadcast the table with more than 512 millions rows: $numRows rows")

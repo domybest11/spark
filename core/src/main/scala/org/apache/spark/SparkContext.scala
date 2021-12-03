@@ -623,6 +623,7 @@ class SparkContext(config: SparkConf) extends Logging {
     _heartbeater = new Heartbeater(
       () => SparkContext.this.reportHeartBeat(_executorMetricsSource),
       "driver-heartbeater",
+      conf.get(EXECUTOR_HEARTBEAT_INITIAL),
       conf.get(EXECUTOR_HEARTBEAT_INTERVAL))
     _heartbeater.start()
 

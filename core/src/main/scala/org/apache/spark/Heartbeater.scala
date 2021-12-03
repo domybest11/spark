@@ -33,6 +33,7 @@ import org.apache.spark.util.{ThreadUtils, Utils}
 private[spark] class Heartbeater(
     reportHeartbeat: () => Unit,
     name: String,
+    initialMs: Long,
     intervalMs: Long) extends Logging {
   // Executor for the heartbeat task
   private val heartbeater = ThreadUtils.newDaemonSingleThreadScheduledExecutor(name)
@@ -40,7 +41,7 @@ private[spark] class Heartbeater(
   /** Schedules a task to report a heartbeat. */
   def start(): Unit = {
     // Wait a random interval so the heartbeats don't end up in sync
-    val initialDelay = intervalMs + (math.random * intervalMs).asInstanceOf[Int]
+    val initialDelay = initialMs + (math.random * intervalMs).asInstanceOf[Int]
 
     val heartbeatTask = new Runnable() {
       override def run(): Unit = Utils.logUncaughtExceptions(reportHeartbeat())

@@ -17,7 +17,7 @@ include:
     ref: master
     file: 'security/lint_depend_scan.yml'
 
-lint:vet:
+lint:
   stage: lint
   only:
     - merge_requests
@@ -30,9 +30,9 @@ test:
   only:
     - merge_requests
   script:
-    - echo "test"
+    - echo "todo"
 
-build:shuffleservice:
+spark_shuffleservice_build:
   stage: build
   only:
     - tags
@@ -52,46 +52,115 @@ build:shuffleservice:
     - export DEST_FILE_MD5=`alterctl md5 $DEST_FILE_LOCAL_PATH`
     - alterctl fs upload $DEST_FILE_LOCAL_PATH $DEST_FILE_REMOTE_PATH --debug
     - |
-      curl -X POST 'http://alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata' \
+      curl -X POST 'http://alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata/v3' \
         --header 'Content-Type: application/json' \
         --header 'Accept: application/json' \
         --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
         --data '{
          "bossPath":"'"$DEST_FILE_REMOTE_PATH"'",
-         "ciBranch":"3.1",
          "ciTag":"'"$CI_COMMIT_TAG"'",
+         "ciType": 0,
          "ciTime":"'"$START_BUILD_TIME"'",
          "ciUser":"'"$GITLAB_USER_LOGIN"'",
          "commitId":"'"$CI_COMMIT_SHA"'",
          "commitMsg":"'"$CI_COMMIT_TITLE"'",
          "gitGroup":"'"$CI_PROJECT_NAMESPACE"'",
+         "componentName": "JSSZ-Spark3.1-ESS;JSCS-Spark3.1-ESS",
+         "department": "datacenter",
+         "team": "offline",
          "gitRepo":"'"$CI_PROJECT_NAME"'",
          "packMd5":"'"$DEST_FILE_MD5"'",
          "packName":"'"$DEST_FILE_NAME"'",
          "packType":"tgz"
        }'
-
     - |
-      curl -X POST 'http://uat-alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata' \
+      curl -X POST 'http://uat-alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata/v3' \
         --header 'Content-Type: application/json' \
         --header 'Accept: application/json' \
         --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
         --data '{
          "bossPath":"'"$DEST_FILE_REMOTE_PATH"'",
-         "ciBranch":"3.1",
          "ciTag":"'"$CI_COMMIT_TAG"'",
+         "ciType": 0,
          "ciTime":"'"$START_BUILD_TIME"'",
          "ciUser":"'"$GITLAB_USER_LOGIN"'",
          "commitId":"'"$CI_COMMIT_SHA"'",
          "commitMsg":"'"$CI_COMMIT_TITLE"'",
          "gitGroup":"'"$CI_PROJECT_NAMESPACE"'",
+         "componentName": "JSSZ-Spark3.1-ESS;JSCS-Spark3.1-ESS;",
+         "department": "datacenter",
+         "team": "offline",
          "gitRepo":"'"$CI_PROJECT_NAME"'",
          "packMd5":"'"$DEST_FILE_MD5"'",
          "packName":"'"$DEST_FILE_NAME"'",
          "packType":"tgz"
        }'
 
-build:client:
+spark_engine_build:
+  stage: build
+  only:
+    - tags
+  artifacts:
+    paths:
+      - ./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
+    expire_in: 2 week
+  script:
+    - export
+    - export START_BUILD_TIME=`date "+%Y-%m-%d %H:%M:%S"`
+    - mv conf conf_bak
+    - mv bilibili-conf/engine-conf conf
+    - ./dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.1-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -DskipTests -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
+    - export DEST_FILE_NAME="spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz"
+    - export DEST_FILE_LOCAL_PATH=./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
+    - export DEST_FILE_REMOTE_PATH=$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
+    - export DEST_FILE_MD5=`alterctl md5 $DEST_FILE_LOCAL_PATH`
+    - alterctl fs upload $DEST_FILE_LOCAL_PATH $DEST_FILE_REMOTE_PATH --debug
+    - |
+      curl -X POST 'http://alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata/v3' \
+        --header 'Content-Type: application/json' \
+        --header 'Accept: application/json' \
+        --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
+        --data '{
+         "bossPath":"'"$DEST_FILE_REMOTE_PATH"'",
+         "ciTag":"'"$CI_COMMIT_TAG"'",
+         "ciType": 0,
+         "ciTime":"'"$START_BUILD_TIME"'",
+         "ciUser":"'"$GITLAB_USER_LOGIN"'",
+         "commitId":"'"$CI_COMMIT_SHA"'",
+         "commitMsg":"'"$CI_COMMIT_TITLE"'",
+         "gitGroup":"'"$CI_PROJECT_NAMESPACE"'",
+         "componentName": "JSCS-Spark3.1-ENGINE;JSSZ-Spark3.1-ENGINE",
+         "department": "datacenter",
+         "team": "offline",
+         "gitRepo":"'"$CI_PROJECT_NAME"'",
+         "packMd5":"'"$DEST_FILE_MD5"'",
+         "packName":"'"$DEST_FILE_NAME"'",
+         "packType":"tgz"
+       }'
+    - |
+      curl -X POST 'http://uat-alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata/v3' \
+        --header 'Content-Type: application/json' \
+        --header 'Accept: application/json' \
+        --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
+        --data '{
+         "bossPath":"'"$DEST_FILE_REMOTE_PATH"'",
+         "ciTag":"'"$CI_COMMIT_TAG"'",
+         "ciType": 0,
+         "ciTime":"'"$START_BUILD_TIME"'",
+         "ciUser":"'"$GITLAB_USER_LOGIN"'",
+         "commitId":"'"$CI_COMMIT_SHA"'",
+         "commitMsg":"'"$CI_COMMIT_TITLE"'",
+         "gitGroup":"'"$CI_PROJECT_NAMESPACE"'",
+         "componentName": "JSCS-Spark3.1-ENGINE;JSSZ-Spark3.1-ENGINE",
+         "department": "datacenter",
+         "team": "offline",
+         "gitRepo":"'"$CI_PROJECT_NAME"'",
+         "packMd5":"'"$DEST_FILE_MD5"'",
+         "packName":"'"$DEST_FILE_NAME"'",
+         "packType":"tgz"
+       }'
+
+spark_client_build:
   stage: build
   only:
     - tags
@@ -102,14 +171,15 @@ build:client:
   script:
     - export
     - mv conf conf_bak
+    - export BUILD_TIME=`date "+%Y%m%d-%H%M%S"`
     - mv bilibili-conf/client-conf conf
-    - sed -i "s/hdfs:\/\/jssz\-bigdata\-ns4\/data\/spark\/production\/jars\/spark\-3.1\-20210806.zip/hdfs:\/\/jssz\-bigdata\-ns4\/data\/spark\/production\/jars\/spark\-3.1\-${CI_COMMIT_TAG}.zip/g" ./conf/spark-defaults.conf
+    - sed -i "s/hdfs:\/\/jssz\-bigdata\-ns4\/data\/spark\/production\/jars\/spark\-3.1\-20210806.zip/hdfs:\/\/jssz\-bigdata\-ns4\/data\/spark\/production\/jars\/spark\-3.1\-${CI_COMMIT_TAG}\-${BUILD_TIME}.zip/g" ./conf/spark-defaults.conf
     - dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.1-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
     - mkdir -p dest/tmp
     - mv *.tgz dest
     - tar -zxvf dest/*.tgz -C dest/tmp
-    - export DEST_FILE_NAME=spark31_${CI_COMMIT_TAG}.zip
-    - zip dest/$DEST_FILE_NAME dest/tmp/spark*/jars/*
+    - export DEST_FILE_NAME=spark-3.1-${CI_COMMIT_TAG}-${BUILD_TIME}.zip
+    - zip -r -j dest/$DEST_FILE_NAME dest/tmp/spark*/jars/*
     - rm -rf dest/tmp
     - alterctl fs upload dest/$DEST_FILE_NAME $CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
     - |
@@ -122,40 +192,59 @@ build:client:
            "replica": 100
         }'
 
-    - |
-      curl --location --request POST 'http://uat-alter.bilibili.co/api/alter/cicd/pack/hdfs/open/spark/jars/upload' \
-        --header 'Content-Type: application/json' \
-        --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
-        --data '{
-          "bossPath":"'"$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME"'",
-          "fileName":"'"$DEST_FILE_NAME"'",
-           "replica": 100
-        }'
+hadoop_build:
+  stage: build
+  only:
+    - tags
+  script:
+    - curl --request POST --form "token=$CI_JOB_TOKEN" --form ref=master "https://git.bilibili.co/api/v4/projects/5633/trigger/pipeline"
 
-package:client:docker:
+hive_build:
+  stage: build
+  only:
+    - tags
+  script:
+    - curl --request POST --form "token=$CI_JOB_TOKEN" --form ref=master "https://git.bilibili.co/api/v4/projects/8097/trigger/pipeline"
+
+hadoop_conf_build:
+  stage: build
+  only:
+    - tags
+  script:
+    - curl --request POST --form "token=$CI_JOB_TOKEN" --form ref=master "https://git.bilibili.co/api/v4/projects/8346/trigger/pipeline"
+
+hive_conf_build:
+  stage: build
+  only:
+    - tags
+  script:
+    - curl --request POST --form "token=$CI_JOB_TOKEN" --form ref=master "https://git.bilibili.co/api/v4/projects/8347/trigger/pipeline"
+
+package_client_docker:
   stage: package
   tags:
     - rider-shared-shell
   only:
     - master
     - tags
+  before_script:
+    - curl --location --output hadoop_artifacts.zip "https://git.bilibili.co/api/v4/projects/5633/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
+    - unzip hadoop_artifacts.zip
+    - curl --location --output hive_artifacts.zip "https://git.bilibili.co/api/v4/projects/8097/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
+    - unzip hive_artifacts.zip
+    - curl --location --output hadoop_client_conf_artifacts.zip "https://git.bilibili.co/api/v4/projects/8346/jobs/artifacts/master/download?job=hadoop_client_package&job_token=$CI_JOB_TOKEN"
+    - unzip hadoop_client_conf_artifacts.zip
+    - curl --location --output hive_conf_artifacts.zip "https://git.bilibili.co/api/v4/projects/8347/jobs/artifacts/master/download?job=hive_config_package&job_token=$CI_JOB_TOKEN"
+    - unzip hive_conf_artifacts.zip
   script:
-    - docker build -f client.dockerfile -t hub.bilibili.co/datacenter-spark31-build/jssz-spark31-client:${CI_COMMIT_TAG} .
-    - docker push hub.bilibili.co/datacenter-spark31-build/jssz-spark31-client:${CI_COMMIT_TAG}
-    - /home/gitlab-runner/rider.py $CI_BUILD_ID $CI_COMMIT_REF_NAME $CI_COMMIT_SHA $CI_COMMIT_MESSAGE $GITLAB_USER_EMAIL datacenter.spark31-build.jssz-spark31-client hub.bilibili.co/datacenter-spark31-build/jssz-spark31-client:${CI_COMMIT_TAG} $CI_COMMIT_TAG
+    - docker build -f client.dockerfile -t hub.bilibili.co/compile/hadoop-base:${CI_COMMIT_TAG} .
+    - docker push hub.bilibili.co/compile/hadoop-base:${CI_COMMIT_TAG}
+    - docker tag hub.bilibili.co/compile/hadoop-base:${CI_COMMIT_TAG} hub.bilibili.co/compile/hadoop-base:latest
+    - docker push hub.bilibili.co/compile/hadoop-base:latest
   dependencies:
-    - build:client
-
-
-
-
-
-
-
-
-
-
-
-
-
+    - hive_build
+    - hive_conf_build
+    - hadoop_build
+    - hadoop_conf_build
+    - spark_client_build
 
