@@ -404,6 +404,7 @@ public class RemoteShuffleMasterHandler {
                         String key = appId + "_" + attemptId;
                         RunningApplication runningApplication = runningApplicationMap.computeIfAbsent(key, f -> new RunningApplication(appId, attemptId));
                         synchronized (runningApplication) {
+                            runningApplication.setLatestHeartbeatTime(System.currentTimeMillis());
                             runningApplication.getWorkerInfos().add(workerInfo);
                         }
                     });

@@ -36,14 +36,17 @@ public class RegisterExecutor extends BlockTransferMessage {
   public final String appId;
   public final String execId;
   public final ExecutorShuffleInfo executorInfo;
+  public String shuffleServiceType;
 
   public RegisterExecutor(
       String appId,
       String execId,
-      ExecutorShuffleInfo executorInfo) {
+      ExecutorShuffleInfo executorInfo,
+      String shuffleServiceType) {
     this.appId = appId;
     this.execId = execId;
     this.executorInfo = executorInfo;
+    this.shuffleServiceType = shuffleServiceType;
   }
 
   @Override
@@ -51,7 +54,7 @@ public class RegisterExecutor extends BlockTransferMessage {
 
   @Override
   public int hashCode() {
-    return Objects.hash(appId, execId, executorInfo);
+    return Objects.hash(appId, execId, executorInfo, shuffleServiceType);
   }
 
   @Override
@@ -60,6 +63,7 @@ public class RegisterExecutor extends BlockTransferMessage {
       .append("appId", appId)
       .append("execId", execId)
       .append("executorInfo", executorInfo)
+      .append("shuffleServiceType", shuffleServiceType)
       .toString();
   }
 
@@ -69,7 +73,8 @@ public class RegisterExecutor extends BlockTransferMessage {
       RegisterExecutor o = (RegisterExecutor) other;
       return Objects.equals(appId, o.appId)
         && Objects.equals(execId, o.execId)
-        && Objects.equals(executorInfo, o.executorInfo);
+        && Objects.equals(executorInfo, o.executorInfo)
+        && Objects.equals(shuffleServiceType, o.shuffleServiceType);
     }
     return false;
   }
@@ -78,7 +83,8 @@ public class RegisterExecutor extends BlockTransferMessage {
   public int encodedLength() {
     return Encoders.Strings.encodedLength(appId)
       + Encoders.Strings.encodedLength(execId)
-      + executorInfo.encodedLength();
+      + executorInfo.encodedLength()
+      + Encoders.Strings.encodedLength(shuffleServiceType);
   }
 
   @Override
@@ -86,12 +92,18 @@ public class RegisterExecutor extends BlockTransferMessage {
     Encoders.Strings.encode(buf, appId);
     Encoders.Strings.encode(buf, execId);
     executorInfo.encode(buf);
+    Encoders.Strings.encode(buf, shuffleServiceType);
   }
 
   public static RegisterExecutor decode(ByteBuf buf) {
     String appId = Encoders.Strings.decode(buf);
     String execId = Encoders.Strings.decode(buf);
     ExecutorShuffleInfo executorShuffleInfo = ExecutorShuffleInfo.decode(buf);
-    return new RegisterExecutor(appId, execId, executorShuffleInfo);
+    try {
+      String shuffleServiceType = Encoders.Strings.decode(buf);
+      return new RegisterExecutor(appId, execId, executorShuffleInfo, shuffleServiceType);
+    } catch (IndexOutOfBoundsException e) {
+      return new RegisterExecutor(appId, execId, executorShuffleInfo, "rss_v1");
+    }
   }
 }

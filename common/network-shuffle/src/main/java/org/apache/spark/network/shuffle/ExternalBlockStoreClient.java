@@ -170,8 +170,9 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
               assert inputListener instanceof BlockPushingListener :
                 "Expecting a BlockPushingListener, but got " + inputListener.getClass();
               TransportClient client = clientFactory.createClient(host, port);
+              String shuffleServiceType = ShuffleClientUtils.getShuffleServiceType(transportConf);
               new OneForOneBlockPusher(client, appId, comparableAppAttemptId, inputBlockId,
-                (BlockPushingListener) inputListener, buffersWithId).start();
+                (BlockPushingListener) inputListener, buffersWithId, shuffleServiceType).start();
             } else {
               logger.info("This clientFactory was closed. Skipping further block push retries.");
             }
@@ -278,7 +279,8 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
       ExecutorShuffleInfo executorInfo) throws IOException, InterruptedException {
     checkInit();
     try (TransportClient client = clientFactory.createClient(host, port)) {
-      ByteBuffer registerMessage = new RegisterExecutor(appId, execId, executorInfo).toByteBuffer();
+      String shuffleServiceType = ShuffleClientUtils.getShuffleServiceType(transportConf);
+      ByteBuffer registerMessage = new RegisterExecutor(appId, execId, executorInfo, shuffleServiceType).toByteBuffer();
       client.sendRpcSync(registerMessage, registrationTimeoutMs);
     }
   }

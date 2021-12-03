@@ -20,6 +20,7 @@ import com.google.common.collect.Lists;
 import org.apache.spark.deploy.RemoteShuffleMasterHandler;
 import org.apache.spark.network.TransportContext;
 import org.apache.spark.network.client.TransportClientFactory;
+import org.apache.spark.network.shuffle.ShuffleClientUtils;
 import org.apache.spark.network.shuffle.protocol.remote.RemoteShuffleWorkerHeartbeat;
 import org.apache.spark.network.shuffle.protocol.remote.RunningStage;
 import org.apache.spark.network.util.MapConfigProvider;
@@ -35,6 +36,9 @@ public class RemoteShuffleMasterHandlerSuite {
 
     @Test
     public void testMasterRecovery() throws Exception {
+        String[] ss = new String[]{"aa", "bb"};
+        String result = Arrays.stream(ss).reduce((a,b) -> a + "," + b).get();
+        System.out.println(result);
         long[] lon = new long[2];
         RunningStage[] runningStages = new RunningStage[0];
         List<RunningStage> currentRunningStages = new ArrayList<>();
@@ -113,10 +117,18 @@ public class RemoteShuffleMasterHandlerSuite {
                 14};
         WorkerPressure pressure = new WorkerPressure(metrics);
         Map<String, String> config = new HashMap<>();
+        config.put("spark.shuffle.push.enabled", "fals");
+        config.put("spark.shuffle.remote.service.enabled", "true");
         MapConfigProvider map = new MapConfigProvider(config);
         TransportConf conf = new TransportConf("shuffle", map);
         RemoteShuffleMasterHandler handler = new RemoteShuffleMasterHandler("", 0, conf);
         double score = handler.computeWorkerScore(pressure, false);
+
+        //getShuffleServiceType
+       String  ssType =  ShuffleClientUtils.getShuffleServiceType(conf);
+        System.out.println(ssType);
+
+
         Assert.assertEquals(0.16, score);
     }
 

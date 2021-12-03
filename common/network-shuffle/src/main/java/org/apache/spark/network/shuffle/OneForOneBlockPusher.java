@@ -54,6 +54,7 @@ public class OneForOneBlockPusher {
   private final String[] blockIds;
   private final BlockPushingListener listener;
   private final Map<String, ManagedBuffer> buffers;
+  private String shuffleServiceType;
 
   public OneForOneBlockPusher(
       TransportClient client,
@@ -61,13 +62,15 @@ public class OneForOneBlockPusher {
       int appAttemptId,
       String[] blockIds,
       BlockPushingListener listener,
-      Map<String, ManagedBuffer> buffers) {
+      Map<String, ManagedBuffer> buffers,
+      String shuffleServiceType) {
     this.client = client;
     this.appId = appId;
     this.appAttemptId = appAttemptId;
     this.blockIds = blockIds;
     this.listener = listener;
     this.buffers = buffers;
+    this.shuffleServiceType = shuffleServiceType;
   }
 
   private class BlockPushCallback implements RpcResponseCallback {
@@ -163,7 +166,7 @@ public class OneForOneBlockPusher {
       ByteBuffer header =
         new PushBlockStream(appId, appAttemptId, Integer.parseInt(blockIdParts[1]),
           Integer.parseInt(blockIdParts[2]), Integer.parseInt(blockIdParts[3]),
-            Integer.parseInt(blockIdParts[4]), i).toByteBuffer();
+            Integer.parseInt(blockIdParts[4]), i, shuffleServiceType).toByteBuffer();
       client.uploadStream(new NioManagedBuffer(header), buffers.get(blockIds[i]),
         new BlockPushCallback(i, blockIds[i]));
     }

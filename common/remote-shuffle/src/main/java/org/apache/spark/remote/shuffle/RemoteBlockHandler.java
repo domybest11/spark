@@ -160,17 +160,25 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             checkAuth(client, message.appId);
             String appKey = message.appId + "_" + message.appAttemptId;
             String shuffleKey = message.appId + "_" + message.appAttemptId + "_" + message.shuffleId + "_";
-            ConcurrentHashMap<String, RunningStage> appRunningStageMap = appStageMap.computeIfAbsent(appKey, v -> {
-                registerExecutor(message.appId, message.appAttemptId);
-                return new ConcurrentHashMap<>();
-            });
-            appRunningStageMap.computeIfAbsent(shuffleKey, v ->
-                    new RunningStage(
-                            message.appId,
-                            message.appAttemptId,
-                            message.shuffleId
-                    )
-            );
+            String shuffleServiceType;
+            try {
+                shuffleServiceType = message.shuffleServiceType;
+            } catch (Exception e) {
+                shuffleServiceType = "";
+            }
+            if (shuffleServiceType.equals("rss_v2")) {
+                ConcurrentHashMap<String, RunningStage> appRunningStageMap = appStageMap.computeIfAbsent(appKey, v -> {
+                    registerExecutor(message.appId, message.appAttemptId);
+                    return new ConcurrentHashMap<>();
+                });
+                appRunningStageMap.computeIfAbsent(shuffleKey, v ->
+                        new RunningStage(
+                                message.appId,
+                                message.appAttemptId,
+                                message.shuffleId
+                        )
+                );
+            }
             return mergeManager.receiveBlockDataAsStream(message);
         } else {
             throw new UnsupportedOperationException("Unexpected message with #receiveStream: " + msgObj);
@@ -191,6 +199,15 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             try {
                 RegisterExecutor msg = (RegisterExecutor) msgObj;
                 checkAuth(client, msg.appId);
+                String shuffleServiceType;
+                try {
+                    shuffleServiceType = msg.shuffleServiceType;
+                } catch (Exception e) {
+                    shuffleServiceType = "";
+                }
+                if (shuffleServiceType.equals("rss_v1")) {
+                    mergeManager.registerExecutor(msg.appId, msg.executorInfo);
+                }
                 blockManager.registerExecutor(msg.appId, msg.execId, msg.executorInfo);
                 callback.onSuccess(ByteBuffer.wrap(new byte[0]));
                 logger.info("Registered executor {} of appId {} with executorInfo {} from host {}",
@@ -234,6 +251,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         }
         String shuffleManagerMeta = "_:" + jsonString; //适配RemoteBlockPushResolver.registerExecutor
         String[] mergePaths = diskManager.makeMergeSpace(appId, attemptId);
+        logger.info("Choose worker dir is: {}", Arrays.stream(mergePaths).reduce((a,b) -> a + "," + b).get());
         mergeManager.registerExecutor(appId, new ExecutorShuffleInfo(mergePaths, 64, shuffleManagerMeta));
     }
 
