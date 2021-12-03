@@ -43,6 +43,7 @@ public class PushBlockStream extends BlockTransferMessage {
   // Similar to the chunkIndex in StreamChunkId, indicating the index of a block in a batch of
   // blocks to be pushed.
   public final int index;
+  public String shuffleServiceType;
 
   public PushBlockStream(
       String appId,
@@ -51,7 +52,8 @@ public class PushBlockStream extends BlockTransferMessage {
       int shuffleMergeId,
       int mapIndex,
       int reduceId,
-      int index) {
+      int index,
+      String shuffleServiceType) {
     this.appId = appId;
     this.appAttemptId = appAttemptId;
     this.shuffleId = shuffleId;
@@ -59,6 +61,7 @@ public class PushBlockStream extends BlockTransferMessage {
     this.mapIndex = mapIndex;
     this.reduceId = reduceId;
     this.index = index;
+    this.shuffleServiceType = shuffleServiceType;
   }
 
   @Override
@@ -69,7 +72,7 @@ public class PushBlockStream extends BlockTransferMessage {
   @Override
   public int hashCode() {
     return Objects.hashCode(appId, appAttemptId, shuffleId, shuffleMergeId, mapIndex , reduceId,
-      index);
+      index, shuffleServiceType);
   }
 
   @Override
@@ -82,6 +85,7 @@ public class PushBlockStream extends BlockTransferMessage {
       .append("mapIndex", mapIndex)
       .append("reduceId", reduceId)
       .append("index", index)
+      .append("remoteServiceEnable", shuffleServiceType)
       .toString();
   }
 
@@ -95,14 +99,15 @@ public class PushBlockStream extends BlockTransferMessage {
         && shuffleMergeId == o.shuffleMergeId
         && mapIndex == o.mapIndex
         && reduceId == o.reduceId
-        && index == o.index;
+        && index == o.index
+        && Objects.equal(shuffleServiceType, o.shuffleServiceType);
     }
     return false;
   }
 
   @Override
   public int encodedLength() {
-    return Encoders.Strings.encodedLength(appId) + 4 + 4 + 4 + 4 + 4 + 4;
+    return Encoders.Strings.encodedLength(appId) + 4 + 4 + 4 + 4 + 4 + 4 + Encoders.Strings.encodedLength(shuffleServiceType);
   }
 
   @Override
@@ -114,6 +119,7 @@ public class PushBlockStream extends BlockTransferMessage {
     buf.writeInt(mapIndex);
     buf.writeInt(reduceId);
     buf.writeInt(index);
+    Encoders.Strings.encode(buf, shuffleServiceType);
   }
 
   public static PushBlockStream decode(ByteBuf buf) {
@@ -124,7 +130,13 @@ public class PushBlockStream extends BlockTransferMessage {
     int mapIdx = buf.readInt();
     int reduceId = buf.readInt();
     int index = buf.readInt();
-    return new PushBlockStream(appId, attemptId, shuffleId, shuffleMergeId, mapIdx, reduceId,
-      index);
+    try {
+      String remoteServiceEnable = Encoders.Strings.decode(buf);
+      return new PushBlockStream(appId, attemptId, shuffleId, shuffleMergeId, mapIdx, reduceId,
+              index, remoteServiceEnable);
+    } catch (IndexOutOfBoundsException e) {
+      return new PushBlockStream(appId, attemptId, shuffleId, shuffleMergeId, mapIdx, reduceId,
+              index, "rss_v1");
+    }
   }
 }

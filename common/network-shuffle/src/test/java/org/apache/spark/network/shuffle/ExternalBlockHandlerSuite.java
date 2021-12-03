@@ -94,7 +94,7 @@ public class ExternalBlockHandlerSuite {
 
     String[] localDirs = new String[] {"/a", "/b"};
     ExecutorShuffleInfo config = new ExecutorShuffleInfo(localDirs, 16, "sort");
-    ByteBuffer registerMessage = new RegisterExecutor("app0", "exec1", config).toByteBuffer();
+    ByteBuffer registerMessage = new RegisterExecutor("app0", "exec1", config, "").toByteBuffer();
     handler.receive(client, registerMessage, callback);
     verify(blockResolver, times(1)).registerExecutor("app0", "exec1", config);
     verify(mergedShuffleManager, times(1)).registerExecutor("app0", config);

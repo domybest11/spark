@@ -696,6 +696,52 @@ package object config {
       .timeConf(TimeUnit.SECONDS)
       .createWithDefaultString("1h")
 
+  private[spark] val SHUFFLE_REMOTE_SERVICE_ENABLED =
+    ConfigBuilder("spark.shuffle.remote.service.enabled")
+      .version("3.2.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val SHUFFLE_REMOTE_SERVICE_MASTER_HOST =
+    ConfigBuilder("spark.shuffle.remote.service.master.host")
+      .version("3.2.0")
+      .stringConf
+      .createOptional
+
+  private[spark] val SHUFFLE_REMOTE_SERVICE_MASTER_PORT =
+    ConfigBuilder("spark.shuffle.remote.service.master.port")
+      .version("3.2.0")
+      .intConf
+      .createWithDefault(9097)
+
+  private[spark] val SHUFFLE_REMOTE_REPORT_INTERVAL =
+    ConfigBuilder("spark.shuffle.remote.report.interval")
+      .version("3.2.0")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(_ >= 0L, "Timeout must be >= 0.")
+      .createWithDefaultString("60s")
+
+  private[spark] val SHUFFLE_REMOTE_WORKER_INTERVAL =
+    ConfigBuilder("spark.shuffle.remote.worker.interval")
+      .version("3.2.0")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(_ >= 0L, "Timeout must be >= 0.")
+      .createWithDefaultString("60s")
+
+  private[spark] val SHUFFLE_REMOTE_WORKER_MONITOR =
+    ConfigBuilder("spark.shuffle.remote.worker.monitor")
+      .version("3.2.0")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(_ >= 0L, "Timeout must be >= 0.")
+      .createWithDefaultString("60s")
+
+  private[spark] val SHUFFLE_REMOTE_APPLICATION_EXPIRE =
+    ConfigBuilder("spark.shuffle.remote.application.expire")
+      .version("3.2.0")
+      .timeConf(TimeUnit.SECONDS)
+      .checkValue(_ >= 0L, "Timeout must be >= 0.")
+      .createWithDefaultString("600s")
+
   private[spark] val SHUFFLE_SERVICE_FETCH_RDD_ENABLED =
     ConfigBuilder(Constants.SHUFFLE_SERVICE_FETCH_RDD_ENABLED)
       .doc("Whether to use the ExternalShuffleService for fetching disk persisted RDD blocks. " +

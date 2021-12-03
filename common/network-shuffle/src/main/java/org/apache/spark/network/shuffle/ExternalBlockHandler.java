@@ -38,6 +38,7 @@ import com.codahale.metrics.Counter;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
+import org.apache.spark.network.shuffle.protocol.remote.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,15 +75,16 @@ public class ExternalBlockHandler extends RpcHandler
   private static final String SHUFFLE_CHUNK_ID = "shuffleChunk";
 
   @VisibleForTesting
-  private static ExternalShuffleBlockResolver blockManager;
+  protected static ExternalShuffleBlockResolver blockManager;
 
   public ExternalShuffleBlockResolver getBlockManager() {
     return blockManager;
   }
 
   private final OneForOneStreamManager streamManager;
-  private static ShuffleMetrics metrics = new ShuffleMetrics();
-  private final MergedShuffleFileManager mergeManager;
+  protected static ShuffleMetrics metrics = new ShuffleMetrics();
+  protected final MergedShuffleFileManager mergeManager;
+
 
   public ExternalBlockHandler(TransportConf conf, File registeredExecutorFile)
     throws IOException {
@@ -351,7 +353,7 @@ public class ExternalBlockHandler extends RpcHandler
     blockManager.close();
   }
 
-  private void checkAuth(TransportClient client, String appId) {
+  protected void checkAuth(TransportClient client, String appId) {
     if (client.getClientId() != null && !client.getClientId().equals(appId)) {
       throw new SecurityException(String.format(
         "Client for %s not authorized for application %s.", client.getClientId(), appId));
@@ -365,16 +367,30 @@ public class ExternalBlockHandler extends RpcHandler
   public static class ShuffleMetrics implements MetricSet {
     private final Map<String, Metric> allMetrics;
     // Time latency for open block request in ms
-    private final Timer openBlockRequestLatencyMillis =
+    public final Timer openBlockRequestLatencyMillis =
         new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for executor registration latency in ms
-    private final Timer registerExecutorRequestLatencyMillis =
+    public final Timer registerExecutorRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    public final Timer registerWorkerRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    public final Timer workerHeartbeatRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    public final Timer unregisterWorkerRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    public final Timer registerApplicationRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    public final Timer unregisterApplicationRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    public final Timer driverHeartbeatRequestLatencyMillis =
+        new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
+    public final Timer getPushMergerLocationsRequestLatencyMillis =
         new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for processing fetch merged blocks meta request latency in ms
-    private final Timer fetchMergedBlocksMetaLatencyMillis =
+    public final Timer fetchMergedBlocksMetaLatencyMillis =
         new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for processing finalize shuffle merge request latency in ms
-    private final Timer finalizeShuffleMergeLatencyMillis =
+    public final Timer finalizeShuffleMergeLatencyMillis =
         new TimerWithCustomTimeUnit(TimeUnit.MILLISECONDS);
     // Time latency for pushing block request latency in ms
     private final Timer pushBlockRequestLatencyMillis =
@@ -399,7 +415,7 @@ public class ExternalBlockHandler extends RpcHandler
     // Merged pushed block in byte per second
     public final Meter mergedPushedBlockRateBytes = new Meter();
     // Number of active connections to the shuffle service
-    private Counter activeConnections = new Counter();
+    public Counter activeConnections = new Counter();
     // Number of exceptions caught in connections to the shuffle service
     private Counter caughtExceptions = new Counter();
     // Number of blocks which merged arrives too late to shuffle service
@@ -413,6 +429,13 @@ public class ExternalBlockHandler extends RpcHandler
       allMetrics = new HashMap<>();
       allMetrics.put("openBlockRequestLatencyMillis", openBlockRequestLatencyMillis);
       allMetrics.put("registerExecutorRequestLatencyMillis", registerExecutorRequestLatencyMillis);
+      allMetrics.put("registerWorkerRequestLatencyMillis", registerWorkerRequestLatencyMillis);
+      allMetrics.put("workerHeartbeatRequestLatencyMillis", workerHeartbeatRequestLatencyMillis);
+      allMetrics.put("unregisterWorkerRequestLatencyMillis", unregisterWorkerRequestLatencyMillis);
+      allMetrics.put("registerApplicationRequestLatencyMillis", registerApplicationRequestLatencyMillis);
+      allMetrics.put("unregisterApplicationRequestLatencyMillis", unregisterApplicationRequestLatencyMillis);
+      allMetrics.put("driverHeartbeatRequestLatencyMillis", driverHeartbeatRequestLatencyMillis);
+      allMetrics.put("getPushMergerLocationsRequestLatencyMillis", getPushMergerLocationsRequestLatencyMillis);
       allMetrics.put("fetchMergedBlocksMetaLatencyMillis", fetchMergedBlocksMetaLatencyMillis);
       allMetrics.put("finalizeShuffleMergeLatencyMillis", finalizeShuffleMergeLatencyMillis);
       allMetrics.put("mergedPushedBlockTimeMillis", mergedPushedBlockTimeMillis);

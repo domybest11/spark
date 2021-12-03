@@ -19,13 +19,13 @@ package org.apache.spark.scheduler
 
 import java.io.NotSerializableException
 import java.util.Properties
-import java.util.concurrent.{ConcurrentHashMap, ScheduledFuture, TimeoutException, TimeUnit }
+import java.util.concurrent.{ConcurrentHashMap, ScheduledFuture, TimeoutException, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.annotation.tailrec
 import scala.collection.Map
 import scala.collection.mutable
-import scala.collection.mutable.{HashMap, HashSet, ListBuffer}
+import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, ListBuffer}
 import scala.concurrent.duration._
 import scala.util.Try
 import scala.util.control.NonFatal
@@ -1358,10 +1358,51 @@ private[spark] class DAGScheduler(
   private def prepareShuffleServicesForShuffleMapStage(stage: ShuffleMapStage): Unit = {
     assert(stage.shuffleDep.shuffleMergeEnabled && !stage.shuffleDep.shuffleMergeFinalized)
     if (stage.shuffleDep.getMergerLocs.isEmpty) {
-      val mergerLocs = sc.schedulerBackend.getShufflePushMergerLocations(
-        stage.shuffleDep.partitioner.numPartitions, stage.resourceProfileId)
-      if (mergerLocs.nonEmpty) {
-        stage.shuffleDep.setMergerLocs(mergerLocs)
+      val remoteShuffle = sc.remoteShuffleClient;
+      val mergerLocs = if (sc.getConf.get(config.SHUFFLE_REMOTE_SERVICE_ENABLED) && remoteShuffle.isDefined) {
+        val res = new ArrayBuffer[BlockManagerId]()
+        val tasksPerExecutor = sc.resourceProfileManager
+          .resourceProfileFromId(stage.resourceProfileId).maxTasksPerExecutor(sc.conf)
+        val maxExecutors = if (Utils.isDynamicAllocationEnabled(sc.getConf)) {
+          sc.getConf.get(config.DYN_ALLOCATION_MAX_EXECUTORS)
+        } else {
+          sc.getConf.get(config.EXECUTOR_INSTANCES).getOrElse(0)
+        }
+        remoteShuffle.map(client => {
+          val workers = client.getShufflePushMergerLocations(
+            sc.applicationId,
+            sc.applicationAttemptId,
+            stage.id,
+            stage.shuffleDep.partitioner.numPartitions,
+            tasksPerExecutor,
+            maxExecutors
+          )
+          logInfo(s"worker: ${workers.mkString(",")}")
+          workers
+        }).foreach(workers => workers.foreach(
+          work => {
+            work.split(":").toSeq match {
+              case Seq(host: String, port: String) =>  res += new BlockManagerId(host, host, port.toInt, None)
+              case _ => logWarning(s"get shuffle push merger location error, worker format is wrong")
+            }
+          }
+        ))
+        val minMergersThresholdRatio = sc.getConf.get(config.SHUFFLE_MERGER_LOCATIONS_MIN_THRESHOLD_RATIO)
+        val minMergersStaticThreshold = sc.getConf.get(config.SHUFFLE_MERGER_LOCATIONS_MIN_STATIC_THRESHOLD)
+        val numMergersDesired = Math.min(Math.max(1, Math.ceil(stage.shuffleDep.partitioner.numPartitions * 1.0 / tasksPerExecutor).toInt), maxExecutors)
+        val minMergersNeeded = math.max(minMergersStaticThreshold,
+          math.floor(numMergersDesired * minMergersThresholdRatio).toInt)
+        if (res.size > minMergersNeeded) {
+          Some(res)
+        } else {
+          Some(Seq.empty[BlockManagerId])
+        }
+      } else {
+        Some(sc.schedulerBackend.getShufflePushMergerLocations(
+          stage.shuffleDep.partitioner.numPartitions, stage.resourceProfileId))
+      }
+      if (mergerLocs.isDefined && mergerLocs.get.nonEmpty) {
+        stage.shuffleDep.setMergerLocs(mergerLocs.get)
         logInfo(s"Push-based shuffle enabled for $stage (${stage.name}) with" +
           s" ${stage.shuffleDep.getMergerLocs.size} merger locations")
 
