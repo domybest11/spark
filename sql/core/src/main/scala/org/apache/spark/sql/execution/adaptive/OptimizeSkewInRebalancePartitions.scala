@@ -17,7 +17,7 @@
 
 package org.apache.spark.sql.execution.adaptive
 
-import org.apache.spark.sql.execution.{CoalescedPartitionSpec, ShufflePartitionSpec, SparkPlan}
+import org.apache.spark.sql.execution.{CoalescedPartitionSpec, ProjectExec, ShufflePartitionSpec, SparkPlan}
 import org.apache.spark.sql.execution.exchange.{REBALANCE_PARTITIONS_BY_COL, REBALANCE_PARTITIONS_BY_NONE, ShuffleOrigin}
 import org.apache.spark.sql.internal.SQLConf
 
@@ -69,7 +69,7 @@ object OptimizeSkewInRebalancePartitions extends CustomShuffleReaderRule {
   }
 
   private def tryOptimizeSkewedPartitions(shuffle: ShuffleQueryStageExec): SparkPlan = {
-    val advisorySize = conf.getConf(SQLConf.ADVISORY_PARTITION_SIZE_IN_BYTES)
+    val advisorySize = conf.getConf(SQLConf.ADVISORY_REBALANCE_PARTITION_SIZE_IN_BYTES)
     val mapStats = shuffle.mapStats
     if (mapStats.isEmpty ||
       mapStats.get.bytesByPartitionId.forall(_ <= advisorySize)) {
@@ -95,6 +95,14 @@ object OptimizeSkewInRebalancePartitions extends CustomShuffleReaderRule {
       case shuffle: ShuffleQueryStageExec
           if supportedShuffleOrigins.contains(shuffle.shuffle.shuffleOrigin) =>
         tryOptimizeSkewedPartitions(shuffle)
+      case ProjectExec(_, child: ShuffleQueryStageExec)
+          if supportedShuffleOrigins.contains(child.shuffle.shuffleOrigin) =>
+        val newChild = tryOptimizeSkewedPartitions(child)
+        if (newChild.isInstanceOf[CustomShuffleReaderExec]) {
+          plan.withNewChildren(Seq(newChild))
+        } else {
+          plan
+        }
       case _ => plan
     }
   }

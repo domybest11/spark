@@ -3217,6 +3217,16 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
+  val ADVISORY_REBALANCE_PARTITION_SIZE_IN_BYTES =
+    buildConf("spark.sql.adaptive.advisoryRebalancePartitionSizeInBytes")
+      .doc("The advisory size in bytes of the rebalance shuffle partition " +
+        "during adaptive optimization " +
+        s"(when ${ADAPTIVE_OPTIMIZE_SKEWS_IN_REBALANCE_PARTITIONS_ENABLED.key} is true). ")
+      .version("3.2.0")
+      .bytesConf(ByteUnit.BYTE)
+      .checkValue(_ > 0, "advisoryRebalancePartitionSizeInBytes must be positive")
+      .createWithDefaultString("512MB")
+
   /**
    * Holds information about keys that have been deprecated.
    *
