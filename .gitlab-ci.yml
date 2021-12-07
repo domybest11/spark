@@ -2,7 +2,7 @@ stages:
   - lint
   - test
   - build
-  - package
+  - image
 
 variables:
   # 需要发送的安全依赖文件，java语言则对应为pom.xml，python语言则为requirements.txt，nodejs语言则为package.json,go语言则为go.sum，php语言则为composer.lock
@@ -192,26 +192,12 @@ spark_client_build:
            "replica": 100
         }'
 
-hadoop_build:
-  stage: build
-  only:
-    - tags
-  script:
-    - curl --request POST --form "token=$CI_JOB_TOKEN" --form ref=master "https://git.bilibili.co/api/v4/projects/5633/trigger/pipeline"
-
 hive_build:
   stage: build
   only:
     - tags
   script:
     - curl --request POST --form "token=$CI_JOB_TOKEN" --form ref=master "https://git.bilibili.co/api/v4/projects/8097/trigger/pipeline"
-
-hadoop_conf_build:
-  stage: build
-  only:
-    - tags
-  script:
-    - curl --request POST --form "token=$CI_JOB_TOKEN" --form ref=master "https://git.bilibili.co/api/v4/projects/8346/trigger/pipeline"
 
 hive_conf_build:
   stage: build
@@ -220,31 +206,70 @@ hive_conf_build:
   script:
     - curl --request POST --form "token=$CI_JOB_TOKEN" --form ref=master "https://git.bilibili.co/api/v4/projects/8347/trigger/pipeline"
 
-package_client_docker:
-  stage: package
+image_ai_docker:
+  stage: image
   tags:
     - rider-shared-shell
   only:
     - master
     - tags
   before_script:
-    - curl --location --output hadoop_artifacts.zip "https://git.bilibili.co/api/v4/projects/5633/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
-    - unzip hadoop_artifacts.zip
     - curl --location --output hive_artifacts.zip "https://git.bilibili.co/api/v4/projects/8097/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
     - unzip hive_artifacts.zip
-    - curl --location --output hadoop_client_conf_artifacts.zip "https://git.bilibili.co/api/v4/projects/8346/jobs/artifacts/master/download?job=hadoop_client_package&job_token=$CI_JOB_TOKEN"
-    - unzip hadoop_client_conf_artifacts.zip
     - curl --location --output hive_conf_artifacts.zip "https://git.bilibili.co/api/v4/projects/8347/jobs/artifacts/master/download?job=hive_config_package&job_token=$CI_JOB_TOKEN"
     - unzip hive_conf_artifacts.zip
   script:
-    - docker build -f client.dockerfile -t hub.bilibili.co/compile/hadoop-base:${CI_COMMIT_TAG} .
-    - docker push hub.bilibili.co/compile/hadoop-base:${CI_COMMIT_TAG}
-    - docker tag hub.bilibili.co/compile/hadoop-base:${CI_COMMIT_TAG} hub.bilibili.co/compile/hadoop-base:latest
-    - docker push hub.bilibili.co/compile/hadoop-base:latest
+    - docker build -f ai.dockerfile -t hub.bilibili.co/compile/spark-ai:${CI_COMMIT_TAG} .
+    - docker push hub.bilibili.co/compile/spark-ai:${CI_COMMIT_TAG}
+    - docker tag hub.bilibili.co/compile/spark-ai:${CI_COMMIT_TAG} hub.bilibili.co/compile/spark-ai:latest
+    - docker push hub.bilibili.co/compile/spark-ai:latest
   dependencies:
     - hive_build
     - hive_conf_build
-    - hadoop_build
-    - hadoop_conf_build
     - spark_client_build
+
+image_internel_docker:
+  stage: image
+  tags:
+    - rider-shared-shell
+  only:
+    - master
+    - tags
+  before_script:
+    - curl --location --output hive_artifacts.zip "https://git.bilibili.co/api/v4/projects/8097/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
+    - unzip hive_artifacts.zip
+    - curl --location --output hive_conf_artifacts.zip "https://git.bilibili.co/api/v4/projects/8347/jobs/artifacts/master/download?job=hive_config_package&job_token=$CI_JOB_TOKEN"
+    - unzip hive_conf_artifacts.zip
+  script:
+    - docker build -f internel.dockerfile -t hub.bilibili.co/compile/spark-internel:${CI_COMMIT_TAG} .
+    - docker push hub.bilibili.co/compile/spark-internel:${CI_COMMIT_TAG}
+    - docker tag hub.bilibili.co/compile/spark-internel:${CI_COMMIT_TAG} hub.bilibili.co/compile/spark-internel:latest
+    - docker push hub.bilibili.co/compile/spark-internel:latest
+  dependencies:
+    - hive_build
+    - hive_conf_build
+    - spark_client_build
+
+image_externel_docker:
+  stage: image
+  tags:
+    - rider-shared-shell
+  only:
+    - master
+    - tags
+  before_script:
+    - curl --location --output hive_artifacts.zip "https://git.bilibili.co/api/v4/projects/8097/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
+    - unzip hive_artifacts.zip
+    - curl --location --output hive_conf_artifacts.zip "https://git.bilibili.co/api/v4/projects/8347/jobs/artifacts/master/download?job=hive_config_package&job_token=$CI_JOB_TOKEN"
+    - unzip hive_conf_artifacts.zip
+  script:
+    - docker build -f externel.dockerfile -t hub.bilibili.co/compile/spark-externel:${CI_COMMIT_TAG} .
+    - docker push hub.bilibili.co/compile/spark-externel:${CI_COMMIT_TAG}
+    - docker tag hub.bilibili.co/compile/spark-externel:${CI_COMMIT_TAG} hub.bilibili.co/compile/spark-externel:latest
+    - docker push hub.bilibili.co/compile/spark-externel:latest
+  dependencies:
+    - hive_build
+    - hive_conf_build
+    - spark_client_build
+
 
