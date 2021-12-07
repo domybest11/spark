@@ -21,7 +21,9 @@ class SparkConfHelper(sparkConf: SparkConf) extends Logging {
     ExecutorMemoryRule(sparkConf),
     DataSourceGrayScaleRelease(sparkConf),
     AllocationRatioRule(sparkConf),
-    RepartitionBeforeWriteTableRule(sparkConf))
+    RepartitionBeforeWriteTableRule(sparkConf),
+    PushShuffleRule(sparkConf)
+  )
 
   def execute: Unit = {
     rules.foreach(r => r.apply(this))
