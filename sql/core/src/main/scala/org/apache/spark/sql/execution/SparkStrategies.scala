@@ -32,7 +32,7 @@ import org.apache.spark.sql.catalyst.streaming.{InternalOutputModes, StreamingRe
 import org.apache.spark.sql.execution.aggregate.AggUtils
 import org.apache.spark.sql.execution.columnar.{InMemoryRelation, InMemoryTableScanExec}
 import org.apache.spark.sql.execution.command._
-import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, REPARTITION, REPARTITION_WITH_NUM, ShuffleExchangeExec}
+import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, REBALANCE_PARTITIONS_BY_COL, REBALANCE_PARTITIONS_BY_NONE, REPARTITION_BY_COL, REPARTITION_BY_NUM, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.python._
 import org.apache.spark.sql.execution.streaming._
 import org.apache.spark.sql.execution.streaming.sources.MemoryPlan
@@ -670,7 +670,7 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
       case logical.Repartition(numPartitions, shuffle, child) =>
         if (shuffle) {
           ShuffleExchangeExec(RoundRobinPartitioning(numPartitions),
-            planLater(child), REPARTITION_WITH_NUM) :: Nil
+            planLater(child), REPARTITION_BY_NUM) :: Nil
         } else {
           execution.CoalesceExec(numPartitions, planLater(child)) :: Nil
         }
@@ -705,25 +705,34 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
       case r: logical.RepartitionByExpression =>
         val shuffleOrigin = if (r.withEnsureRequirementsShuffleOrigin) {
           ENSURE_REQUIREMENTS
+        } else if (r.partitionExpressions.isEmpty && r.optNumPartitions.isEmpty) {
+          REBALANCE_PARTITIONS_BY_NONE
         } else if (r.optNumPartitions.isEmpty) {
-          REPARTITION
+          REPARTITION_BY_COL
         } else {
-          REPARTITION_WITH_NUM
+          REPARTITION_BY_NUM
+        }
+        exchange.ShuffleExchangeExec(r.partitioning, planLater(r.child), shuffleOrigin) :: Nil
+      case r: logical.RebalancePartitions =>
+        val shuffleOrigin = if (r.partitionExpressions.isEmpty) {
+          REBALANCE_PARTITIONS_BY_NONE
+        } else {
+          REBALANCE_PARTITIONS_BY_COL
         }
         exchange.ShuffleExchangeExec(r.partitioning, planLater(r.child), shuffleOrigin) :: Nil
       case r: logical.RepartitionByZorder =>
         val shuffleOrigin = if (r.optNumPartitions.isEmpty) {
-          REPARTITION
+          REPARTITION_BY_COL
         } else {
-          REPARTITION_WITH_NUM
+          REPARTITION_BY_NUM
         }
         exchange.ShuffleExchangeExec(
           r.partitioning, planLater(r.child), shuffleOrigin) :: Nil
       case r: logical.RepartitionByHilbertCurve =>
         val shuffleOrigin = if (r.optNumPartitions.isEmpty) {
-          REPARTITION
+          REPARTITION_BY_COL
         } else {
-          REPARTITION_WITH_NUM
+          REPARTITION_BY_NUM
         }
         exchange.ShuffleExchangeExec(
           r.partitioning, planLater(r.child), shuffleOrigin) :: Nil
