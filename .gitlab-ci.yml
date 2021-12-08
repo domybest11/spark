@@ -211,7 +211,6 @@ image_ai_docker:
   tags:
     - rider-shared-shell
   only:
-    - master
     - tags
   before_script:
     - curl --location --output hive_artifacts.zip "https://git.bilibili.co/api/v4/projects/8097/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
@@ -233,7 +232,6 @@ image_internal_docker:
   tags:
     - rider-shared-shell
   only:
-    - master
     - tags
   before_script:
     - curl --location --output hive_artifacts.zip "https://git.bilibili.co/api/v4/projects/8097/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
@@ -255,7 +253,6 @@ image_external_docker:
   tags:
     - rider-shared-shell
   only:
-    - master
     - tags
   before_script:
     - curl --location --output hive_artifacts.zip "https://git.bilibili.co/api/v4/projects/8097/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
