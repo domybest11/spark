@@ -263,7 +263,7 @@ image_external_docker:
     - curl --location --output hive_conf_artifacts.zip "https://git.bilibili.co/api/v4/projects/8347/jobs/artifacts/master/download?job=hive_config_package&job_token=$CI_JOB_TOKEN"
     - unzip hive_conf_artifacts.zip
   script:
-    - docker build -f external.dockerfile -t hub.bilibili.co/compile/spark-externel:${CI_COMMIT_TAG} .
+    - docker build -f external.dockerfile -t hub.bilibili.co/compile/spark-external:${CI_COMMIT_TAG} .
     - docker push hub.bilibili.co/compile/spark-external:${CI_COMMIT_TAG}
     - docker tag hub.bilibili.co/compile/spark-external:${CI_COMMIT_TAG} hub.bilibili.co/compile/spark-external:latest
     - docker push hub.bilibili.co/compile/spark-external:latest
