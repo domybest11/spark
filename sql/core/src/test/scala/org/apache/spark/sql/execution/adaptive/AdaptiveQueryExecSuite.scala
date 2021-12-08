@@ -1592,7 +1592,9 @@ class AdaptiveQueryExecSuite
   }
 
   test("SPARK-35650: Coalesce number of partitions by AEQ") {
-    withSQLConf(SQLConf.COALESCE_PARTITIONS_MIN_PARTITION_NUM.key -> "1") {
+    withSQLConf(
+      SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true",
+      SQLConf.COALESCE_PARTITIONS_MIN_PARTITION_NUM.key -> "1") {
       Seq("REPARTITION", "REBALANCE(key)")
         .foreach {repartition =>
           val query = s"SELECT /*+ $repartition */ * FROM testData"
@@ -1611,7 +1613,9 @@ class AdaptiveQueryExecSuite
   }
 
   test("SPARK-35650: Use local shuffle reader if can not coalesce number of partitions") {
-    withSQLConf(SQLConf.COALESCE_PARTITIONS_ENABLED.key -> "false") {
+    withSQLConf(
+      SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true",
+      SQLConf.COALESCE_PARTITIONS_ENABLED.key -> "false") {
       val query = "SELECT /*+ REPARTITION */ * FROM testData"
       val (_, adaptivePlan) = runAdaptiveAndVerifyResult(query)
       collect(adaptivePlan) {
@@ -1652,7 +1656,9 @@ class AdaptiveQueryExecSuite
           assert(reader.head.partitionSpecs.size == totalNumber)
         }
 
-        withSQLConf(SQLConf.ADVISORY_PARTITION_SIZE_IN_BYTES.key -> "150") {
+        withSQLConf(
+          SQLConf.ADVISORY_PARTITION_SIZE_IN_BYTES.key -> "150",
+          SQLConf.ADVISORY_REBALANCE_PARTITION_SIZE_IN_BYTES.key -> "150") {
           // partition size [0,258,72,72,72]
           checkPartitionNumber("SELECT /*+ REBALANCE(c1) */ * FROM v", 2, 4)
           // partition size [72,216,216,144,72]
@@ -1660,7 +1666,9 @@ class AdaptiveQueryExecSuite
         }
 
         // no skewed partition should be optimized
-        withSQLConf(SQLConf.ADVISORY_PARTITION_SIZE_IN_BYTES.key -> "10000") {
+        withSQLConf(
+          SQLConf.ADVISORY_PARTITION_SIZE_IN_BYTES.key -> "10000",
+          SQLConf.ADVISORY_REBALANCE_PARTITION_SIZE_IN_BYTES.key -> "10000") {
           checkPartitionNumber("SELECT /*+ REBALANCE(c1) */ * FROM v", 0, 1)
         }
       }
