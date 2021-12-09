@@ -210,7 +210,7 @@ private[spark] class Client(
       reportLauncherState(SparkAppHandle.State.SUBMITTED)
       val traceId = sparkConf.get("spark.trace.id", "")
       val queueName = sparkConf.get("spark.yarn.queue", "default")
-      printQueueInfo(hadoopConf, traceId, queueName)
+      printQueueInfo(hadoopConf, traceId, queueName, appId)
 
       appId
     } catch {
@@ -222,7 +222,8 @@ private[spark] class Client(
     }
   }
 
-  def printQueueInfo(conf: Configuration, traceId: String, queueName: String): Unit = {
+  def printQueueInfo(conf: Configuration, traceId: String, queueName: String,
+                     appId: ApplicationId): Unit = {
     var rmClient: ApplicationClientProtocol = null
     val action = "resource"
     try {
@@ -238,6 +239,7 @@ private[spark] class Client(
       request.setIncludeApplications(false)
       request.setIncludeChildQueues(false)
       request.setRecursive(false)
+      request.setApplicationId(appId)
       var queueInfo = rmClient.getQueueInfo(request).getQueueInfo
       var queueStat = queueInfo.getQueueStatistics
       val cpuUsage = (queueStat.getAllocatedVCores * 100.0) /
@@ -263,6 +265,7 @@ private[spark] class Client(
       request.setIncludeApplications(false)
       request.setIncludeChildQueues(false)
       request.setRecursive(false)
+      request.setApplicationId(appId)
       queueInfo = rmClient.getQueueInfo(request).getQueueInfo
       queueStat = queueInfo.getQueueStatistics
       val pendingAppStr = s"当前队列等待任务：${queueStat.getNumAppsPending}"
@@ -295,6 +298,7 @@ private[spark] class Client(
         request.setIncludeApplications(false)
         request.setIncludeChildQueues(false)
         request.setRecursive(false)
+        request.setApplicationId(appId)
         queueInfo = rmClient.getQueueInfo(request).getQueueInfo
         queueStat = queueInfo.getQueueStatistics
         queueVCoreUsageStr = s"部门队列${dQueueName}CPU资源已用${queueStat.getAllocatedVCores}，" +
