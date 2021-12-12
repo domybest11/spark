@@ -115,7 +115,154 @@ public class RemoteShuffleMasterHandlerSuite {
                 0, 0, 250, 112, 40, 19, 1, 1, 1,
                 0, 0, 436, 142, 67, 22, 1, 1, 1,
                 14};
+
+        long[] metrics1 = new long[]{200, 48, 3851, 2300, 3971, 2109, 0,
+            0, 42, 280, 138, 26, 18, 15, 1, 0,
+            0, 0, 263, 113, 29, 15, 12, 1, 0,
+            0, 0, 234, 119, 40, 20, 1, 1, 0,
+            0, 0, 218, 185, 37, 28, 1, 1, 1,
+            0, 0, 350, 137, 62, 23, 1, 1, 1,
+            0, 0, 281, 136, 48, 24, 1, 1, 1,
+            0, 0, 140, 115, 22, 20, 1, 1, 1,
+            0, 0, 150, 110, 26, 18, 1, 1, 1,
+            0, 0, 173, 105, 32, 20, 1, 1, 1,
+            0, 0, 240, 109, 41, 19, 1, 1, 1,
+            0, 0, 212, 123, 38, 21, 1, 1, 1,
+            0, 0, 176, 106, 39, 18, 1, 1, 1,
+            0, 0, 250, 112, 40, 19, 1, 1, 1,
+            0, 0, 436, 142, 67, 22, 1, 1, 1,
+            14};
+
+        long[] metrics2 = new long[]{96, 48, 10240, 2300, 3971, 2109, 0,
+            0, 42, 280, 138, 26, 18, 15, 1, 0,
+            0, 0, 263, 113, 29, 15, 12, 1, 0,
+            0, 0, 234, 119, 40, 20, 1, 1, 0,
+            0, 0, 218, 185, 37, 28, 1, 1, 1,
+            0, 0, 350, 137, 62, 23, 1, 1, 1,
+            0, 0, 281, 136, 48, 24, 1, 1, 1,
+            0, 0, 140, 115, 22, 20, 1, 1, 1,
+            0, 0, 150, 110, 26, 18, 1, 1, 1,
+            0, 0, 173, 105, 32, 20, 1, 1, 1,
+            0, 0, 240, 109, 41, 19, 1, 1, 1,
+            0, 0, 212, 123, 38, 21, 1, 1, 1,
+            0, 0, 176, 106, 39, 18, 1, 1, 1,
+            0, 0, 250, 112, 40, 19, 1, 1, 1,
+            0, 0, 436, 142, 67, 22, 1, 1, 1,
+            14};
+
+        long[] metrics3 = new long[]{200, 48, 3971, 2300, 3971, 10240, 0,
+            0, 42, 280, 138, 26, 18, 15, 1, 0,
+            0, 0, 263, 113, 29, 15, 12, 1, 0,
+            0, 0, 234, 119, 40, 20, 1, 1, 0,
+            0, 0, 218, 185, 37, 28, 1, 1, 1,
+            0, 0, 350, 137, 62, 23, 1, 1, 1,
+            0, 0, 281, 136, 48, 24, 1, 1, 1,
+            0, 0, 140, 115, 22, 20, 1, 1, 1,
+            0, 0, 150, 110, 26, 18, 1, 1, 1,
+            0, 0, 173, 105, 32, 20, 1, 1, 1,
+            0, 0, 240, 109, 41, 19, 1, 1, 1,
+            0, 0, 212, 123, 38, 21, 1, 1, 1,
+            0, 0, 176, 106, 39, 18, 1, 1, 1,
+            0, 0, 250, 112, 40, 19, 1, 1, 1,
+            0, 0, 436, 142, 67, 22, 1, 1, 1,
+            14};
+
+        long[] metrics4 = new long[]{200, 48, 3971, 2300, 3971, 2300, 5000,
+            0, 42, 280, 138, 26, 18, 15, 1, 0,
+            0, 0, 263, 113, 29, 15, 12, 1, 0,
+            0, 0, 234, 119, 40, 20, 1, 1, 0,
+            0, 0, 218, 185, 37, 28, 1, 1, 1,
+            0, 0, 350, 137, 62, 23, 1, 1, 1,
+            0, 0, 281, 136, 48, 24, 1, 1, 1,
+            0, 0, 140, 115, 22, 20, 1, 1, 1,
+            0, 0, 150, 110, 26, 18, 1, 1, 1,
+            0, 0, 173, 105, 32, 20, 1, 1, 1,
+            0, 0, 240, 109, 41, 19, 1, 1, 1,
+            0, 0, 212, 123, 38, 21, 1, 1, 1,
+            0, 0, 176, 106, 39, 18, 1, 1, 1,
+            0, 0, 250, 112, 40, 19, 1, 1, 1,
+            0, 0, 436, 142, 67, 22, 1, 1, 1,
+            14};
+
+        long[] metrics5 = new long[]{96, 48, 3851, 2300, 3971, 2109, 0,
+            0, 42, 280, 138, 100, 18, 15, 1, 0,
+            0, 0, 263, 113, 100, 15, 12, 1, 0,
+            0, 0, 234, 119, 100, 20, 1, 1, 0,
+            0, 0, 218, 185, 100, 28, 1, 1, 1,
+            0, 0, 350, 137, 100, 23, 1, 1, 1,
+            0, 0, 281, 136, 100, 24, 1, 1, 1,
+            0, 0, 140, 115, 100, 20, 1, 1, 1,
+            0, 0, 150, 110, 100, 18, 1, 1, 1,
+            0, 0, 173, 105, 100, 20, 1, 1, 1,
+            0, 0, 240, 109, 100, 19, 1, 1, 1,
+            0, 0, 212, 123, 100, 21, 1, 1, 1,
+            0, 0, 176, 106, 100, 18, 1, 1, 1,
+            0, 0, 250, 112, 100, 19, 1, 1, 1,
+            0, 0, 436, 142, 100, 22, 1, 1, 1,
+            14};
+
+        long[] metrics6 = new long[]{96, 48, 3851, 2300, 3971, 2109, 0,
+            0, 42, 280, 138, 26, 18, 100, 1, 0,
+            0, 0, 263, 113, 29, 15, 100, 1, 0,
+            0, 0, 234, 119, 40, 20, 100, 1, 0,
+            0, 0, 218, 185, 37, 28, 100, 1, 1,
+            0, 0, 350, 137, 62, 23, 100, 1, 1,
+            0, 0, 281, 136, 48, 24, 100, 1, 1,
+            0, 0, 140, 115, 22, 20, 100, 1, 1,
+            0, 0, 150, 110, 26, 18, 100, 1, 1,
+            0, 0, 173, 105, 32, 20, 100, 1, 1,
+            0, 0, 240, 109, 41, 19, 100, 1, 1,
+            0, 0, 212, 123, 38, 21, 100, 1, 1,
+            0, 0, 176, 106, 39, 18, 100, 1, 1,
+            0, 0, 250, 112, 40, 19, 100, 1, 1,
+            0, 0, 436, 142, 67, 22, 100, 1, 1,
+            14};
+
+        long[] metrics7 = new long[]{96, 48, 3851, 2300, 3971, 2109, 0,
+            0, 42, 280, 138, 26, 18, 15, 1, 0,
+            0, 0, 263, 113, 29, 15, 12, 1, 0,
+            0, 0, 234, 119, 40, 20, 1, 1, 0,
+            0, 0, 218, 185, 37, 28, 1, 1, 1,
+            0, 0, 350, 137, 62, 23, 1, 1, 1,
+            0, 0, 281, 136, 48, 24, 1, 1, 1,
+            0, 0, 140, 115, 22, 20, 1, 1, 1,
+            0, 0, 150, 110, 26, 18, 1, 1, 1,
+            0, 0, 173, 105, 32, 20, 1, 1, 1,
+            0, 0, 240, 109, 41, 19, 1, 1, 1,
+            0, 0, 212, 123, 38, 21, 1, 1, 1,
+            0, 0, 176, 106, 39, 18, 1, 1, 1,
+            0, 0, 250, 112, 40, 19, 1, 1, 1,
+            0, 0, 436, 142, 67, 22, 1, 1, 1,
+            14};
+
+
+        long[] metrics8 = new long[]{96, 48, 3851, 2300, 3971, 2109, 0,
+            300, 42, 280, 138, 26, 18, 15, 1, 0,
+            300, 0, 263, 113, 29, 15, 12, 1, 0,
+            300, 0, 234, 119, 40, 20, 1, 1, 0,
+            2500, 0, 218, 185, 37, 28, 1, 1, 1,
+            2500, 0, 350, 137, 62, 23, 1, 1, 1,
+            2500, 0, 281, 136, 48, 24, 1, 1, 1,
+            2500, 0, 140, 115, 22, 20, 1, 1, 1,
+            2500, 0, 150, 110, 26, 18, 1, 1, 1,
+            2500, 0, 173, 105, 32, 20, 1, 1, 1,
+            2500, 0, 240, 109, 41, 19, 1, 1, 1,
+            2500, 0, 212, 123, 38, 21, 1, 1, 1,
+            2500, 0, 176, 106, 39, 18, 1, 1, 1,
+            2500, 0, 250, 112, 40, 19, 1, 1, 1,
+            2500, 0, 436, 142, 67, 22, 1, 1, 1,
+            14};
+
         WorkerPressure pressure = new WorkerPressure(metrics);
+        WorkerPressure pressure1 = new WorkerPressure(metrics1);
+        WorkerPressure pressure2 = new WorkerPressure(metrics2);
+        WorkerPressure pressure3 = new WorkerPressure(metrics3);
+        WorkerPressure pressure4 = new WorkerPressure(metrics4);
+        WorkerPressure pressure5 = new WorkerPressure(metrics5);
+        WorkerPressure pressure6 = new WorkerPressure(metrics6);
+        WorkerPressure pressure7 = new WorkerPressure(metrics7);
+        WorkerPressure pressure8 = new WorkerPressure(metrics8);
+
         Map<String, String> config = new HashMap<>();
         config.put("spark.shuffle.push.enabled", "fals");
         config.put("spark.shuffle.remote.service.enabled", "true");
@@ -123,13 +270,29 @@ public class RemoteShuffleMasterHandlerSuite {
         TransportConf conf = new TransportConf("shuffle", map);
         RemoteShuffleMasterHandler handler = new RemoteShuffleMasterHandler("", 0, conf);
         double score = handler.computeWorkerScore(pressure, false);
+        double score1 = handler.computeWorkerScore(pressure1, false);
+        double score2 = handler.computeWorkerScore(pressure2, true);
+        double score3 = handler.computeWorkerScore(pressure3, false);
+        double score4 = handler.computeWorkerScore(pressure4, false);
+        double score5 = handler.computeWorkerScore(pressure5, true);
+        double score6 = handler.computeWorkerScore(pressure6, false);
+        double score7 = handler.computeWorkerScore(pressure7, false);
+        double score8 = handler.computeWorkerScore(pressure8, true);
 
         //getShuffleServiceType
        String  ssType =  ShuffleClientUtils.getShuffleServiceType(conf);
         System.out.println(ssType);
 
 
-        Assert.assertEquals(0.16, score);
+        Assert.assertEquals(0.16, score, 0.0);
+        Assert.assertEquals(1.0, score1, 0.0);
+        Assert.assertEquals(1.0, score2, 0.0);
+        Assert.assertEquals(1.0, score3,0.0);
+        Assert.assertEquals(1.0, score4, 0.0);
+        Assert.assertEquals(1.0, score5, 0.0);
+        Assert.assertEquals(1.0, score6,0.0);
+        Assert.assertEquals(0.16, score7, 0.0);
+        Assert.assertEquals(1.0, score8, 0.0);
     }
 
 
