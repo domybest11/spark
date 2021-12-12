@@ -572,7 +572,7 @@ public class RemoteShuffleMasterHandler {
         NETWORKINBYTES5MIN("networkInBytes5min", 0.1, 0.0, 10240.0),
         NETWORKOUTBYTES("networkOutBytes", 0.1, 0.0, 10240.0),
         NETWORKOUTBYTES5MIN("networkOutBytes5min", 0.1, 0.0, 10240.0),
-        ALIVECONNECTION("aliveConnection", 0.1, 0.0, 10000.0),
+        ALIVECONNECTION("aliveConnection", 0.1, 0.0, 5000.0),
         //HDD
         HDDDISKREAD("diskReadIOps", 0.1, 0.0, 300.0),
         HDDDISKREAD5MIN("diskReadIOps5min", 0.1, 0.0, 300.0),
