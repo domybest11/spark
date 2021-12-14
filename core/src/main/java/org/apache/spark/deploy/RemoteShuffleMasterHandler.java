@@ -572,7 +572,7 @@ public class RemoteShuffleMasterHandler {
         NETWORKINBYTES5MIN("networkInBytes5min", 0.1, 0.0, 10240.0),
         NETWORKOUTBYTES("networkOutBytes", 0.1, 0.0, 10240.0),
         NETWORKOUTBYTES5MIN("networkOutBytes5min", 0.1, 0.0, 10240.0),
-        ALIVECONNECTION("aliveConnection", 0.1, 0.0, 10000.0),
+        ALIVECONNECTION("aliveConnection", 0.1, 0.0, 5000.0),
         //HDD
         HDDDISKREAD("diskReadIOps", 0.1, 0.0, 300.0),
         HDDDISKREAD5MIN("diskReadIOps5min", 0.1, 0.0, 300.0),
@@ -636,12 +636,22 @@ public class RemoteShuffleMasterHandler {
         double diskIOUtils = 0.0;
         double diskSpaceUsed = 0.0;
         double diskInodeUsed = 0.0;
-        metrics.add(maxMinNormalization(WorkerMertric.CPULOADAVERAGE.max, WorkerMertric.CPULOADAVERAGE.min, pressure.cpuLoadAverage));
+        double cpuLoadAverage =  maxMinNormalization(WorkerMertric.CPULOADAVERAGE.max, WorkerMertric.CPULOADAVERAGE.min, pressure.cpuLoadAverage);
+        double aliveConnection = maxMinNormalization(WorkerMertric.ALIVECONNECTION.max, WorkerMertric.ALIVECONNECTION.min, pressure.aliveConnection);
+        if (cpuLoadAverage > blackScore || aliveConnection > blackScore) {
+            return 1.0;
+        }
+        metrics.add(cpuLoadAverage);
         metrics.add(maxMinNormalization(WorkerMertric.CPUAVAILABLE.max, WorkerMertric.CPUAVAILABLE.min, pressure.cpuAvailable));
-        metrics.add(maxMinNormalization(WorkerMertric.ALIVECONNECTION.max, WorkerMertric.ALIVECONNECTION.min, pressure.aliveConnection));
+        metrics.add(aliveConnection);
         if (shortTime) {
-            metrics.add(maxMinNormalization(WorkerMertric.NETWORKINBYTES.max, WorkerMertric.NETWORKINBYTES.min, pressure.networkInBytes));
-            metrics.add(maxMinNormalization(WorkerMertric.NETWORKOUTBYTES.max, WorkerMertric.NETWORKOUTBYTES.min, pressure.networkOutBytes));
+            double netWorkInbytes = maxMinNormalization(WorkerMertric.NETWORKINBYTES.max, WorkerMertric.NETWORKINBYTES.min, pressure.networkInBytes);
+            double netWorkOutbytes = maxMinNormalization(WorkerMertric.NETWORKOUTBYTES.max, WorkerMertric.NETWORKOUTBYTES.min, pressure.networkOutBytes);
+            if (netWorkInbytes > blackScore || netWorkOutbytes > blackScore) {
+                return 1.0;
+            }
+            metrics.add(netWorkInbytes);
+            metrics.add(netWorkOutbytes);
             for(int i = 0; i < diskInfos.length; i++) {
                 if (diskInfos[i][8] == 0) {
                     ssdDiskReadIOps += diskInfos[i][0];
@@ -656,8 +666,13 @@ public class RemoteShuffleMasterHandler {
                 diskInodeUsed += diskInfos[i][7];
             }
         } else {
-            metrics.add(maxMinNormalization(WorkerMertric.NETWORKINBYTES5MIN.max, WorkerMertric.NETWORKINBYTES5MIN.min, pressure.networkInBytes5min));
-            metrics.add(maxMinNormalization(WorkerMertric.NETWORKOUTBYTES5MIN.max, WorkerMertric.NETWORKOUTBYTES5MIN.min, pressure.networkOutBytes5min));
+            double netWorkInbytes5min = maxMinNormalization(WorkerMertric.NETWORKINBYTES5MIN.max, WorkerMertric.NETWORKINBYTES5MIN.min, pressure.networkInBytes5min);
+            double netWorkOutbytes5min = maxMinNormalization(WorkerMertric.NETWORKOUTBYTES5MIN.max, WorkerMertric.NETWORKOUTBYTES5MIN.min, pressure.networkOutBytes5min);
+            if (netWorkInbytes5min > blackScore || netWorkOutbytes5min > blackScore) {
+                return 1.0;
+            }
+            metrics.add(netWorkInbytes5min);
+            metrics.add(netWorkOutbytes5min);
             for(int i = 0; i < diskInfos.length; i++) {
                 if (diskInfos[i][8] == 0) {
                     ssdDiskReadIOps += diskInfos[i][1];
@@ -696,11 +711,18 @@ public class RemoteShuffleMasterHandler {
                     maxMinNormalization(WorkerMertric.SSDDISKWRITE.max, WorkerMertric.SSDDISKWRITE.min, 1.0 * ssdDiskWriteIOps / ssdCount);
         }
         double avgDiskWriteMaxMin = 1.0 * (hddDiskWriteMaxMin + ssdDiskWriteMaxMin) / 2;
+        double avgDiskIOutilsMaxMin = maxMinNormalization(WorkerMertric.DISKIOUTILS.max, WorkerMertric.DISKIOUTILS.min, 1.0 * diskIOUtils / diskInfos.length);
+        double avgDiskSpaceMaxMin = maxMinNormalization(WorkerMertric.DISKSPACEUSED.max, WorkerMertric.DISKSPACEUSED.min, 1.0 * diskSpaceUsed / diskInfos.length);
+        double avgDiskInodeMaxMin = maxMinNormalization(WorkerMertric.DISKINODEAUSED.max, WorkerMertric.DISKINODEAUSED.min, 1.0 * diskInodeUsed / diskInfos.length);
+        if (avgDiskReadMaxMin > blackScore || avgDiskWriteMaxMin > blackScore || avgDiskInodeMaxMin > blackScore ||
+                avgDiskIOutilsMaxMin > blackScore || avgDiskSpaceMaxMin > blackScore) {
+            return 1.0;
+        }
         metrics.add(avgDiskReadMaxMin);
         metrics.add(avgDiskWriteMaxMin);
-        metrics.add(maxMinNormalization(WorkerMertric.DISKIOUTILS.max, WorkerMertric.DISKIOUTILS.min, 1.0 * diskIOUtils / diskInfos.length));
-        metrics.add(maxMinNormalization(WorkerMertric.DISKSPACEUSED.max, WorkerMertric.DISKSPACEUSED.min, 1.0 * diskSpaceUsed / diskInfos.length));
-        metrics.add(maxMinNormalization(WorkerMertric.DISKINODEAUSED.max, WorkerMertric.DISKINODEAUSED.min, 1.0 * diskInodeUsed / diskInfos.length));
+        metrics.add(avgDiskIOutilsMaxMin);
+        metrics.add(avgDiskSpaceMaxMin);
+        metrics.add(avgDiskInodeMaxMin);
         Double[] values = metrics.stream().toArray(Double[]::new);
         double[] weights;
         if (shortTime) {
