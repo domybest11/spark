@@ -131,6 +131,13 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S
         sparkProperties(k) = v
       }
     }
+    // Append cluster information to appTags
+    if (!sparkProperties.get("spark.yarn.tags").toString.contains("DCINFO=")) {
+      if (env.contains("DCINFO")) {
+        sparkProperties("spark.yarn.tags") = sparkProperties.get("spark.yarn.tags")
+          .getOrElse("") + ",DCINFO=" + env.getOrElse("DCINFO", "")
+      }
+    }
   }
 
   /**
