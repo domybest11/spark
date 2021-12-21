@@ -26,7 +26,7 @@ import org.apache.spark.scheduler.{SparkListener, SparkListenerEvent, SparkListe
 import org.apache.spark.sql.{Dataset, QueryTest, Row, SparkSession, Strategy}
 import org.apache.spark.sql.catalyst.optimizer.{BuildLeft, BuildRight}
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, LogicalPlan}
-import org.apache.spark.sql.execution.{PartialReducerPartitionSpec, QueryExecution, ReusedSubqueryExec, ShuffledRowRDD, SparkPlan, UnaryExecNode}
+import org.apache.spark.sql.execution.{CoalescedPartitionSpec, PartialReducerPartitionSpec, QueryExecution, ReusedSubqueryExec, ShuffledRowRDD, ShuffledRowRDDPartition, SparkPlan, UnaryExecNode}
 import org.apache.spark.sql.execution.command.DataWritingCommandExec
 import org.apache.spark.sql.execution.datasources.noop.NoopDataSource
 import org.apache.spark.sql.execution.datasources.v2.V2TableWriteExec
@@ -1671,6 +1671,63 @@ class AdaptiveQueryExecSuite
           SQLConf.ADVISORY_REBALANCE_PARTITION_SIZE_IN_BYTES.key -> "10000") {
           checkPartitionNumber("SELECT /*+ REBALANCE(c1) */ * FROM v", 0, 1)
         }
+      }
+    }
+  }
+
+  test("SPARK-37528: Support reorder tasks during scheduling by shuffle partition size in AQE") {
+    withTempView("v") {
+      withSQLConf(
+        SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true",
+        SQLConf.SHUFFLE_PARTITIONS.key -> "5",
+        SQLConf.ADVISORY_PARTITION_SIZE_IN_BYTES.key -> "10",
+        SQLConf.ADVISORY_REBALANCE_PARTITION_SIZE_IN_BYTES.key -> "10"
+      ) {
+
+        spark.sparkContext.parallelize(
+          (1 to 100).map(i => TestData(if (i > 21) 21 else if (i > 3) 3 else i, i.toString)), 2)
+          .toDF("c1", "c2").createOrReplaceTempView("v")
+
+        def findShuffledRowRDD(query: String): ShuffledRowRDD = {
+          val df = sql(query)
+          var rdd = df.rdd
+          while (!rdd.isInstanceOf[ShuffledRowRDD]) {
+            rdd = rdd.firstParent
+          }
+          assert(rdd.isInstanceOf[ShuffledRowRDD])
+          rdd.asInstanceOf[ShuffledRowRDD]
+        }
+
+        Seq(true, false).foreach { enableAqe =>
+          withSQLConf(SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> enableAqe.toString) {
+            // For CoalescedPartitionSpec
+            val shuffledRowRDD1 = findShuffledRowRDD(
+              "SELECT c1, collect_list(c2) FROM v GROUP BY c1")
+            val parts1 = shuffledRowRDD1.getPartitions
+            if (enableAqe) {
+              assert(parts1.length == 3)
+              assert(parts1.forall(_.asInstanceOf[ShuffledRowRDDPartition]
+                .spec.isInstanceOf[CoalescedPartitionSpec]))
+              assert(parts1.forall(_.predictedInputBytes.isDefined))
+            } else {
+              assert(parts1.length == 5)
+              assert(parts1.forall(_.predictedInputBytes.isEmpty))
+            }
+          }
+        }
+
+
+        // For PartialReducerPartitionSpec + CoalescedPartitionSpec
+        // We don't need care about non-AQE side since its partition spec must be
+        // CoalescedPartitionSpec
+        val shuffledRowRDD2 = findShuffledRowRDD(
+          "SELECT /*+ REBALANCE(c1) */ * FROM v")
+        val parts2 = shuffledRowRDD2.getPartitions
+        assert(parts2.length == 3)
+        parts2.exists(_.asInstanceOf[ShuffledRowRDDPartition]
+          .spec.isInstanceOf[PartialReducerPartitionSpec])
+        assert(parts2.forall(_.predictedInputBytes.isDefined))
+
       }
     }
   }
