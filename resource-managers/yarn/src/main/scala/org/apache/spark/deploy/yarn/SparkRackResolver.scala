@@ -133,5 +133,5 @@ object SparkRackResolver extends Logging {
   }
 
   private val sparkRackResolverExecutor = ExecutionContext.fromExecutorService(
-    ThreadUtils.newDaemonSingleThreadExecutor("spark-rack-resolver"))
+    ThreadUtils.newDaemonCachedThreadPool("spark-rack-resolver", 10, 30))
 }

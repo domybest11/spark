@@ -2337,4 +2337,13 @@ package object config {
       .version("3.1.1")
       .doubleConf
       .createWithDefault(1.0)
+
+  private[spark] val SCHEDULER_REORDER_TASKS =
+    ConfigBuilder("spark.scheduler.reorderTasks.enabled")
+      .doc("When true, Spark will reorder the tasks based on the partition's predicted input " +
+        "size, so the big task can take precedence.")
+      .version("3.3.0")
+      .booleanConf
+      .createWithDefault(true)
+
 }

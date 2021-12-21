@@ -93,7 +93,9 @@ private[spark] class SparkSubmit extends Logging {
       logInfo(appArgs.toString)
     }
     appArgs.action match {
-      case SparkSubmitAction.SUBMIT => submit(appArgs, uninitLog)
+      case SparkSubmitAction.SUBMIT =>
+        printVersion()
+        submit(appArgs, uninitLog)
       case SparkSubmitAction.KILL => kill(appArgs)
       case SparkSubmitAction.REQUEST_STATUS => requestStatus(appArgs)
       case SparkSubmitAction.PRINT_VERSION => printVersion()
