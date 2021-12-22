@@ -2332,12 +2332,6 @@ package object config {
       .longConf
       .createWithDefault(1000L)
 
-  private[spark] val REPARTITION_WRITE_FILE_SIZE_RATIO =
-    ConfigBuilder("spark.sql.repartition.file.size.limitRatio")
-      .version("3.1.1")
-      .doubleConf
-      .createWithDefault(1.0)
-
   private[spark] val SCHEDULER_REORDER_TASKS =
     ConfigBuilder("spark.scheduler.reorderTasks.enabled")
       .doc("When true, Spark will reorder the tasks based on the partition's predicted input " +

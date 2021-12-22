@@ -2104,32 +2104,12 @@ object SQLConf {
       .intConf
       .createWithDefault(100)
 
-  val INSERT_REPARTITION_BEFORE_WRITE =
-    buildConf("spark.sql.optimizer.insertRepartitionBeforeWrite.enabled")
+  val INSERT_REBALANCEPARTITIONS_BEFORE_WRITE =
+    buildConf("spark.sql.insertRebalancePartitionsBeforeWrite.enabled")
       .doc("Add repartition node at the top of query plan. An approach of merging small files.")
       .version("3.1.0")
       .booleanConf
       .createWithDefault(false)
-
-  val INSERT_REPARTITION_NUM =
-    buildConf("spark.sql.optimizer.insertRepartitionNum")
-      .doc(s"The partition number if ${INSERT_REPARTITION_BEFORE_WRITE.key} is enabled. " +
-        s"If AQE is disabled, the default value is ${SQLConf.SHUFFLE_PARTITIONS.key}. " +
-        "If AQE is enabled, the default value is none that means depend on AQE.")
-      .version("3.1.0")
-      .intConf
-      .createOptional
-
-  val DYNAMIC_PARTITION_INSERTION_REPARTITION_NUM =
-    buildConf("spark.sql.optimizer.dynamicPartitionInsertionRepartitionNum")
-      .doc(s"The partition number of each dynamic partition if " +
-        s"${INSERT_REPARTITION_BEFORE_WRITE.key} is enabled. " +
-        "We will repartition by dynamic partition columns to reduce the small file but that " +
-        "can cause data skew. This config is to extend the partition of dynamic " +
-        "partition column to avoid skew but may generate some small files.")
-      .version("3.1.0")
-      .intConf
-      .createWithDefault(100)
 
   val ZORDER_PARTITIONS_FACTOR =
     buildConf("spark.sql.execution.zorderExchange.partitionsFactor")

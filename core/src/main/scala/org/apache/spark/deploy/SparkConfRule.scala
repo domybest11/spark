@@ -2,8 +2,7 @@
 package org.apache.spark.deploy
 
 import org.apache.spark.SparkConf
-import org.apache.spark.internal.config.REPARTITION_WRITE_FILE_SIZE_RATIO
-import org.apache.spark.internal.{Logging, config}
+import org.apache.spark.internal.{config, Logging}
 
 sealed trait SparkConfRule extends Logging {
 
@@ -103,49 +102,18 @@ case class AllocationRatioRule(sparkConf: SparkConf) extends SparkConfRule {
 
 case class RepartitionBeforeWriteTableRule(sparkConf: SparkConf) extends SparkConfRule {
 
-  private[spark] val PART_NUM = "numPart"
-  private[spark] val FILE_WRITE_COUNT = "numFilesWrite"
-  private[spark] val FILE_MERGE_COUNT = "mergeNumFiles"
-  private[spark] val WRITE_BYTES = "filesSizeWrite"
   private[spark] val EXECUTE_RULES = "rules"
-
+  private[spark] val MERGE_FILES = "MergeFiles"
   private[spark] val REPARTITION_BEFORE_WRITE = "repartitionBeforeWriteTable"
 
   override def doApply(helper: SparkConfHelper): Unit = {
     if (enabled(sparkConf) && helper.getJobTag().isDefined) {
-      val smallest = sparkConf.get("spark.sql.hive.merge.smallfile.size").toLong
-      val biggest = sparkConf.get("spark.sql.hive.merge.size.per.task").toLong
-      val numPartOpt = helper.getMetricByKey(PART_NUM)
-      if (numPartOpt.isDefined && numPartOpt.map(_.asInstanceOf[Int]).getOrElse(-1) < 2) {
-        val rules = helper.getMetricByKey(EXECUTE_RULES)
-          .map(_.asInstanceOf[String]).getOrElse("")
-        val mergeNumFilesOpt = helper.getMetricByKey(FILE_MERGE_COUNT)
-        val mergeNumFiles = mergeNumFilesOpt.map(_.asInstanceOf[Int]).getOrElse(-1)
-        if (mergeNumFiles > 0) {
-          helper.addEffectiveRules(REPARTITION_BEFORE_WRITE)
-          helper.setConf("spark.sql.optimizer.insertRepartitionBeforeWrite.enabled", "true")
-          helper.setConf("spark.sql.optimizer.insertRepartitionNum", s"${mergeNumFiles}")
-        } else if (rules.contains(REPARTITION_BEFORE_WRITE)) {
-          val oldNumFilesWrite = helper.getMetricByKey(FILE_WRITE_COUNT)
-            .map(String.valueOf(_)).getOrElse("0").toLong
-          val filesSizeWrite = helper.getMetricByKey(WRITE_BYTES)
-            .map(String.valueOf(_)).getOrElse("0.0").toDouble
-          val oldAvgSizeByte = filesSizeWrite / oldNumFilesWrite
-          val ratio = sparkConf.getDouble(REPARTITION_WRITE_FILE_SIZE_RATIO.key, 1.0)
-          if (oldAvgSizeByte < biggest * ratio) {
-            var newNumFilesWrite = oldNumFilesWrite
-            if (filesSizeWrite < biggest * 1.2) {
-              newNumFilesWrite = 1
-            } else {
-              val down = Math.ceil(filesSizeWrite / biggest)
-              val up = Math.floor(filesSizeWrite / smallest)
-              newNumFilesWrite = Math.round(down + (up - down) * 0.25)
-            }
-            helper.addEffectiveRules(REPARTITION_BEFORE_WRITE)
-            helper.setConf("spark.sql.optimizer.insertRepartitionBeforeWrite.enabled", "true")
-            helper.setConf("spark.sql.optimizer.insertRepartitionNum", s"${newNumFilesWrite}")
-          }
-        }
+      val rules = helper.getMetricByKey(EXECUTE_RULES)
+        .map(_.asInstanceOf[String]).getOrElse("")
+      if (rules.contains(MERGE_FILES) ||
+          rules.contains(REPARTITION_BEFORE_WRITE)) {
+        helper.addEffectiveRules(REPARTITION_BEFORE_WRITE)
+        helper.setConf("spark.sql.insertRebalancePartitionsBeforeWrite.enabled", "true")
       }
     }
   }
