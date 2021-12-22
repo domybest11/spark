@@ -38,7 +38,7 @@ import org.apache.spark.sql.execution.ui.{AppClientStatus, SQLAppStatusStore, SQ
 import org.apache.spark.status.AppStatusStore
 import org.apache.spark.status.api.v1.{JobData, StageData, _}
 import org.apache.spark.ui.scope.RDDOperationGraph
-import org.apache.spark.util.{AppCostReporter, SqlTextTruncate, Utils}
+import org.apache.spark.util.{SqlTextTruncate, TraceReporter, Utils}
 
 /**
  * A wrapper around a KVStore that provides methods for accessing the API data stored within.
@@ -49,7 +49,7 @@ class SqlAppStoreStatusStoreV1(
     val conf: SparkConf) extends Logging {
 
   private val hadoopConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(conf))
-  private val reporter = AppCostReporter.createAppCostReporter(conf)
+  private val reporter = TraceReporter.createTraceReporter(conf)
 
   def countResourceCost(applicationSQLExecutionData: ApplicationSQLExecutionData): String = {
     var rmClient: ApplicationClientProtocol = null
