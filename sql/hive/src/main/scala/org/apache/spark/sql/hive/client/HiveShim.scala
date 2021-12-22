@@ -879,7 +879,7 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
 
     val partitions =
       if (filter.isEmpty) {
-        prunePartitionsFastFallback(hive, table, catalogTable, predicates)
+        prunePartitionsFastFallback(hive, table, timeZoneId, catalogTable, predicates)
       } else {
         logDebug(s"Hive metastore filter is '$filter'.")
         val tryDirectSqlConfVar = HiveConf.ConfVars.METASTORE_TRY_DIRECT_SQL
@@ -908,7 +908,7 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
               s"${SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK_ON_EXCEPTION.key} " +
               " to false and let the query fail instead.", ex)
             // HiveShim clients are expected to handle a superset of the requested partitions
-            prunePartitionsFastFallback(hive, table, catalogTable, predicates)
+            prunePartitionsFastFallback(hive, table, timeZoneId, catalogTable, predicates)
           case ex: InvocationTargetException if ex.getCause.isInstanceOf[MetaException] && tryDirectSql =>
             throw new RuntimeException("Caught Hive MetaException attempting to get partition " +
             "metadata by filter from Hive. You can set the Spark configuration setting " +
@@ -924,15 +924,15 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
   private def prunePartitionsFastFallback(
       hive: Hive,
       table: Table,
+      timeZoneId: String,
       catalogTable: CatalogTable,
       predicates: Seq[Expression]): java.util.Collection[Partition] = {
-    val timeZoneId = SQLConf.get.sessionLocalTimeZone
-
     // Because there is no way to know whether the partition properties has timeZone,
     // client-side filtering cannot be used with TimeZoneAwareExpression.
     def hasTimeZoneAwareExpression(e: Expression): Boolean = {
       e.collectFirst {
-        case t: TimeZoneAwareExpression => t
+        case cast: CastBase if cast.needsTimeZone => cast
+        case tz: TimeZoneAwareExpression if !tz.isInstanceOf[CastBase] => tz
       }.isDefined
     }
 
