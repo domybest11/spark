@@ -2,8 +2,8 @@
 package org.apache.spark.deploy
 
 import org.apache.spark.SparkConf
+import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.internal.config.REPARTITION_WRITE_FILE_SIZE_RATIO
-import org.apache.spark.internal.{Logging, config}
 
 sealed trait SparkConfRule extends Logging {
 
@@ -16,7 +16,8 @@ sealed trait SparkConfRule extends Logging {
       logInfo(s"Try to apply spark conf rule success for rule ${this.getClass.getName}")
     } catch {
       case throwable: Throwable =>
-        logWarning(s"Try to apply spark conf rule error for rule ${this.getClass.getName}", throwable)
+        logWarning(s"Try to apply spark conf rule error for rule ${this.getClass.getName}",
+          throwable)
         fallback(helper)
     }
   }
@@ -44,33 +45,32 @@ case class ExecutorMemoryRule(sparkConf: SparkConf) extends SparkConfRule {
 
   override def doApply(helper: SparkConfHelper): Unit = {
     if (enabled(sparkConf) && helper.getJobTag().isDefined) {
-      val metrics = helper.getMetricByKey(PEAK_EXECUTOR_MEMORY)
-      if (metrics != null) {
-        val peakExecutorMemory = metrics.map(_.asInstanceOf[Int]).getOrElse(-1)
-        val originalExecutorMemory = sparkConf.getSizeAsMb(config.EXECUTOR_MEMORY.key)
-        var executorMemory = originalExecutorMemory
+      val originalExecutorMemory = sparkConf.getSizeAsMb(config.EXECUTOR_MEMORY.key)
+      val preExecutorMemory = helper.getMetricByKey(EXECUTOR_MEMORY)
+        .map(_.asInstanceOf[Int]).getOrElse(originalExecutorMemory.toInt)
+      val peakExecutorMemory =
+        helper.getMetricByKey(PEAK_EXECUTOR_MEMORY).map(_.asInstanceOf[Int]).getOrElse(-1)
+      var executorMemory = preExecutorMemory
 
-        if (peakExecutorMemory == 0) {
-          executorMemory = math.min(originalExecutorMemory, 3072)
+      if (peakExecutorMemory == 0) {
+        executorMemory = math.min(preExecutorMemory, 3072)
+        helper.addEffectiveRules(EXECUTOR_MEMORY)
+      } else if (peakExecutorMemory > 0) {
+        val ratio = peakExecutorMemory.toDouble / preExecutorMemory.toDouble
+        if (ratio < 0.3) {
+          executorMemory = math.max(math.ceil(preExecutorMemory / 2048).toInt * 1024, 4096)
+          helper.addEffectiveRules(EXECUTOR_MEMORY)
+        } else if (ratio > 0.8 && preExecutorMemory < 20480) {
+          val originalExecutorMemoryOverhead =
+            sparkConf.getSizeAsMb(config.EXECUTOR_MEMORY_OVERHEAD.key).toInt
+          val capacity = 28672 - originalExecutorMemoryOverhead
+          executorMemory = math.min(capacity,
+            math.max(preExecutorMemory, peakExecutorMemory) + 1024)
           helper.addEffectiveRules(EXECUTOR_MEMORY)
         }
-        if (peakExecutorMemory > 0) {
-          val rate = peakExecutorMemory.toDouble / originalExecutorMemory.toDouble
-          if (rate < 0.3) {
-            executorMemory = math.max(math.ceil(originalExecutorMemory / 2).toLong, 4096)
-            helper.addEffectiveRules(EXECUTOR_MEMORY)
-          } else if (rate > 0.8 && originalExecutorMemory < 20480) {
-            val originalExecutorMemoryOverhead =
-              sparkConf.getSizeAsMb(config.EXECUTOR_MEMORY_OVERHEAD.key)
-            val capacity = 28672 - originalExecutorMemoryOverhead
-            executorMemory = math.min(capacity,
-              math.max(originalExecutorMemory, peakExecutorMemory) + 1024)
-            helper.addEffectiveRules(EXECUTOR_MEMORY)
-          }
-        }
-        logInfo(s"Set Rule ExecutorMemory from ${originalExecutorMemory}m to ${executorMemory}m")
-        helper.setConf(config.EXECUTOR_MEMORY.key, s"${executorMemory}m")
       }
+      logInfo(s"Set Rule ExecutorMemory from ${originalExecutorMemory}m to ${executorMemory}m")
+      helper.setConf(config.EXECUTOR_MEMORY.key, s"${executorMemory}m")
     }
   }
 }

@@ -7,7 +7,10 @@ import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.HttpClientUtils
 
-class SparkConfHelper(sparkConf: SparkConf) extends Logging {
+class SparkConfHelper(
+    sparkConf: SparkConf,
+    httpClient: HttpClientUtils = HttpClientUtils.getInstance())
+  extends Logging {
 
   private val EFFECTIVE_RULES = "spark.deploy.autoConfEffectiveRules"
 
@@ -15,7 +18,7 @@ class SparkConfHelper(sparkConf: SparkConf) extends Logging {
   private val effectiveRules = new mutable.HashSet[String]()
 
   private lazy val jobTag = sparkConf.getOption("spark.deploy.jobTag")
-  private lazy val metrics = HttpClientUtils.getInstance().getJobHistoryMetric(jobTag.get)
+  private lazy val metrics = httpClient.getJobHistoryMetric(jobTag.get)
 
   private val rules = Seq(
     ExecutorMemoryRule(sparkConf),
