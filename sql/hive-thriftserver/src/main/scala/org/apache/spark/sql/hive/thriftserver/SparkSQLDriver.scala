@@ -78,8 +78,9 @@ private[hive] class SparkSQLDriver(val context: SQLContext = SparkSQLEnv.sqlCont
           new CommandProcessorResponse(1, ExceptionUtils.getStackTrace(ae), null, ae)
         case cause: Throwable =>
           logError(s"Failed in [$command]", cause)
-          if (cause.getCause.getClass.getName.equals("org.apache.hadoop.ipc.RemoteException")
-          && cause.getCause.getMessage.contains("RangerAccessControlException")) {
+          if (cause.getCause != null
+            && cause.getCause.getClass.getName.equals("org.apache.hadoop.ipc.RemoteException")
+            && cause.getCause.getMessage.contains("RangerAccessControlException")) {
             val exceptionInfo = cause.getCause.getMessage
             val userPattern = new Regex("(?<=user=).*?(?=,)")
             val accessPattern = new Regex("(?<=access=).*?(?=,)")
