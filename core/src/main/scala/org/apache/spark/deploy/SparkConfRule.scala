@@ -150,21 +150,19 @@ case class DataSourceGrayScaleRelease(sparkConf: SparkConf) extends SparkConfRul
 case class PushShuffleRule(sparkConf: SparkConf) extends SparkConfRule {
   private[spark] val SHUFFLE_RULE = "pushBasedShuffleRule"
 
-  private[spark] val NUM_PARTITIONS = "numPartitions"
+  private[spark] val ENABLE_PUSH_SHUFFLE = "pushShuffleEnabled"
   private[spark] val IS_PUSH_SHUFFLE = "isPushShuffle"
 
   override def doApply(helper: SparkConfHelper): Unit = {
     if (enabled(sparkConf) && helper.getJobTag().isDefined) {
       val isPushShuffle = helper.getMetricByKey(IS_PUSH_SHUFFLE)
       if (isPushShuffle.isDefined && isPushShuffle.map(String.valueOf(_)).get.toBoolean) {
-        val numPartitions = helper.getMetricByKey(NUM_PARTITIONS)
-        if (numPartitions.isDefined &&
-          numPartitions.map(String.valueOf(_)).getOrElse("-1").toLong > 0) {
-          val targetNumPartitions = numPartitions.map(String.valueOf(_)).getOrElse("-1").toLong
-          helper.setConf("spark.sql.shuffle.partitions", s"${targetNumPartitions}")
+        val enablePushShuffle = helper.getMetricByKey(ENABLE_PUSH_SHUFFLE)
+        if (enablePushShuffle.isDefined &&
+          enablePushShuffle.map(String.valueOf(_)).get.toBoolean) {
           helper.setConf("spark.shuffle.push.enabled", "true")
           helper.addEffectiveRules(SHUFFLE_RULE)
-          logInfo("Shuffle rule has taken effect.")
+          logInfo("Push-based shuffle rule has taken effect.")
         }
       }
     }
