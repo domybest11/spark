@@ -102,7 +102,7 @@ private[hive] class SparkSQLDriver(val context: SQLContext = SparkSQLEnv.sqlCont
               "nothing"
             }
 
-            val postMsg = s"权限错误: 用户 $userInfo 没有 $inodeInfo 的 $accessInfo 权限"
+            val postMsg = s"权限错误: 用户 $userInfo 没有 $inodeInfo 的 $accessInfo 权限, 请联系数平小姐姐"
             val sparkConf = context.sparkContext.getConf
             val traceId = sparkConf.getOption("spark.trace.id")
             val action = "authorityException"
