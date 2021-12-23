@@ -22,21 +22,19 @@ import java.util.Locale
 
 import org.apache.hadoop.fs.{FileSystem, Path}
 
-import org.apache.spark.SparkException
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.planning._
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoDir, InsertIntoStatement, Limit, LogicalPlan, RebalancePartitions, Repartition, RepartitionByExpression, ScriptTransformation, Sort, Statistics, Union}
+import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoDir, InsertIntoStatement, LogicalPlan, ScriptTransformation, Statistics}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Util.assertNoNullTypeInSchema
 import org.apache.spark.sql.execution._
-import org.apache.spark.sql.execution.command.{CreateDataSourceTableAsSelectCommand, CreateTableCommand, DataWritingCommand, DDLUtils}
-import org.apache.spark.sql.execution.datasources.{CreateTable, DataSourceStrategy, InsertIntoHadoopFsRelationCommand}
-import org.apache.spark.sql.hive.RepartitionBeforeWriteHelper.canInsertRepartitionByExpression
+import org.apache.spark.sql.execution.command.{CreateTableCommand, DDLUtils}
+import org.apache.spark.sql.execution.datasources.{CreateTable, DataSourceStrategy}
 import org.apache.spark.sql.hive.execution._
 import org.apache.spark.sql.hive.execution.HiveScriptTransformationExec
-import org.apache.spark.sql.internal.{HiveSerDe, SQLConf, StaticSQLConf}
+import org.apache.spark.sql.internal.{HiveSerDe, SQLConf}
 
 /**
  * Determine the database, serde/format and schema of the Hive serde table, according to the storage
@@ -234,128 +232,6 @@ case class RelationConversions(
         OptimizedCreateHiveTableAsSelectCommand(
           tableDesc, query, query.output.map(_.name), mode)
     }
-  }
-}
-
-/**
- * For Hive/datasource table, there five commands can write data to table
- * 1. InsertIntoHiveTable
- * 2. CreateHiveTableAsSelectCommand
- * 3. OptimizedCreateHiveTableAsSelectCommand
- * 4. InsertIntoHadoopFsRelationCommand
- * 5. CreateDataSourceTableAsSelectCommand
- * This rule add a repartition node between write and query
- */
-case class RebalancePartitionBeforeWriteHive(session: SparkSession) extends Rule[LogicalPlan] {
-  override def apply(plan: LogicalPlan): LogicalPlan = {
-    if (conf.getConf(StaticSQLConf.CATALOG_IMPLEMENTATION) == "hive" &&
-        conf.getConf(SQLConf.INSERT_REBALANCEPARTITIONS_BEFORE_WRITE)) {
-      addRebalancePartition(plan)
-    } else {
-      plan
-    }
-  }
-
-  def applyRebalancePartition(
-      dataWriting: DataWritingCommand,
-      bucketSpec: Option[BucketSpec],
-      partitionColumns: Seq[Expression]): LogicalPlan = {
-    val query = dataWriting.query
-    (bucketSpec, partitionColumns) match {
-      case (None, partExps) =>
-        if (partExps.nonEmpty) {
-          dataWriting.withNewChildren(IndexedSeq(RebalancePartitions(partExps, query)))
-        } else {
-          dataWriting.withNewChildren(IndexedSeq(RebalancePartitions(Seq.empty, query))
-          )
-        }
-      case (Some(bucket), partExps) =>
-        if (dataWriting.isInstanceOf[InsertIntoHiveTable] ||
-          dataWriting.isInstanceOf[InsertIntoHiveDirCommand] ||
-          dataWriting.isInstanceOf[CreateHiveTableAsSelectCommand] ||
-          dataWriting.isInstanceOf[OptimizedCreateHiveTableAsSelectCommand]
-        ) {
-          query
-        } else {
-          if (bucket.sortColumnNames.nonEmpty) {
-            val sortExps = resolveColumnNames(bucket.sortColumnNames, query.output)
-              .map(SortOrder(_, Ascending))
-            dataWriting.withNewChildren(
-              IndexedSeq(Sort(sortExps, false, RebalancePartitions(partExps, query)))
-            )
-          } else {
-            dataWriting.withNewChildren(
-              IndexedSeq(RebalancePartitions(partExps, query))
-            )
-          }
-        }
-      case _ => query
-    }
-  }
-
-  private def resolveColumnNames(
-      columnNames: Seq[String],
-      outputAttrs: Seq[Attribute]): Seq[NamedExpression] = {
-    columnNames.map { c =>
-      outputAttrs.resolve(c :: Nil, conf.resolver).
-        getOrElse(throw new SparkException(s"Cannot resolve column name $c among (" +
-          s"${outputAttrs.map(_.name).mkString(",")})."))
-    }
-  }
-
-  private def getDynamicPartitionColumns(
-      query: LogicalPlan,
-      table: CatalogTable): Seq[Expression] = {
-    query.output.filter(attr => table.partitionColumnNames.contains(attr.name))
-  }
-
-  def addRebalancePartition(plan: LogicalPlan): LogicalPlan = plan match {
-    case u: Union =>
-      u.withNewChildren(u.children.map(addRebalancePartition))
-
-    case i @ InsertIntoHiveTable(table, _, query, _, _, _)
-      if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = getDynamicPartitionColumns(query, table)
-      applyRebalancePartition(i, table.bucketSpec, dynamicPartitionColumns)
-
-    case c @ CreateHiveTableAsSelectCommand(table, query, _, _)
-      if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = getDynamicPartitionColumns(query, table)
-      applyRebalancePartition(c, table.bucketSpec, dynamicPartitionColumns)
-
-    case o @ OptimizedCreateHiveTableAsSelectCommand(table, query, _, _)
-      if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = getDynamicPartitionColumns(query, table)
-      applyRebalancePartition(o, table.bucketSpec, dynamicPartitionColumns)
-
-    case i @ InsertIntoHadoopFsRelationCommand(_, _, _, _, _, _, _, query, _, table, _, _)
-      if query.resolved && table.isDefined && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = getDynamicPartitionColumns(query, table.get)
-      applyRebalancePartition(i, table.get.bucketSpec, dynamicPartitionColumns)
-
-    case o @ CreateDataSourceTableAsSelectCommand(table, _, query, _)
-      if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = query.references.
-        filter(attr => table.partitionColumnNames.contains(attr.name)).toSeq
-      applyRebalancePartition(o, table.bucketSpec, dynamicPartitionColumns)
-
-    case _ => plan
-  }
-}
-
-object RepartitionBeforeWriteHelper {
-  def canInsertRepartitionByExpression(plan: LogicalPlan): Boolean = plan match {
-    case Limit(_, _) => false
-    case _: Union => false
-    case ScanOperation(_, _, child) =>
-      child match {
-        case _: RepartitionByExpression => false
-        case _: Repartition => false
-        case _: RebalancePartitions => false
-        case _: Sort => false
-        case _ => true
-      }
-    case _ => true
   }
 }
 
