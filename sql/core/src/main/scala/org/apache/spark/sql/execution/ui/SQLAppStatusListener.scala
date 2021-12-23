@@ -34,8 +34,8 @@ import org.apache.spark.sql.execution.metric._
 import org.apache.spark.sql.execution.ui.AppClientStatus.SHUFFLE_FAIL
 import org.apache.spark.sql.internal.StaticSQLConf._
 import org.apache.spark.status.{ElementTrackingStore, KVUtils, LiveEntity}
-import org.apache.spark.util.SQLAppStatusReporter
-import org.apache.spark.util.SQLAppStatusReporter.Msg
+import org.apache.spark.util.TraceReporter
+import org.apache.spark.util.TraceReporter.Msg
 import org.apache.spark.util.collection.OpenHashMap
 
 class SQLAppStatusListener(
@@ -62,7 +62,7 @@ class SQLAppStatusListener(
 
   val TRACE_ID_KEY = "spark.trace.id"
   val TRACE_IGNORED_KEY = "spark.trace.ignored"
-  private val reporter = SQLAppStatusReporter.createAppStatusReporter(conf)
+  private val reporter = TraceReporter.createTraceReporter(conf)
 
   kvstore.addTrigger(classOf[SQLExecutionUIData], conf.get[Int](UI_RETAINED_EXECUTIONS)) { count =>
     cleanupExecutions(count)

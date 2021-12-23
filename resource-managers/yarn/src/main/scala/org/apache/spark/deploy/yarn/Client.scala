@@ -23,7 +23,6 @@ import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.{Calendar, Locale, Properties, UUID}
 import java.util.zip.{ZipEntry, ZipOutputStream}
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable.{Map => IMap}
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, ListBuffer, Map}
@@ -60,7 +59,7 @@ import org.apache.spark.internal.config.Python._
 import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle, YarnCommandBuilderUtils}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.RpcEnv
-import org.apache.spark.util.{CallerContext, Utils, YarnContainerInfoHelper, SQLAppStatusReporter}
+import org.apache.spark.util.{CallerContext, TraceReporter, Utils, YarnContainerInfoHelper}
 
 private[spark] class Client(
     val args: ClientArguments,
@@ -230,7 +229,7 @@ private[spark] class Client(
       if (!currentQueueName.startsWith("root")) {
         currentQueueName = "root." + currentQueueName
       }
-      val reporter = SQLAppStatusReporter.createAppStatusReporter(sparkConf)
+      val reporter = TraceReporter.createTraceReporter(sparkConf)
       val queues = currentQueueName.split("\\.")
       var request = Records.newRecord(classOf[GetQueueInfoRequest])
       request.setQueueName("root")

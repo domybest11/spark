@@ -30,7 +30,7 @@ import org.apache.spark.sql.hive.thriftserver.ui.{HiveThriftServer2Listener, Liv
 import org.apache.spark.status.AppStatusStore
 import org.apache.spark.status.api.v1.{JobData, StageData, _}
 import org.apache.spark.ui.scope.RDDOperationGraph
-import org.apache.spark.util.{AppCostReporter, SqlTextTruncate, Utils}
+import org.apache.spark.util.{SqlTextTruncate, TraceReporter, Utils}
 
 
 
@@ -44,7 +44,7 @@ class ThriftServerSqlAppStatusStore(
                            sqlContext: SQLContext,
                            val conf: SparkConf) extends Logging {
 
-  private val reporter = AppCostReporter.createAppCostReporter(conf)
+  private val reporter = TraceReporter.createTraceReporter(conf)
 
   def getExecutionBySession(sessionId : String): List[LiveExecutionData] = {
     listener.getExecutionListFromStore.map(exc => {

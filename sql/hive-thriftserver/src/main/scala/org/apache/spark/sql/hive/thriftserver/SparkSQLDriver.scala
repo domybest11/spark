@@ -18,7 +18,6 @@
 package org.apache.spark.sql.hive.thriftserver
 
 import java.util.{Arrays, ArrayList => JArrayList, List => JList}
-
 import scala.collection.JavaConverters._
 import org.apache.commons.lang3.exception.ExceptionUtils
 import org.apache.hadoop.hive.metastore.api.{FieldSchema, Schema}
@@ -31,6 +30,9 @@ import org.apache.spark.sql.execution.HiveResult.hiveResultString
 import org.apache.spark.sql.execution.QueryExecution
 import org.apache.spark.sql.execution.ui.{AppClientStatus, SQLExecutionUIData}
 import org.apache.spark.sql.internal.{SQLConf, VariableSubstitution}
+import org.apache.spark.util.TraceReporter
+
+import scala.util.matching.Regex
 
 
 private[hive] class SparkSQLDriver(val context: SQLContext = SparkSQLEnv.sqlContext)
@@ -76,6 +78,37 @@ private[hive] class SparkSQLDriver(val context: SQLContext = SparkSQLEnv.sqlCont
           new CommandProcessorResponse(1, ExceptionUtils.getStackTrace(ae), null, ae)
         case cause: Throwable =>
           logError(s"Failed in [$command]", cause)
+          if (cause.getCause.getClass.getName.equals("org.apache.hadoop.ipc.RemoteException")
+          && cause.getCause.getMessage.contains("RangerAccessControlException")) {
+            val exceptionInfo = cause.getCause.getMessage
+            val userPattern = new Regex("(?<=user=).*?(?=,)")
+            val accessPattern = new Regex("(?<=access=).*?(?=,)")
+            val inodePattern = new Regex("(?<=inode=).*?(?=\n)")
+            val userInfo = if ((userPattern findFirstIn exceptionInfo).isDefined) {
+              (userPattern findFirstIn exceptionInfo).get
+            } else {
+              "nothing"
+            }
+
+            val accessInfo = if ((accessPattern findFirstIn exceptionInfo).isDefined) {
+              (accessPattern findFirstIn exceptionInfo).get
+            } else {
+              "nothing"
+            }
+
+            val inodeInfo = if ((inodePattern findFirstIn exceptionInfo).isDefined) {
+              (inodePattern findFirstIn exceptionInfo).get
+            } else {
+              "nothing"
+            }
+
+            val postMsg = s"权限错误: 用户 $userInfo 没有 $inodeInfo 的 $accessInfo 权限"
+            val sparkConf = context.sparkContext.getConf
+            val traceId = sparkConf.getOption("spark.trace.id")
+            val action = "authorityException"
+            val reporter = TraceReporter.createTraceReporter(sparkConf)
+            reporter.postEvent(traceId, action, "", postMsg, System.currentTimeMillis())
+          }
           new CommandProcessorResponse(1, ExceptionUtils.getStackTrace(cause), null, cause)
     } finally {
       try {
