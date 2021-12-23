@@ -3,7 +3,6 @@ package org.apache.spark.deploy
 
 import org.apache.spark.SparkConf
 import org.apache.spark.internal.{config, Logging}
-import org.apache.spark.internal.config.REPARTITION_WRITE_FILE_SIZE_RATIO
 
 sealed trait SparkConfRule extends Logging {
 
@@ -103,6 +102,7 @@ case class AllocationRatioRule(sparkConf: SparkConf) extends SparkConfRule {
 
 case class RepartitionBeforeWriteTableRule(sparkConf: SparkConf) extends SparkConfRule {
 
+  private[spark] val PART_NUM = "numPart"
   private[spark] val EXECUTE_RULES = "rules"
   private[spark] val MERGE_FILES = "MergeFiles"
   private[spark] val REPARTITION_BEFORE_WRITE = "repartitionBeforeWriteTable"
@@ -111,8 +111,9 @@ case class RepartitionBeforeWriteTableRule(sparkConf: SparkConf) extends SparkCo
     if (enabled(sparkConf) && helper.getJobTag().isDefined) {
       val rules = helper.getMetricByKey(EXECUTE_RULES)
         .map(_.asInstanceOf[String]).getOrElse("")
-      if (rules.contains(MERGE_FILES) ||
-          rules.contains(REPARTITION_BEFORE_WRITE)) {
+      val numPartOpt = helper.getMetricByKey(PART_NUM)
+      if (numPartOpt.isDefined && numPartOpt.map(_.asInstanceOf[Int]).getOrElse(0) > 0 &&
+          (rules.contains(MERGE_FILES) || rules.contains(REPARTITION_BEFORE_WRITE))) {
         helper.addEffectiveRules(REPARTITION_BEFORE_WRITE)
         helper.setConf("spark.sql.insertRebalancePartitionsBeforeWrite.enabled", "true")
       }
