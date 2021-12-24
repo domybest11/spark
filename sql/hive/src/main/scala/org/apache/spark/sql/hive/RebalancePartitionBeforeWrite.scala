@@ -17,16 +17,18 @@
 
 package org.apache.spark.sql.hive
 
+import java.util.Random
+
 import org.apache.spark.SparkException
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, Expression, NamedExpression, SortOrder}
+import org.apache.spark.sql.catalyst.expressions.{Ascending, Attribute, Expression, Literal, NamedExpression, SortOrder}
 import org.apache.spark.sql.catalyst.planning.ScanOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Limit, LogicalPlan, RebalancePartitions, Repartition, RepartitionByExpression, Sort, Union}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command.{CreateDataSourceTableAsSelectCommand, DataWritingCommand}
 import org.apache.spark.sql.execution.datasources.InsertIntoHadoopFsRelationCommand
-import org.apache.spark.sql.hive.RepartitionBeforeWriteHelper.canInsertRepartitionByExpression
+import org.apache.spark.sql.hive.RepartitionBeforeWriteHelper.{canInsertRebalancePartitions, createExtraExpression}
 import org.apache.spark.sql.hive.execution.{CreateHiveTableAsSelectCommand, InsertIntoHiveDirCommand, InsertIntoHiveTable, OptimizedCreateHiveTableAsSelectCommand}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 
@@ -52,9 +54,9 @@ case class RebalancePartitionBeforeWriteTable(session: SparkSession) extends Rul
   def applyRebalancePartition(
       dataWriting: DataWritingCommand,
       bucketSpec: Option[BucketSpec],
-      partitionColumns: Seq[Expression]): LogicalPlan = {
+      applyColumns: Seq[Expression]): LogicalPlan = {
     val query = dataWriting.query
-    (bucketSpec, partitionColumns) match {
+    (bucketSpec, applyColumns) match {
       case (None, partExps) =>
         if (partExps.nonEmpty) {
           dataWriting.withNewChildren(IndexedSeq(RebalancePartitions(partExps, query)))
@@ -96,10 +98,16 @@ case class RebalancePartitionBeforeWriteTable(session: SparkSession) extends Rul
     }
   }
 
-  private def getDynamicPartitionColumns(
+  private def getRebalanceColumns(
       query: LogicalPlan,
       table: CatalogTable): Seq[Expression] = {
-    query.output.filter(attr => table.partitionColumnNames.contains(attr.name))
+    val dynamicPartitionColumns = query.output.filter(attr =>
+      table.partitionColumnNames.contains(attr.name))
+    if (dynamicPartitionColumns.isEmpty) {
+      dynamicPartitionColumns ++ createExtraExpression
+    } else {
+      dynamicPartitionColumns
+    }
   }
 
   def addRebalancePartition(plan: LogicalPlan): LogicalPlan = plan match {
@@ -107,37 +115,31 @@ case class RebalancePartitionBeforeWriteTable(session: SparkSession) extends Rul
       u.withNewChildren(u.children.map(addRebalancePartition))
 
     case i @ InsertIntoHiveTable(table, _, query, _, _, _)
-      if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = getDynamicPartitionColumns(query, table)
-      applyRebalancePartition(i, table.bucketSpec, dynamicPartitionColumns)
+        if query.resolved && canInsertRebalancePartitions(query) =>
+      applyRebalancePartition(i, table.bucketSpec, getRebalanceColumns(query, table))
 
     case c @ CreateHiveTableAsSelectCommand(table, query, _, _)
-      if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = getDynamicPartitionColumns(query, table)
-      applyRebalancePartition(c, table.bucketSpec, dynamicPartitionColumns)
+        if query.resolved && canInsertRebalancePartitions(query) =>
+      applyRebalancePartition(c, table.bucketSpec, getRebalanceColumns(query, table))
 
     case o @ OptimizedCreateHiveTableAsSelectCommand(table, query, _, _)
-      if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = getDynamicPartitionColumns(query, table)
-      applyRebalancePartition(o, table.bucketSpec, dynamicPartitionColumns)
+        if query.resolved && canInsertRebalancePartitions(query) =>
+      applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
 
     case i @ InsertIntoHadoopFsRelationCommand(_, _, _, _, _, _, _, query, _, table, _, _)
-      if query.resolved && table.isDefined && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = getDynamicPartitionColumns(query, table.get)
-      applyRebalancePartition(i, table.get.bucketSpec, dynamicPartitionColumns)
+        if query.resolved && table.isDefined && canInsertRebalancePartitions(query) =>
+      applyRebalancePartition(i, table.get.bucketSpec, getRebalanceColumns(query, table.get))
 
     case o @ CreateDataSourceTableAsSelectCommand(table, _, query, _)
-      if query.resolved && canInsertRepartitionByExpression(query) =>
-      val dynamicPartitionColumns = query.references.
-        filter(attr => table.partitionColumnNames.contains(attr.name)).toSeq
-      applyRebalancePartition(o, table.bucketSpec, dynamicPartitionColumns)
+        if query.resolved && canInsertRebalancePartitions(query) =>
+      applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
 
     case _ => plan
   }
 }
 
 object RepartitionBeforeWriteHelper {
-  def canInsertRepartitionByExpression(plan: LogicalPlan): Boolean = plan match {
+  def canInsertRebalancePartitions(plan: LogicalPlan): Boolean = plan match {
     case Limit(_, _) => false
     case ScanOperation(_, _, child) =>
       child match {
@@ -149,4 +151,9 @@ object RepartitionBeforeWriteHelper {
       }
     case _ => true
   }
+
+  def createExtraExpression(): Seq[Expression] = {
+    Literal(new Random().nextLong()) :: Nil
+  }
+
 }
