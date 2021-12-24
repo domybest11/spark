@@ -102,18 +102,14 @@ case class AllocationRatioRule(sparkConf: SparkConf) extends SparkConfRule {
 
 case class RepartitionBeforeWriteTableRule(sparkConf: SparkConf) extends SparkConfRule {
 
-  private[spark] val PART_NUM = "numPart"
   private[spark] val EXECUTE_RULES = "rules"
   private[spark] val MERGE_FILES = "MergeFiles"
   private[spark] val REPARTITION_BEFORE_WRITE = "repartitionBeforeWriteTable"
 
   override def doApply(helper: SparkConfHelper): Unit = {
     if (enabled(sparkConf) && helper.getJobTag().isDefined) {
-      val rules = helper.getMetricByKey(EXECUTE_RULES)
-        .map(_.asInstanceOf[String]).getOrElse("")
-      val numPartOpt = helper.getMetricByKey(PART_NUM)
-      if (numPartOpt.isDefined && numPartOpt.map(_.asInstanceOf[Int]).getOrElse(0) > 0 &&
-          (rules.contains(MERGE_FILES) || rules.contains(REPARTITION_BEFORE_WRITE))) {
+      val rules = helper.getMetricByKey(EXECUTE_RULES).map(_.asInstanceOf[String]).getOrElse("")
+      if (rules.contains(MERGE_FILES) || rules.contains(REPARTITION_BEFORE_WRITE)) {
         helper.addEffectiveRules(REPARTITION_BEFORE_WRITE)
         helper.setConf("spark.sql.insertRebalancePartitionsBeforeWrite.enabled", "true")
       }
