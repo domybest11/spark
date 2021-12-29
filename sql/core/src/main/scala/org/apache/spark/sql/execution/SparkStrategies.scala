@@ -20,6 +20,7 @@ package org.apache.spark.sql.execution
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{execution, AnalysisException, Strategy}
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.AggregateExpression
@@ -29,9 +30,11 @@ import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.plans.physical._
 import org.apache.spark.sql.catalyst.streaming.{InternalOutputModes, StreamingRelationV2}
+import org.apache.spark.sql.catalyst.trees.TreeNodeTag
 import org.apache.spark.sql.execution.aggregate.AggUtils
 import org.apache.spark.sql.execution.columnar.{InMemoryRelation, InMemoryTableScanExec}
 import org.apache.spark.sql.execution.command._
+import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.exchange.{ENSURE_REQUIREMENTS, REBALANCE_PARTITIONS_BY_COL, REBALANCE_PARTITIONS_BY_NONE, REPARTITION_BY_COL, REPARTITION_BY_NUM, ShuffleExchangeExec}
 import org.apache.spark.sql.execution.python._
 import org.apache.spark.sql.execution.streaming._
@@ -39,6 +42,7 @@ import org.apache.spark.sql.execution.streaming.sources.MemoryPlan
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.streaming.OutputMode
 import org.apache.spark.sql.types.StructType
+import org.apache.spark.util.TraceReporter
 
 /**
  * Converts a logical plan into zero or more SparkPlans.  This API is exposed for experimenting
@@ -139,6 +143,7 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
   object JoinSelection extends Strategy
     with PredicateHelper
     with JoinSelectionHelper {
+    val reporter: TraceReporter = TraceReporter.createTraceReporter(conf.getAllConfs)
 
     def apply(plan: LogicalPlan): Seq[SparkPlan] = plan match {
 
@@ -203,6 +208,8 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
           if (joinType.isInstanceOf[InnerLike]) {
             // `CartesianProductExec` can't implicitly evaluate equal join condition, here we should
             // pass the original condition which includes both equal and non-equal conditions.
+            findPoorlyJoinCondition(reporter, j.condition, j.left, j.right,
+              "use Cartesian Product JOIN may perform poorly")
             Some(Seq(joins.CartesianProductExec(planLater(left), planLater(right), j.condition)))
           } else {
             None
@@ -222,6 +229,8 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
             .orElse(createCartesianProduct())
             .getOrElse {
               // This join could be very slow or OOM
+              findPoorlyJoinCondition(reporter, j.condition, j.left, j.right,
+                "use Broadcast Nested Loop JOIN could be very slow or OOM")
               val buildSide = getSmallerSide(left, right)
               Seq(joins.BroadcastNestedLoopJoinExec(
                 planLater(left), planLater(right), buildSide, joinType, nonEquiCond))
@@ -284,6 +293,8 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
 
         def createCartesianProduct() = {
           if (joinType.isInstanceOf[InnerLike]) {
+            findPoorlyJoinCondition(reporter, condition, left, right,
+              "use Cartesian Product JOIN may perform poorly")
             Some(Seq(joins.CartesianProductExec(planLater(left), planLater(right), condition)))
           } else {
             None
@@ -295,6 +306,8 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
             .orElse(createCartesianProduct())
             .getOrElse {
               // This join could be very slow or OOM
+              findPoorlyJoinCondition(reporter, condition, left, right,
+                "use Broadcast Nested Loop JOIN could be very slow or OOM")
               Seq(joins.BroadcastNestedLoopJoinExec(
                 planLater(left), planLater(right), desiredBuildSide, joinType, condition))
             }
@@ -307,6 +320,79 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
 
       // --- Cases where this strategy does not apply ---------------------------------------------
       case _ => Nil
+    }
+  }
+
+  def findPoorlyJoinCondition(reporter: TraceReporter, condition: Option[Expression],
+                              left: LogicalPlan, right: LogicalPlan, msg: String): Unit = {
+    try {
+      var traceId = Option(conf.getConfString("spark.trace.id", "null"))
+      if (traceId.get.equals(null)) {
+        traceId = None
+      }
+      if (conf.getConfString("spark.sql.find.poorly.join.condition", "false").toBoolean
+        && traceId.isDefined && condition.isDefined) {
+        if (condition.get.getTagValue(TreeNodeTag[Boolean]("checkJoin")).getOrElse(true)) {
+          condition.get.setTagValue(TreeNodeTag[Boolean]("checkJoin"), false)
+
+          val joinCondition = condition.get.toString
+
+          var leftRelations: Option[String] = None
+          var rightRelations: Option[String] = None
+          val leftLeaves = left.collectLeaves()
+          leftLeaves.foreach {
+            case h: HiveTableRelation =>
+              val leftDatabase = h.tableMeta.identifier.database.getOrElse("")
+              val leftTable = h.tableMeta.identifier.table
+              if (leftRelations.isEmpty) {
+                leftRelations = Option(s"${leftDatabase}.${leftTable}")
+              } else {
+                leftRelations = Option(s"${leftRelations.get}, ${leftDatabase}.${leftTable}")
+              }
+            case l: LogicalRelation =>
+              if (l.catalogTable.isDefined) {
+                val leftDatabase = l.catalogTable.get.identifier.database.getOrElse("")
+                val leftTable = l.catalogTable.get.identifier.table
+                if (leftRelations.isEmpty) {
+                  leftRelations = Option(s"${leftDatabase}.${leftTable}")
+                } else {
+                  leftRelations = Option(s"${leftRelations.get}, ${leftDatabase}.${leftTable}")
+                }
+              }
+          }
+
+          val rightLeaves = right.collectLeaves()
+          rightLeaves.foreach {
+            case h: HiveTableRelation =>
+              val rightDatabase = h.tableMeta.identifier.database.getOrElse("")
+              val rightTable = h.tableMeta.identifier.table
+              if (rightRelations.isEmpty) {
+                rightRelations = Option(s"${rightDatabase}.${rightTable}")
+              } else {
+                rightRelations = Option(s"${rightRelations.get}, ${rightDatabase}.${rightTable}")
+              }
+            case l: LogicalRelation =>
+              if (l.catalogTable.isDefined) {
+                val rightDatabase = l.catalogTable.get.identifier.database.getOrElse("")
+                val rightTable = l.catalogTable.get.identifier.table
+                if (rightRelations.isEmpty) {
+                  rightRelations = Option(s"${rightDatabase}.${rightTable}")
+                } else {
+                  rightRelations = Option(s"${rightRelations.get}, ${rightDatabase}.${rightTable}")
+                }
+              }
+          }
+
+          if (leftRelations.isDefined && rightRelations.isDefined) {
+            val postMsg =
+              s"${leftRelations.get} JOIN ${rightRelations.get} ON ${joinCondition} $msg"
+            reporter.postEvent(traceId, "joinDetect", "", postMsg, System.currentTimeMillis())
+          }
+        }
+      }
+    } catch {
+      case _: Throwable =>
+        // do nothing
     }
   }
 

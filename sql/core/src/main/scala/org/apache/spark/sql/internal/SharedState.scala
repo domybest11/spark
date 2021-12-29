@@ -35,7 +35,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.SQL_APP_LISTENER_ENABLED
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.CacheManager
-import org.apache.spark.sql.execution.status.{SqlAppStatusScheduler, SqlAppStoreStatusStoreV1, SqlMarioListener}
+import org.apache.spark.sql.execution.status.{JoinInflationDetectScheduler, SqlAppStatusScheduler, SqlAppStoreStatusStoreV1, SqlMarioListener}
 import org.apache.spark.sql.execution.streaming.StreamExecution
 import org.apache.spark.sql.execution.ui.{SQLAppStatusListener, SQLAppStatusStore, SQLTab, StreamingQueryStatusStore}
 import org.apache.spark.sql.internal.StaticSQLConf._
@@ -55,6 +55,7 @@ private[sql] class SharedState(
   extends Logging {
 
   var sqlAppStatusScheduler: SqlAppStatusScheduler = null
+  var joinInflationDetectScheduler: JoinInflationDetectScheduler = _
 
   SharedState.setFsUrlStreamHandlerFactory(sparkContext.conf, sparkContext.hadoopConfiguration)
 
@@ -114,6 +115,10 @@ private[sql] class SharedState(
         Some(sqlAppStatusScheduler._executionInfoQueue))
       if (!Utils.isTesting) {
         sqlAppStatusScheduler.start(sqlAppStatusStoreV1)
+      }
+      if (sparkContext.conf.getBoolean("spark.sql.join.inflation.detect.enable", false)) {
+        joinInflationDetectScheduler = new JoinInflationDetectScheduler
+        joinInflationDetectScheduler.start(sparkContext.conf, kvStore, listener)
       }
     }
     sparkContext.listenerBus.addToStatusQueue(listener)

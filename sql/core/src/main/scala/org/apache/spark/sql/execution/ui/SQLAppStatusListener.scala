@@ -236,6 +236,10 @@ class SQLAppStatusListener(
     }
   }
 
+  def getLiveExecutions: ConcurrentHashMap[Long, LiveExecutionData] = {
+    liveExecutions
+  }
+
   private def aggregateMetrics(exec: LiveExecutionData): Map[Long, String] = {
     val metricTypes = exec.metrics.map { m => (m.accumulatorId, m.metricType) }.toMap
 
