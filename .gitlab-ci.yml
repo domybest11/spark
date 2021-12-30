@@ -96,6 +96,71 @@ spark_shuffleservice_build:
          "packType":"tgz"
        }'
 
+jscs_spark_shuffleservice_build:
+  stage: build
+  only:
+    - tags
+  artifacts:
+    paths:
+      - ./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
+    expire_in: 2 week
+  script:
+    - export
+    - export START_BUILD_TIME=`date "+%Y-%m-%d %H:%M:%S"`
+    - mv conf conf_bak
+    - mv bilibili-conf/jscs-shuffleservice-conf conf
+    - ./dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.1-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
+    - export DEST_FILE_NAME="spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz"
+    - export DEST_FILE_LOCAL_PATH=./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
+    - export DEST_FILE_REMOTE_PATH=$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
+    - export DEST_FILE_MD5=`alterctl md5 $DEST_FILE_LOCAL_PATH`
+    - alterctl fs upload $DEST_FILE_LOCAL_PATH $DEST_FILE_REMOTE_PATH --debug
+    - |
+      curl -X POST 'http://alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata/v3' \
+        --header 'Content-Type: application/json' \
+        --header 'Accept: application/json' \
+        --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
+        --data '{
+         "bossPath":"'"$DEST_FILE_REMOTE_PATH"'",
+         "ciTag":"'"$CI_COMMIT_TAG"'",
+         "ciType": 0,
+         "ciTime":"'"$START_BUILD_TIME"'",
+         "ciUser":"'"$GITLAB_USER_LOGIN"'",
+         "commitId":"'"$CI_COMMIT_SHA"'",
+         "commitMsg":"'"$CI_COMMIT_TITLE"'",
+         "gitGroup":"'"$CI_PROJECT_NAMESPACE"'",
+         "componentName": "JSCS-Spark3.1-ESS",
+         "department": "datacenter",
+         "team": "offline",
+         "gitRepo":"'"$CI_PROJECT_NAME"'",
+         "packMd5":"'"$DEST_FILE_MD5"'",
+         "packName":"'"$DEST_FILE_NAME"'",
+         "packType":"tgz"
+       }'
+    - |
+      curl -X POST 'http://uat-alter.bilibili.co/api/alter/cicd/pack/ci/open/add/metadata/v3' \
+        --header 'Content-Type: application/json' \
+        --header 'Accept: application/json' \
+        --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
+        --data '{
+         "bossPath":"'"$DEST_FILE_REMOTE_PATH"'",
+         "ciTag":"'"$CI_COMMIT_TAG"'",
+         "ciType": 0,
+         "ciTime":"'"$START_BUILD_TIME"'",
+         "ciUser":"'"$GITLAB_USER_LOGIN"'",
+         "commitId":"'"$CI_COMMIT_SHA"'",
+         "commitMsg":"'"$CI_COMMIT_TITLE"'",
+         "gitGroup":"'"$CI_PROJECT_NAMESPACE"'",
+         "componentName": "JSCS-Spark3.1-ESS;",
+         "department": "datacenter",
+         "team": "offline",
+         "gitRepo":"'"$CI_PROJECT_NAME"'",
+         "packMd5":"'"$DEST_FILE_MD5"'",
+         "packName":"'"$DEST_FILE_NAME"'",
+         "packType":"tgz"
+       }'
+
+
 spark_engine_build:
   stage: build
   only:
