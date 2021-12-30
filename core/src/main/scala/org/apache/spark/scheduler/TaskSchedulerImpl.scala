@@ -117,6 +117,9 @@ private[spark] class TaskSchedulerImpl(
               conf.get(RUNNING_TASK_LIMIT_RATIO), conf.get(RUNNING_TASK_LIMIT_NUM))
   } else Integer.MAX_VALUE
 
+  val CLUSTER_MIN_CORES = conf.get(DYN_ALLOCATION_MIN_EXECUTORS) *
+    conf.getInt("spark.executor.cores", 1)
+
   // TaskSetManagers are not thread safe, so any access to one should be synchronized
   // on this class.  Protected by `this`
   private val taskSetsByStageIdAndAttempt = new HashMap[Int, HashMap[Int, TaskSetManager]]
@@ -538,8 +541,28 @@ private[spark] class TaskSchedulerImpl(
     val availableResources = shuffledOffers.map(_.resources).toArray
     val availableCpus = shuffledOffers.map(o => o.cores).toArray
     val resourceProfileIds = shuffledOffers.map(o => o.resourceProfileId).toArray
-    val sortedTaskSets = rootPool.getSortedTaskSetQueue
-      .filter(_.runningTasks < STAGE_RUNNING_TASK_LIMIT)
+    var runningTasksNums = 0
+    val remainingTaskSets: ArrayBuffer[TaskSetManager] = new ArrayBuffer[TaskSetManager]()
+    val sortedTaskSets = rootPool.getSortedTaskSetQueue.filter(taskSet => {
+        if (taskSet.runningTasks < STAGE_RUNNING_TASK_LIMIT) {
+          runningTasksNums += taskSet.runningTasks
+          true
+        } else {
+          remainingTaskSets += taskSet
+          false
+        }
+      })
+
+    if (conf.get(RUNNING_TASK_DYN_RESTRICT_ENABLE)) {
+      var remainingCores = CLUSTER_MIN_CORES - runningTasksNums
+      remainingTaskSets.foreach(taskSet => {
+        if (taskSet.runningTasks <= remainingCores) {
+          sortedTaskSets += taskSet
+          remainingCores -= taskSet.runningTasks
+        }
+      })
+    }
+
     for (taskSet <- sortedTaskSets) {
       logDebug("taskLimitValue: %s parentName: %s, name: %s, runningTasks: %s".format(
         STAGE_RUNNING_TASK_LIMIT, taskSet.parent.name, taskSet.name, taskSet.runningTasks))

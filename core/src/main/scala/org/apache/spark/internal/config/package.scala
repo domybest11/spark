@@ -2090,6 +2090,13 @@ package object config {
       .intConf
       .createWithDefault(Integer.MAX_VALUE)
 
+  private[spark] val RUNNING_TASK_DYN_RESTRICT_ENABLE =
+    ConfigBuilder("spark.stage.running.task.dynamicRestriction.enable")
+      .doc("Set to restrict the nums of task dynamically")
+      .version("3.1.0")
+      .booleanConf
+      .createWithDefault(false)
+
   private[spark] val SPECULATION_TASK_DURATION_THRESHOLD =
     ConfigBuilder("spark.speculation.task.duration.threshold")
       .doc("Task duration after which scheduler would try to speculative run the task. If " +
