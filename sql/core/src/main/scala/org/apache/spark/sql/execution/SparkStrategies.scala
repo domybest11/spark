@@ -327,7 +327,7 @@ abstract class SparkStrategies extends QueryPlanner[SparkPlan] {
                               left: LogicalPlan, right: LogicalPlan, msg: String): Unit = {
     try {
       var traceId = Option(conf.getConfString("spark.trace.id", "null"))
-      if (traceId.get.equals(null)) {
+      if (traceId.get.equals("null")) {
         traceId = None
       }
       if (conf.getConfString("spark.sql.find.poorly.join.condition", "false").toBoolean

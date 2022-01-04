@@ -42,7 +42,7 @@ class JoinInflationDetectScheduler extends Logging {
   def init(conf: SparkConf): Unit = {
     initDelayTime = conf.getLong("spark.sql.join.inflation.detect.delay.time", 20)
     periodTime = conf.getLong("spark.sql.join.inflation.detect.period.time", 10)
-    inflationFactor = conf.getLong("spark.sql.join.inflation.detect.factor", 10)
+    inflationFactor = conf.getDouble("spark.sql.join.inflation.detect.factor", 10.0)
     checkJoinOutputRowsThreshold =
       conf.getLong("spark.sql.join.inflation.detect.threshold", 1000000)
     executionShouldCheckTime =
@@ -81,7 +81,7 @@ class JoinInflationDetectScheduler extends Logging {
         val executionMetrics = listener.liveExecutionMetrics(executionId)
         val graphWrapper = store.read(classOf[SparkPlanGraphWrapper], executionId)
         val joinNodes = graphWrapper.nodes.filter(n => {
-          n.node.name.endsWith("Join") || n.node.name.equals("CartesianProduct")
+          n.node != null && (n.node.name.endsWith("Join") || n.node.name.equals("CartesianProduct"))
         })
         if (joinNodes.nonEmpty) {
           joinNodes.foreach(j => {
@@ -125,7 +125,11 @@ class JoinInflationDetectScheduler extends Logging {
         }
       } else {
         val accumulatorId = metrics.head.accumulatorId
-        Option(executionMetrics.get(accumulatorId).toLong)
+        if (executionMetrics.get.contains(accumulatorId)) {
+          Option(executionMetrics.get(accumulatorId).toLong)
+        } else {
+          None
+        }
       }
     }
   }
