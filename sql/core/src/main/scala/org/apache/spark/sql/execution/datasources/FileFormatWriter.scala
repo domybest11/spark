@@ -19,6 +19,8 @@ package org.apache.spark.sql.execution.datasources
 
 import java.util.{Date, UUID}
 
+import scala.util.matching.Regex
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileAlreadyExistsException, Path}
 import org.apache.hadoop.mapreduce._
@@ -43,7 +45,7 @@ import org.apache.spark.sql.execution.{ProjectExec, SortExec, SparkPlan, SQLExec
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types.StringType
 import org.apache.spark.unsafe.types.UTF8String
-import org.apache.spark.util.{SerializableConfiguration, Utils}
+import org.apache.spark.util.{SerializableConfiguration, TraceReporter, Utils}
 
 
 /** A helper object for writing FileFormat data out to a location. */
@@ -229,6 +231,38 @@ object FileFormatWriter extends Logging {
     } catch { case cause: Throwable =>
       logError(s"Aborting job ${description.uuid}.", cause)
       committer.abortJob(job)
+      if (cause.getCause != null
+        && cause.getCause.getClass.getName.equals("org.apache.hadoop.ipc.RemoteException")
+        && cause.getCause.getMessage.contains("RangerAccessControlException")) {
+        val exceptionInfo = cause.getCause.getMessage
+        val userPattern = new Regex("(?<=user=).*?(?=,)")
+        val accessPattern = new Regex("(?<=access=).*?(?=,)")
+        val inodePattern = new Regex("(?<=inode=).*?(?=\n)")
+        val userInfo = if ((userPattern findFirstIn exceptionInfo).isDefined) {
+          (userPattern findFirstIn exceptionInfo).get
+        } else {
+          "nothing"
+        }
+
+        val accessInfo = if ((accessPattern findFirstIn exceptionInfo).isDefined) {
+          (accessPattern findFirstIn exceptionInfo).get
+        } else {
+          "nothing"
+        }
+
+        val inodeInfo = if ((inodePattern findFirstIn exceptionInfo).isDefined) {
+          (inodePattern findFirstIn exceptionInfo).get
+        } else {
+          "nothing"
+        }
+
+        val postMsg = s"权限错误: 用户 $userInfo 没有 $inodeInfo 的 $accessInfo 权限, 请联系数平小姐姐"
+        val sparkConf = sparkSession.sparkContext.getConf
+        val traceId = sparkConf.getOption("spark.trace.id")
+        val action = "authorityException"
+        val reporter = TraceReporter.createTraceReporter(sparkConf)
+        reporter.postEvent(traceId, action, "", postMsg, System.currentTimeMillis())
+      }
       throw new SparkException("Job aborted.", cause)
     }
   }
