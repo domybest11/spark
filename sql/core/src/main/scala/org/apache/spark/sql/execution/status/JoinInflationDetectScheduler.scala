@@ -49,6 +49,7 @@ class JoinInflationDetectScheduler extends Logging {
       conf.getLong("spark.sql.join.inflation.should.check.time", 10 * 60 * 1000)
     reporter = TraceReporter.createTraceReporter(conf)
   }
+
   def start(conf: SparkConf, kvStore: ElementTrackingStore,
             listener: SQLAppStatusListener): Unit = {
     init(conf)
@@ -123,13 +124,15 @@ class JoinInflationDetectScheduler extends Logging {
         } else {
           None
         }
-      } else {
+      } else if (metrics.size == 1) {
         val accumulatorId = metrics.head.accumulatorId
         if (executionMetrics.get.contains(accumulatorId)) {
-          Option(executionMetrics.get(accumulatorId).toLong)
+          Option(executionMetrics.get(accumulatorId).replace(",", "").toLong)
         } else {
           None
         }
+      } else {
+        None
       }
     }
   }
@@ -137,7 +140,7 @@ class JoinInflationDetectScheduler extends Logging {
   def getParentNode(node: SparkPlanGraphNode, graphWrapper: SparkPlanGraphWrapper): Seq[SparkPlanGraphNode] = {
     val edges = graphWrapper.edges.filter(_.toId == node.id)
     edges.flatMap(e => {
-      graphWrapper.nodes.filter(_.node.id == e.fromId).map(_.node)
+      graphWrapper.nodes.filter(n => {n.node != null && n.node.id == e.fromId}).map(_.node)
     })
   }
 
