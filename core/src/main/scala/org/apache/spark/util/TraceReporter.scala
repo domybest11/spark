@@ -88,4 +88,10 @@ private[spark] object TraceReporter {
   def createTraceReporter(conf: SparkConf): TraceReporter = {
     new TraceReporter(conf)
   }
+
+  def createTraceReporter(conf: Map[String, String]): TraceReporter = {
+    val sparkConf = new SparkConf
+    sparkConf.setAll(conf)
+    new TraceReporter(sparkConf)
+  }
 }
