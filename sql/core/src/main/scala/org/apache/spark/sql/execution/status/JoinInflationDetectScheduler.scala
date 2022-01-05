@@ -98,6 +98,8 @@ class JoinInflationDetectScheduler extends Logging {
               // check inflation
               if (!ignored && maxParentOutputRows > 0
                 && joinNodeOutputRows.get >= maxParentOutputRows * inflationFactor) {
+                log.warn(
+                  s"The inflation rate of ${j.node.desc} is more than ${inflationFactor} times")
                 // scalastyle:off
                 val postMsg = s"注意: ${j.node.desc} 膨胀超过了 ${inflationFactor} 倍"
                 reporter.postEvent(traceId, action, "", postMsg, System.currentTimeMillis())
