@@ -171,6 +171,8 @@ private[spark] class Client(
     var appId: ApplicationId = null
     try {
       launcherBackend.connect()
+      hadoopConf.set("spark.app.name", sparkConf.get("spark.app.name", "Spark"))
+      hadoopConf.set("spark.yarn.queue", sparkConf.get("spark.yarn.queue", "default"))
       yarnClient.init(hadoopConf)
       yarnClient.start()
 
