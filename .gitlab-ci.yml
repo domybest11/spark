@@ -331,7 +331,7 @@ image_internal_python_docker:
     - unzip hive_conf_artifacts.zip
   script:
     - |
-      docker build -f internal_python.dockerfile -t hub.bilibili.co/compile/spark-internal-python:${CI_COMMIT_TAG} .
+      docker build -f python_internal.dockerfile -t hub.bilibili.co/compile/spark-internal-python:${CI_COMMIT_TAG} .
       docker push hub.bilibili.co/compile/spark-internal-python:${CI_COMMIT_TAG}
       docker tag hub.bilibili.co/compile/spark-internal-python:${CI_COMMIT_TAG} hub.bilibili.co/compile/spark-internal-python:latest
       docker push hub.bilibili.co/compile/spark-internal-python:latest
