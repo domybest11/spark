@@ -318,6 +318,32 @@ image_internal_docker:
     - hive_conf_build
     - spark_client_build
 
+image_internal_python_docker:
+  stage: image
+  tags:
+    - rider-shared-shell
+  only:
+    - tags
+  before_script:
+    - curl --location --output hive_artifacts.zip "https://git.bilibili.co/api/v4/projects/8097/jobs/artifacts/master/download?job=package&job_token=$CI_JOB_TOKEN"
+    - unzip hive_artifacts.zip
+    - curl --location --output hive_conf_artifacts.zip "https://git.bilibili.co/api/v4/projects/8347/jobs/artifacts/master/download?job=hive_config_package&job_token=$CI_JOB_TOKEN"
+    - unzip hive_conf_artifacts.zip
+  script:
+    - |
+      docker build -f internal_python.dockerfile -t hub.bilibili.co/compile/spark-internal-python:${CI_COMMIT_TAG} .
+      docker push hub.bilibili.co/compile/spark-internal-python:${CI_COMMIT_TAG}
+      docker tag hub.bilibili.co/compile/spark-internal-python:${CI_COMMIT_TAG} hub.bilibili.co/compile/spark-internal-python:latest
+      docker push hub.bilibili.co/compile/spark-internal-python:latest
+      if [[ $CI_COMMIT_TAG == *-release ]]; then
+        docker tag hub.bilibili.co/compile/spark-internal-python:${CI_COMMIT_TAG} hub.bilibili.co/compile/spark-internal-python:release
+        docker push hub.bilibili.co/compile/spark-internal-python:release
+      fi
+  dependencies:
+    - hive_build
+    - hive_conf_build
+    - spark_client_build
+
 image_external_docker:
   stage: image
   tags:
