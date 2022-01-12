@@ -19,7 +19,7 @@ package org.apache.spark.internal.io
 
 import org.apache.hadoop.fs._
 import org.apache.hadoop.mapreduce._
-
+import org.apache.hadoop.security.AccessControlException
 import org.apache.spark.internal.Logging
 import org.apache.spark.util.Utils
 
@@ -121,7 +121,29 @@ abstract class FileCommitProtocol extends Logging {
    * implementation deletes the file immediately.
    */
   def deleteWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean = {
-    fs.delete(path, recursive)
+    try {
+      fs.delete(path, recursive)
+    } catch {
+      case ex : AccessControlException =>
+        if (ex.getMessage.contains("is a mount point")) {
+          logWarning("delete a hdfs mount point path, turn to delete sub path", ex)
+          deleteSubWithJob(fs, path, recursive)
+        } else {
+          throw ex
+        }
+      case ex : Throwable =>
+        throw ex
+    }
+  }
+
+  def deleteSubWithJob(fs: FileSystem, path: Path, recursive: Boolean): Boolean = {
+    var ret = true
+    fs.listStatus(path).foreach(
+      status => {
+        ret = ret && fs.delete(status.getPath, recursive)
+      }
+    )
+    ret
   }
 
   /**
