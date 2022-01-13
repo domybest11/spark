@@ -9,6 +9,11 @@ sealed trait SparkConfRule extends Logging {
   private[spark] val AUTO_SET_ENABLED = "spark.deploy.autoConf"
   private[spark] val APP_RETRY_TIMES = "spark.deploy.appRetryTimes"
 
+  val ruleName: String = {
+    val className = getClass.getName
+    if (className endsWith "$") className.dropRight(1) else className
+  }
+
   def apply(helper: SparkConfHelper): Unit = {
     try {
       doApply(helper)

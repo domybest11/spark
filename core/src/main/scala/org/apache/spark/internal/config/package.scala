@@ -2347,4 +2347,10 @@ package object config {
       .booleanConf
       .createWithDefault(true)
 
+  val HBO_EXCLUDE_RULES =
+    ConfigBuilder("spark.deploy.hbo.excludedRules")
+      .doc("Configures a list of rules to be disabled in HBO, in which the " +
+        "rules are specified by their rule names and separated by comma. ")
+      .stringConf
+      .createOptional
 }

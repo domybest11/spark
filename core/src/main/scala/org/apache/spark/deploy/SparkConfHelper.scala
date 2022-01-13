@@ -4,8 +4,8 @@ package org.apache.spark.deploy
 import scala.collection.mutable
 
 import org.apache.spark.SparkConf
-import org.apache.spark.internal.Logging
-import org.apache.spark.util.HttpClientUtils
+import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.util.{HttpClientUtils, Utils}
 
 class SparkConfHelper(
     sparkConf: SparkConf,
@@ -29,7 +29,14 @@ class SparkConfHelper(
   )
 
   def execute: Unit = {
-    rules.foreach(r => r.apply(this))
+    val excludeRules = sparkConf.getOption(config.HBO_EXCLUDE_RULES.key)
+      .map(Utils.stringToSeq).getOrElse(Seq.empty)
+    rules.foreach(rule =>
+      if (excludeRules.contains(rule.ruleName)) {
+        logInfo(s"HBO rule '${rule.ruleName}' is excluded from the confHelper.")
+      } else {
+        rule.apply(this)
+      })
   }
 
   def addEffectiveRules(rule: String): Unit = {
