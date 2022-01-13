@@ -48,7 +48,12 @@ class SqlAppStoreStatusStoreV1(
     val appStatusStore: Option[AppStatusStore] = None,
     val conf: SparkConf) extends Logging {
 
-  private val hadoopConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(conf))
+  private val hadoopConf =
+    if (SparkHadoopUtil.HADOOP_CONF != null) {
+      SparkHadoopUtil.HADOOP_CONF
+    } else {
+      new YarnConfiguration(SparkHadoopUtil.newConfiguration(conf))
+    }
   private val reporter = TraceReporter.createTraceReporter(conf)
 
   def countResourceCost(applicationSQLExecutionData: ApplicationSQLExecutionData): String = {

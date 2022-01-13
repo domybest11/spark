@@ -175,6 +175,7 @@ private[spark] class Client(
       hadoopConf.set("spark.yarn.queue", sparkConf.get("spark.yarn.queue", "default"))
       yarnClient.init(hadoopConf)
       yarnClient.start()
+      SparkHadoopUtil.HADOOP_CONF = hadoopConf
 
       logInfo("Requesting a new application from cluster with %d NodeManagers"
         .format(yarnClient.getYarnClusterMetrics.getNumNodeManagers))
