@@ -77,6 +77,14 @@ private[spark] class SparkRackResolver(conf: Configuration) extends Logging {
       return Seq.empty
     }
     val nodes = new ArrayBuffer[Node]
+
+    val skip = conf.getBoolean("spark.rack.awareness.skip", false)
+    if (skip) {
+      logInfo("skip resolve rack aware, return NetworkTopology.DEFAULT_RACK")
+      hostNames.foreach(nodes += new NodeBase(_, NetworkTopology.DEFAULT_RACK))
+      return nodes.toList
+    }
+
     // dnsToSwitchMapping is thread-safe
     val rseFuture = SparkRackResolver.sparkRackResolverExecutor.submit(
       () => dnsToSwitchMapping.resolve(hostNames.toList.asJava).asScala
