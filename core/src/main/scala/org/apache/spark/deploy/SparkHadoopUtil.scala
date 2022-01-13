@@ -35,7 +35,7 @@ import org.apache.hadoop.mapred.JobConf
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.security.token.{Token, TokenIdentifier}
 import org.apache.hadoop.security.token.delegation.AbstractDelegationTokenIdentifier
-
+import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.BUFFER_SIZE
@@ -429,6 +429,8 @@ private[spark] object SparkHadoopUtil extends Logging {
   private[spark] val SPARK_HADOOP_CONF_FILE = "__spark_hadoop_conf__.xml"
 
   def get: SparkHadoopUtil = instance
+
+  var HADOOP_CONF: YarnConfiguration = _
 
   /**
    * Returns a Configuration object with Spark configuration applied on top. Unlike
