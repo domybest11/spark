@@ -17,11 +17,8 @@
 
 package org.apache.spark.deploy.yarn
 
-import java.util.concurrent.TimeUnit
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.ExecutionContext
 
 import com.google.common.base.Strings
 import org.apache.hadoop.conf.Configuration
@@ -32,9 +29,6 @@ import org.apache.hadoop.yarn.util.RackResolver
 import org.apache.log4j.{Level, Logger}
 
 import org.apache.spark.internal.Logging
-import org.apache.spark.util.ThreadUtils
-
-
 
 /**
  * Re-implement YARN's [[RackResolver]] for hadoop releases without YARN-9332.
@@ -77,26 +71,15 @@ private[spark] class SparkRackResolver(conf: Configuration) extends Logging {
       return Seq.empty
     }
     val nodes = new ArrayBuffer[Node]
-
-    val skip = conf.getBoolean("spark.rack.awareness.skip", false)
-    if (skip) {
-      logInfo("skip resolve rack aware, return NetworkTopology.DEFAULT_RACK")
+    val skipResolveRack = conf.getBoolean("rackAware.skip", false)
+    if (skipResolveRack) {
+      logDebug("skip resolve rack, return NetworkTopology.DEFAULT_RACK")
       hostNames.foreach(nodes += new NodeBase(_, NetworkTopology.DEFAULT_RACK))
       return nodes.toList
     }
 
     // dnsToSwitchMapping is thread-safe
-    val rseFuture = SparkRackResolver.sparkRackResolverExecutor.submit(
-      () => dnsToSwitchMapping.resolve(hostNames.toList.asJava).asScala
-    )
-
-    val rNameList = try {
-      rseFuture.get(5, TimeUnit.SECONDS)
-    } catch {
-      case ex: Exception =>
-        Seq.empty[String]
-    }
-
+    val rNameList = dnsToSwitchMapping.resolve(hostNames.toList.asJava).asScala
     if (rNameList == null || rNameList.isEmpty) {
       hostNames.foreach(nodes += new NodeBase(_, NetworkTopology.DEFAULT_RACK))
       logInfo(s"Got an error when resolving hostNames. " +
@@ -140,6 +123,4 @@ object SparkRackResolver extends Logging {
     instance
   }
 
-  private val sparkRackResolverExecutor = ExecutionContext.fromExecutorService(
-    ThreadUtils.newDaemonSingleThreadExecutor("spark-rack-resolver"))
 }
