@@ -484,9 +484,14 @@ private[yarn] class YarnAllocator(
           allocatedHostToContainer, localRequests, rpIdToResourceProfile(rpId))
 
         val newLocalityRequests = new mutable.ArrayBuffer[ContainerRequest]
+        val skipResolveRack = conf.getBoolean("rackAware.skip", false)
         containerLocalityPreferences.foreach {
           case ContainerLocalityPreferences(nodes, racks) if nodes != null =>
-            newLocalityRequests += createContainerRequest(resource, nodes, racks, rpId)
+            if (skipResolveRack) {
+              newLocalityRequests += createContainerRequest(resource, null, null, rpId)
+            } else {
+              newLocalityRequests += createContainerRequest(resource, nodes, racks, rpId)
+            }
           case _ =>
         }
 
