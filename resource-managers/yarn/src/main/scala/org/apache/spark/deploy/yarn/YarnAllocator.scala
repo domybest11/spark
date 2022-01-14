@@ -485,9 +485,10 @@ private[yarn] class YarnAllocator(
 
         val newLocalityRequests = new mutable.ArrayBuffer[ContainerRequest]
         val skipResolveRack = conf.getBoolean("rackAware.skip", false)
+        val dcInfo = sys.env.getOrElse("HADOOP_CONF_DIR", "/etc/hadoop")
         containerLocalityPreferences.foreach {
           case ContainerLocalityPreferences(nodes, racks) if nodes != null =>
-            if (skipResolveRack) {
+            if (skipResolveRack || "/etc/hadoop-jscs".equals(dcInfo)) {
               newLocalityRequests += createContainerRequest(resource, null, null, rpId)
             } else {
               newLocalityRequests += createContainerRequest(resource, nodes, racks, rpId)

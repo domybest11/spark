@@ -72,7 +72,8 @@ private[spark] class SparkRackResolver(conf: Configuration) extends Logging {
     }
     val nodes = new ArrayBuffer[Node]
     val skipResolveRack = conf.getBoolean("rackAware.skip", false)
-    if (skipResolveRack) {
+    val dcInfo = sys.env.getOrElse("HADOOP_CONF_DIR", "/etc/hadoop")
+    if (skipResolveRack || "/etc/hadoop-jscs".equals(dcInfo)) {
       logDebug("skip resolve rack, return NetworkTopology.DEFAULT_RACK")
       hostNames.foreach(nodes += new NodeBase(_, NetworkTopology.DEFAULT_RACK))
       return nodes.toList
