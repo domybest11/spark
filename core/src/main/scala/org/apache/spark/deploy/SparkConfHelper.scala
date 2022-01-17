@@ -25,7 +25,8 @@ class SparkConfHelper(
     DataSourceGrayScaleRelease(sparkConf),
     AllocationRatioRule(sparkConf),
     RepartitionBeforeWriteTableRule(sparkConf),
-    PushShuffleRule(sparkConf)
+    PushShuffleRule(sparkConf),
+    RackResolveRule(sparkConf)
   )
 
   def execute: Unit = {
