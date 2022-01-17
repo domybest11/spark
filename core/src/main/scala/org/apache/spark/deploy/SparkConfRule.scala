@@ -169,3 +169,13 @@ case class PushShuffleRule(sparkConf: SparkConf) extends SparkConfRule {
     }
   }
 }
+
+case class RackResolveRule(sparkConf: SparkConf) extends SparkConfRule {
+  override def doApply(helper: SparkConfHelper): Unit = {
+    val dcInfo = sys.env.getOrElse("HADOOP_CONF_DIR", "/etc/hadoop")
+    if (!sparkConf.contains("spark.hadoop.rackAware.skip")
+      && ("/etc/hadoop-jscs".equals(dcInfo) || "/etc/hadoop-jscs/".equals(dcInfo))) {
+      helper.setConf("spark.hadoop.rackAware.skip", "true")
+    }
+  }
+}
