@@ -3240,6 +3240,28 @@ object SQLConf {
       .booleanConf
       .createWithDefault(false)
 
+  val LAYOUT_OPTIMIZE_ENABLED =
+    buildConf("spark.sql.layout.optimize.enabled")
+      .doc("When ture, Spark will redistribute data layout before writing to make data gathered " +
+        "which have adjacent values in specified columns, this is beneficial for data skipping")
+      .booleanConf
+      .createWithDefault(false)
+
+  object ZorderBuildStrategy extends Enumeration {
+    val DIRECT, SAMPLE = Value
+  }
+
+  val LAYOUT_OPTIMIZE_ZORDER_STRATEGY =
+    buildConf("spark.sql.layout.optimize.zorderStrategy")
+      .doc("Controls how data is sampled to build the z-order curve. " +
+        "two methods: `direct`,`sample`." +
+        "The direct method is faster than the sampling, " +
+        "however sample method would produce a better data layout.")
+      .stringConf
+      .transform(_.toUpperCase(Locale.ROOT))
+      .checkValues(ZorderBuildStrategy.values.map(_.toString))
+      .createWithDefault(ZorderBuildStrategy.SAMPLE.toString)
+
   /**
    * Holds information about keys that have been deprecated.
    *
@@ -3927,6 +3949,11 @@ class SQLConf extends Serializable with Logging {
   def partitionStatsEnabled: Boolean = getConf(SQLConf.PARTITION_STATS_ENABLED)
 
   def radicalJoinSizeEstimate: Boolean = getConf(SQLConf.RADICAL_JOIN_SIZE_ESTIMATE_ENABLED)
+
+  def layoutOptimizeEnabled: Boolean = getConf(SQLConf.LAYOUT_OPTIMIZE_ENABLED)
+
+  def layoutOptimizeZorderStrategy: ZorderBuildStrategy.Value =
+    ZorderBuildStrategy.withName(getConf(SQLConf.LAYOUT_OPTIMIZE_ZORDER_STRATEGY))
 
   /** ********************** SQLConf functionality methods ************ */
 
