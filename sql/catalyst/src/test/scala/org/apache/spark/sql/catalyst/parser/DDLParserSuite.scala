@@ -1335,6 +1335,90 @@ class DDLParserSuite extends AnalysisTest {
     assert(exc.getMessage.contains("INSERT INTO ... IF NOT EXISTS"))
   }
 
+  test("convert table: convert table compressType where partitionFilter") {
+    parseCompare(
+      """
+        |CONVERT TABLE test.tbl
+        |COMPRESS ZSTD
+        |WHERE P1=3
+      """.stripMargin,
+      ConvertStatement(
+        UnresolvedRelation(Seq("test", "tbl")),
+        Project(Seq(UnresolvedStar(None)),
+          Filter(
+            EqualTo(UnresolvedAttribute("P1"),
+              Literal(3)
+            ),
+            UnresolvedRelation(Seq("test", "tbl"))
+          )
+        ),
+        None,
+        Option("ZSTD")
+      ))
+  }
+
+  test("convert table: convert table fileFormat where partitionFilter") {
+    parseCompare(
+      """
+        |CONVERT TABLE test.tbl
+        |FORMAT ORC
+        |WHERE P1=3
+      """.stripMargin,
+      ConvertStatement(
+        UnresolvedRelation(Seq("test", "tbl")),
+        Project(Seq(UnresolvedStar(None)),
+          Filter(
+            EqualTo(UnresolvedAttribute("P1"),
+              Literal(3)
+            ),
+            UnresolvedRelation(Seq("test", "tbl"))
+          )
+        ),
+        Option("ORC"),
+        None
+      ))
+  }
+
+  test("convert table: convert table fileFormat with compressType") {
+    parseCompare(
+      """
+        |CONVERT TABLE test.tbl
+        |FORMAT ORC
+        |WITH COMPRESS ZSTD
+      """.stripMargin,
+      ConvertStatement(
+        UnresolvedRelation(Seq("test", "tbl")),
+        Project(Seq(UnresolvedStar(None)),
+            UnresolvedRelation(Seq("test", "tbl"))
+        ),
+        Option("ORC"),
+        Option("ZSTD")
+      ))
+  }
+
+  test("convert table: convert table fileFormat with compressType where partitionFilter") {
+    parseCompare(
+      """
+        |CONVERT TABLE test.tbl
+        |FORMAT ORC
+        |WITH COMPRESS ZSTD
+        |WHERE P1=3
+      """.stripMargin,
+      ConvertStatement(
+        UnresolvedRelation(Seq("test", "tbl")),
+        Project(Seq(UnresolvedStar(None)),
+          Filter(
+            EqualTo(UnresolvedAttribute("P1"),
+              Literal(3)
+            ),
+            UnresolvedRelation(Seq("test", "tbl"))
+          )
+        ),
+        Option("ORC"),
+        Option("ZSTD")
+      ))
+  }
+
   test("delete from table: delete all") {
     parseCompare("DELETE FROM testcat.ns1.ns2.tbl",
       DeleteFromTable(

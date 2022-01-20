@@ -95,6 +95,7 @@ class HiveSessionStateBuilder(
       DetectAmbiguousSelfJoin +:
         new DetermineTableStats(session) +:
         RelationConversions(catalog) +:
+        ConvertPruning(session) +:
         PreprocessTableCreation(session) +:
         PreprocessTableInsertion +:
         DataSourceAnalysis +:

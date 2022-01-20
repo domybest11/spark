@@ -26,7 +26,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.planning._
-import org.apache.spark.sql.catalyst.plans.logical.{InsertIntoDir, InsertIntoStatement, LogicalPlan, ScriptTransformation, Statistics}
+import org.apache.spark.sql.catalyst.plans.logical.{ConvertStatement, InsertIntoDir, InsertIntoStatement, LogicalPlan, ScriptTransformation, Statistics}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Util.assertNoNullTypeInSchema
 import org.apache.spark.sql.execution._
@@ -147,6 +147,10 @@ class DetermineTableStats(session: SparkSession) extends Rule[LogicalPlan] {
     case i @ InsertIntoStatement(relation: HiveTableRelation, _, _, _, _, _)
       if DDLUtils.isHiveTable(relation.tableMeta) && relation.tableMeta.stats.isEmpty =>
       i.copy(table = hiveTableWithStats(relation))
+
+    case c @ ConvertStatement(relation: HiveTableRelation, _, _, _, _)
+      if DDLUtils.isHiveTable(relation.tableMeta) && relation.tableMeta.stats.isEmpty =>
+      c.copy(table = hiveTableWithStats(relation))
   }
 }
 
@@ -163,6 +167,10 @@ object HiveAnalysis extends Rule[LogicalPlan] {
         if DDLUtils.isHiveTable(r.tableMeta) =>
       InsertIntoHiveTable(r.tableMeta, partSpec, query, overwrite,
         ifPartitionNotExists, query.output.map(_.name))
+
+    case ConvertStatement(r: HiveTableRelation, query, fileFormat, compressType, updatePartitions)
+      if DDLUtils.isHiveTable(r.tableMeta) =>
+      ConvertHiveTableCommand(r.tableMeta, query, fileFormat, compressType, updatePartitions)
 
     case CreateTable(tableDesc, mode, None) if DDLUtils.isHiveTable(tableDesc) =>
       CreateTableCommand(tableDesc, ignoreIfExists = mode == SaveMode.Ignore)
@@ -219,6 +227,64 @@ case class RelationConversions(
       case relation: HiveTableRelation
           if DDLUtils.isHiveTable(relation.tableMeta) && isConvertible(relation) =>
         metastoreCatalog.convert(relation)
+
+      // Convert table
+      case ConvertStatement(r: HiveTableRelation, query, fileFormat, compressType, _)
+        if query.resolved =>
+        val formatRelation = if (fileFormat.isDefined) {
+          val serde = fileFormat.get.toLowerCase(Locale.ROOT) match {
+            case "text" => HiveSerDe.serdeMap("textfile")
+            case _ => HiveSerDe.serdeMap(fileFormat.get.toLowerCase(Locale.ROOT))
+          }
+
+          val fileStorage = CatalogStorageFormat.empty.copy(
+            inputFormat = serde.inputFormat,
+            outputFormat = serde.outputFormat,
+            serde = serde.serde)
+
+          if (r.tableMeta.storage.serde.isDefined &&
+            r.tableMeta.storage.serde.get.equals(fileStorage.serde.get)) {
+            r
+          } else {
+            val storage = r.tableMeta.storage.copy(
+              inputFormat = fileStorage.inputFormat,
+              outputFormat = fileStorage.outputFormat,
+              serde = fileStorage.serde)
+            if (fileStorage.outputFormat.get.endsWith("TextOutputFormat")) {
+              r.copy(tableMeta = r.tableMeta.copy(storage = storage))
+            } else {
+              r.copy(tableMeta = r.tableMeta.copy(storage = storage))
+            }
+          }
+        } else {
+          r
+        }
+        val relation = if (compressType.isDefined) {
+          val outputFormat = formatRelation.tableMeta.storage.outputFormat
+          val compressKey = outputFormat.getOrElse("").toLowerCase(Locale.ROOT) match {
+              case fileFormat if fileFormat.endsWith("parquetoutputformat") => "parquet.compression"
+              case fileFormat if fileFormat.endsWith("orcoutputformat") => "orc.compress"
+              case _ => ""
+          }
+
+          val originCompressType = formatRelation.tableMeta.properties
+            .getOrElse(compressKey, "").toUpperCase(Locale.ROOT)
+          if (!compressKey.equals("") && !originCompressType.equals(compressType.get)) {
+            val map: Map[String, String] = formatRelation.tableMeta.properties +
+              (compressKey -> compressType.get)
+            formatRelation.copy(tableMeta = formatRelation.tableMeta.copy(properties = map))
+          } else {
+            formatRelation
+          }
+        } else {
+          formatRelation
+        }
+
+        if (DDLUtils.isHiveTable(relation.tableMeta) && isConvertible(relation)) {
+          ConvertStatement(metastoreCatalog.convert(relation), query, fileFormat, compressType)
+        } else {
+          ConvertStatement(relation, query, fileFormat, compressType)
+        }
 
       // CTAS
       case CreateTable(tableDesc, mode, Some(query))
