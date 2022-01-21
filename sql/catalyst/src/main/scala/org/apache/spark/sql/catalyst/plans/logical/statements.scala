@@ -18,7 +18,7 @@
 package org.apache.spark.sql.catalyst.plans.logical
 
 import org.apache.spark.sql.catalyst.analysis.ViewType
-import org.apache.spark.sql.catalyst.catalog.{BucketSpec, FunctionResource}
+import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTablePartition, FunctionResource}
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.Attribute
 import org.apache.spark.sql.connector.catalog.TableChange.ColumnPosition
@@ -381,6 +381,19 @@ case class InsertIntoStatement(
     "IF NOT EXISTS is only valid in INSERT OVERWRITE")
   require(partitionSpec.values.forall(_.nonEmpty) || !ifPartitionNotExists,
     "IF NOT EXISTS is only valid with static partitions")
+
+  override def children: Seq[LogicalPlan] = query :: Nil
+}
+
+case class ConvertStatement(
+    table: LogicalPlan,
+    query: LogicalPlan,
+    fileFormat: Option[String],
+    compressType: Option[String],
+    updatePartitions: Seq[CatalogTablePartition] = Seq.empty) extends ParsedStatement {
+
+  require(fileFormat.isDefined || compressType.isDefined,
+    "ConvertFormat and CompressType can't all be null at same time")
 
   override def children: Seq[LogicalPlan] = query :: Nil
 }

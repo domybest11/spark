@@ -105,6 +105,10 @@ singleTableSchema
 
 statement
     : query                                                            #statementDefault
+    | CONVERT TABLE target=tableIdentifier
+        (convertFormat | compressType)  partitionClause?               #convertTable
+    | MERGE TABLE target=tableIdentifier
+        partitionClause?                                               #mergeTable
     | ctes? dmlStatementNoWith                                         #dmlStatement
     | USE NAMESPACE? multipartIdentifier                               #use
     | CREATE namespace (IF NOT EXISTS)? multipartIdentifier
@@ -297,6 +301,14 @@ unsupportedHiveNativeCommands
     | kw1=COMMIT
     | kw1=ROLLBACK
     | kw1=DFS
+    ;
+
+convertFormat
+    : FORMAT targetFormat=identifier (WITH compressType)?
+    ;
+
+compressType
+    : COMPRESS targetCompress=identifier
     ;
 
 createTableHeader
@@ -574,6 +586,10 @@ whereClause
     : WHERE booleanExpression
     ;
 
+partitionClause
+    : WHERE booleanExpressionSimple
+    ;
+
 havingClause
     : HAVING booleanExpression
     ;
@@ -770,6 +786,16 @@ booleanExpression
     | valueExpression predicate?                                   #predicated
     | left=booleanExpression operator=AND right=booleanExpression  #logicalBinary
     | left=booleanExpression operator=OR right=booleanExpression   #logicalBinary
+    ;
+
+booleanExpressionSimple
+    : querySimple                                                                    #logicalQuery
+    | left=booleanExpressionSimple operator=AND right=booleanExpressionSimple        #logicalBinarySimple
+    | left=booleanExpressionSimple operator=OR right=booleanExpressionSimple         #logicalBinarySimple
+    ;
+
+querySimple
+    : '('? multipartIdentifier comparisonOperator constant ')'?
     ;
 
 predicate
@@ -1049,8 +1075,10 @@ ansiNonReserved
     | COMMIT
     | COMPACT
     | COMPACTIONS
+    | COMPRESS
     | COMPUTE
     | CONCATENATE
+    | CONVERT
     | COST
     | CUBE
     | CURRENT
@@ -1273,6 +1301,8 @@ nonReserved
     | COMMIT
     | COMPACT
     | COMPACTIONS
+    | COMPRESS
+    | CONVERT
     | COMPUTE
     | CONCATENATE
     | CONSTRAINT
@@ -1520,9 +1550,11 @@ COMMENT: 'COMMENT';
 COMMIT: 'COMMIT';
 COMPACT: 'COMPACT';
 COMPACTIONS: 'COMPACTIONS';
+COMPRESS: 'COMPRESS';
 COMPUTE: 'COMPUTE';
 CONCATENATE: 'CONCATENATE';
 CONSTRAINT: 'CONSTRAINT';
+CONVERT: 'CONVERT';
 COST: 'COST';
 CREATE: 'CREATE';
 CROSS: 'CROSS';

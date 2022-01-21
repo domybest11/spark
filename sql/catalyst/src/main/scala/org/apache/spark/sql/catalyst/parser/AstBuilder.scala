@@ -118,6 +118,122 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
     query.optionalMap(ctx.ctes)(withCTE)
   }
 
+  /*
+  val tableIdent = visitMultipartIdentifier(ctx.multipartIdentifier)
+    val cols = Option(ctx.identifierList()).map(visitIdentifierList).getOrElse(Nil)
+    val partitionKeys = Option(ctx.partitionSpec).map(visitPartitionSpec).getOrElse(Map.empty)
+
+    if (ctx.EXISTS != null) {
+      operationNotAllowed("INSERT INTO ... IF NOT EXISTS", ctx)
+    }
+
+    (tableIdent, cols, partitionKeys, false)
+   */
+
+  override def visitConvertTable(ctx: ConvertTableContext): LogicalPlan = withOrigin(ctx) {
+    val tableIdent = visitTableIdentifier(ctx.target)
+    val unresolvedTable = UnresolvedRelation(tableIdent)
+    val partitionClause =
+      if (ctx.partitionClause() == null) {
+        None
+      } else {
+        Option(expression(ctx.partitionClause().booleanExpressionSimple()))
+      }
+
+    val tableWithFilter = partitionClause match {
+      case Some(expr) => Filter(expr, unresolvedTable)
+      case None => unresolvedTable
+    }
+
+    val query = Project(Seq(UnresolvedStar(None)), tableWithFilter)
+
+    val (convertFormat, compressType) = if (ctx.convertFormat() == null) {
+      if (ctx.compressType() == null) {
+        (None, None)
+      } else {
+        (None, Option(ctx.compressType().targetCompress.getText.toUpperCase(Locale.ROOT)))
+      }
+    } else {
+      if (ctx.convertFormat().compressType() == null) {
+        (Option(ctx.convertFormat().targetFormat.getText), None)
+      } else {
+        (Option(ctx.convertFormat().targetFormat.getText),
+          Option(ctx.convertFormat().compressType().targetCompress
+            .getText.toUpperCase(Locale.ROOT)))
+      }
+    }
+
+    ConvertStatement(unresolvedTable, query, convertFormat, compressType)
+  }
+
+  override def visitQuerySimple(ctx: QuerySimpleContext): Expression = withOrigin(ctx) {
+    val left = new UnresolvedAttribute(visitMultipartIdentifier(ctx.multipartIdentifier()))
+    val right = expression(ctx.constant())
+    val operator = ctx.comparisonOperator().getChild(0).asInstanceOf[TerminalNode]
+    operator.getSymbol.getType match {
+      case EQ =>
+        EqualTo(left, right)
+      case NSEQ =>
+        EqualNullSafe(left, right)
+      case NEQ | NEQJ =>
+        Not(EqualTo(left, right))
+      case LT =>
+        LessThan(left, right)
+      case LTE =>
+        LessThanOrEqual(left, right)
+      case GT =>
+        GreaterThan(left, right)
+      case GTE =>
+        GreaterThanOrEqual(left, right)
+    }
+  }
+
+  override def visitLogicalBinarySimple(
+     ctx: LogicalBinarySimpleContext): Expression = withOrigin(ctx) {
+    val expressionType = ctx.operator.getType
+    val expressionCombiner = expressionType match {
+      case AND => And.apply _
+      case OR => Or.apply _
+    }
+    // Collect all similar left hand contexts.
+    val contexts = ArrayBuffer(ctx.right)
+    var current = ctx.left
+    def collectContexts: Boolean = current match {
+      case lbc: LogicalBinarySimpleContext if lbc.operator.getType == expressionType =>
+        contexts += lbc.right
+        current = lbc.left
+        true
+      case _ =>
+        contexts += current
+        false
+    }
+
+    while (collectContexts) {
+      // No body - all updates take place in the collectContexts.
+    }
+    // Reverse the contexts to have them in the same sequence as in the SQL statement & turn them
+    // into expressions.
+    val expressions = contexts.reverseMap(expression)
+
+    // Create a balanced tree.
+    def reduceToExpressionTree(low: Int, high: Int): Expression = high - low match {
+      case 0 =>
+        expressions(low)
+      case 1 =>
+        expressionCombiner(expressions(low), expressions(high))
+      case x =>
+        val mid = low + x / 2
+        expressionCombiner(
+          reduceToExpressionTree(low, mid),
+          reduceToExpressionTree(mid + 1, high))
+    }
+    reduceToExpressionTree(0, expressions.size - 1)
+  }
+
+//  override def visitMergeTable(ctx: MergeTableContext): LogicalPlan = withOrigin(ctx) {
+//
+//  }
+
   override def visitDmlStatement(ctx: DmlStatementContext): AnyRef = withOrigin(ctx) {
     val dmlStmt = plan(ctx.dmlStatementNoWith)
     // Apply CTEs
@@ -3108,8 +3224,8 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
 
         case Some(query) =>
           CreateTableAsSelectStatement(
-            table, query, partitioning, bucketSpec, properties, provider, options, location, comment,
-            writeOptions = Map.empty, serdeInfo, external = external, ifNotExists = ifNotExists)
+            table, query, partitioning, bucketSpec, properties, provider, options, location,
+            comment, writeOptions = Map.empty, serdeInfo, external = external, ifNotExists = ifNotExists)
 
         case _ =>
           // Note: table schema includes both the table columns list and the partition columns
