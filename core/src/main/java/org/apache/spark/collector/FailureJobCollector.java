@@ -2,8 +2,12 @@ package org.apache.spark.collector;
 
 import org.apache.log4j.helpers.LogLog;
 import org.apache.spark.SparkConf;
+import org.apache.spark.metrics.event.LogErrorWrapEvent;
 import org.apache.spark.metrics.event.WrapEvent;
 import org.apache.spark.metrics.sink.KafkaSink;
+import org.apache.spark.util.ErrorRecord;
+import org.apache.spark.util.KafkaProducerUtil;
+import org.apache.spark.util.Utils;
 
 import java.util.Properties;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -122,6 +126,19 @@ public class FailureJobCollector<T extends WrapEvent>{
         }
         while (next != POISON_PILL) {
           kafkaSink.report(KafkaSink.METRIC_TOPIC, next);
+          if (next instanceof LogErrorWrapEvent &&
+                ((LogErrorWrapEvent)next).getMessage().startsWith("Error in query")) {
+            LogErrorWrapEvent event = (LogErrorWrapEvent) next;
+            ErrorRecord record = new ErrorRecord(
+                    event.getAppId(),
+                    event.getAppName(),
+                    "error",
+                    event.getTraceId(),
+                    Utils.getCurrentUserName(),
+                    event.getTimeStamp(),
+                    event.getMessage());
+            KafkaProducerUtil.report(record);
+          }
           next = logErrorQueue.take();
         }
       } catch (InterruptedException e) {
