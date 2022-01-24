@@ -75,7 +75,7 @@ trait OptimizeLayoutBeforeWriting extends Rule[LogicalPlan] {
             Sort(
               SortOrder(orderExpr.head, Ascending, NullsLast, Seq.empty) :: Nil,
               false,
-              RepartitionByZorder(orderExpr, plan, Some(conf.numShufflePartitions))
+              RepartitionByZorder(orderExpr, plan, None)
             )
           case ZorderBuildStrategy.DIRECT =>
             Sort(SortOrder(Zorder(orderExpr), Ascending, NullsLast, Seq.empty) :: Nil, true, plan)
@@ -111,7 +111,7 @@ case class OptimizeLayoutBeforeWritingDatasource() extends OptimizeLayoutBeforeW
 }
 
 case class OptimizeLayoutBeforeWritingHive() extends OptimizeLayoutBeforeWriting {
-  override def applyInternal(plan: LogicalPlan): LogicalPlan = {
+  override def applyInternal(plan: LogicalPlan): LogicalPlan = plan match {
     case insert: InsertIntoHiveTable
       if insert.query.resolved && insert.table.bucketSpec.isEmpty &&
         optimizeLayoutEnabled(insert.table.properties) =>
