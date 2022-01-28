@@ -26,7 +26,7 @@ import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.planning._
-import org.apache.spark.sql.catalyst.plans.logical.{ConvertStatement, InsertIntoDir, InsertIntoStatement, LogicalPlan, ScriptTransformation, Statistics}
+import org.apache.spark.sql.catalyst.plans.logical.{ConvertStatement, InsertIntoDir, InsertIntoStatement, LogicalPlan, MergeTableStatement, ScriptTransformation, Statistics}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogV2Util.assertNoNullTypeInSchema
 import org.apache.spark.sql.execution._
@@ -151,6 +151,10 @@ class DetermineTableStats(session: SparkSession) extends Rule[LogicalPlan] {
     case c @ ConvertStatement(relation: HiveTableRelation, _, _, _, _)
       if DDLUtils.isHiveTable(relation.tableMeta) && relation.tableMeta.stats.isEmpty =>
       c.copy(table = hiveTableWithStats(relation))
+
+    case c @ MergeTableStatement(relation: HiveTableRelation, _)
+      if DDLUtils.isHiveTable(relation.tableMeta) && relation.tableMeta.stats.isEmpty =>
+      c.copy(table = hiveTableWithStats(relation))
   }
 }
 
@@ -171,6 +175,10 @@ object HiveAnalysis extends Rule[LogicalPlan] {
     case ConvertStatement(r: HiveTableRelation, query, fileFormat, compressType, updatePartitions)
       if DDLUtils.isHiveTable(r.tableMeta) =>
       ConvertHiveTableCommand(r.tableMeta, query, fileFormat, compressType, updatePartitions)
+
+    case MergeTableStatement(r: HiveTableRelation, query)
+      if DDLUtils.isHiveTable(r.tableMeta) =>
+      MergeHiveTableCommand(r.tableMeta, query)
 
     case CreateTable(tableDesc, mode, None) if DDLUtils.isHiveTable(tableDesc) =>
       CreateTableCommand(tableDesc, ignoreIfExists = mode == SaveMode.Ignore)
@@ -228,6 +236,16 @@ case class RelationConversions(
           if DDLUtils.isHiveTable(relation.tableMeta) && isConvertible(relation) =>
         metastoreCatalog.convert(relation)
 
+      // Merge table
+      case MergeTableStatement(r: HiveTableRelation, query)
+        if query.resolved && isConvertible(r) =>
+        val hiveRelation = r.copy(tableMeta = r.tableMeta.copy(provider = Some("hive")))
+        if (hiveRelation.isPartitioned) {
+          MergeTableStatement(metastoreCatalog.convert(hiveRelation), query)
+        } else {
+          MergeTableStatement(hiveRelation, query)
+        }
+
       // Convert table
       case ConvertStatement(r: HiveTableRelation, query, fileFormat, compressType, _)
         if query.resolved =>
@@ -280,10 +298,14 @@ case class RelationConversions(
           formatRelation
         }
 
-        if (DDLUtils.isHiveTable(relation.tableMeta) && isConvertible(relation)) {
-          ConvertStatement(metastoreCatalog.convert(relation), query, fileFormat, compressType)
+        val hiveRelation = relation.copy(tableMeta = relation.tableMeta.copy(
+          provider = Some("hive")))
+
+        if (hiveRelation.isPartitioned && DDLUtils.isHiveTable(hiveRelation.tableMeta) &&
+          isConvertible(hiveRelation)) {
+          ConvertStatement(metastoreCatalog.convert(hiveRelation), query, fileFormat, compressType)
         } else {
-          ConvertStatement(relation, query, fileFormat, compressType)
+          ConvertStatement(hiveRelation, query, fileFormat, compressType)
         }
 
       // CTAS

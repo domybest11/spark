@@ -1148,6 +1148,19 @@ class Analyzer(override val catalogManager: CatalogManager)
           case other => convert.copy(table = other)
         }
 
+      case mergeTable @ MergeTableStatement(table, _) if mergeTable.query.resolved =>
+        val relation = table match {
+          case u @ UnresolvedRelation(_, _, false) =>
+            lookupRelation(u.multipartIdentifier, u.options, false).getOrElse(u)
+          case other => other
+        }
+
+        EliminateSubqueryAliases(relation) match {
+          case v: View =>
+            table.failAnalysis(s"Convert a view is not allowed. View: ${v.desc.identifier}.")
+          case other => mergeTable.copy(table = other)
+        }
+
       case u: UnresolvedRelation =>
         lookupRelation(u.multipartIdentifier, u.options, u.isStreaming)
           .map(resolveViews).getOrElse(u)
