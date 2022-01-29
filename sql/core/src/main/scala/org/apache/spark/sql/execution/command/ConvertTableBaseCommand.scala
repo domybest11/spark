@@ -56,8 +56,12 @@ abstract class ConvertTableBaseCommand extends DataWritingCommand {
       val map: Map[String, String] = if ("".equals(partitionCompressKey)) {
         partitionInfo.parameters
       } else {
-        partitionInfo.parameters +
-          (partitionCompressKey -> catalogTable.properties(partitionCompressKey))
+        if (catalogTable.properties.contains(partitionCompressKey)) {
+          partitionInfo.parameters +
+            (partitionCompressKey -> catalogTable.properties(partitionCompressKey))
+        } else {
+          partitionInfo.parameters
+        }
       }
       partitionInfo.copy(storage = partition.storage, parameters = map)
     }
