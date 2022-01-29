@@ -35,6 +35,7 @@ import org.apache.spark.TaskContext
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.execution.datasources._
@@ -152,11 +153,14 @@ class OrcFileFormat
       requiredSchema: StructType,
       filters: Seq[Filter],
       options: Map[String, String],
-      hadoopConf: Configuration): (PartitionedFile) => Iterator[InternalRow] = {
+      hadoopConf: Configuration,
+      tableOpt: Option[CatalogTable],
+      partitionOpt: Option[CatalogTablePartition]): (PartitionedFile) => Iterator[InternalRow] = {
 
     val resultSchema = StructType(requiredSchema.fields ++ partitionSchema.fields)
     val sqlConf = sparkSession.sessionState.conf
-    val enableVectorizedReader = supportBatch(sparkSession, resultSchema)
+    val enableVectorizedReader = supportBatch(sparkSession, resultSchema) &&
+      hadoopConf.getBoolean("vectorized.reader.enable", true)
     val capacity = sqlConf.orcVectorizedReaderBatchSize
 
     OrcConf.IS_SCHEMA_EVOLUTION_CASE_SENSITIVE.setBoolean(hadoopConf, sqlConf.caseSensitiveAnalysis)

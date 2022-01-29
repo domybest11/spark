@@ -24,9 +24,9 @@ import scala.collection.mutable.HashMap
 import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.fs.Path
 
-import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.{RDD, UnionRDD}
 import org.apache.spark.sql.catalyst.{InternalRow, TableIdentifier}
-import org.apache.spark.sql.catalyst.catalog.BucketSpec
+import org.apache.spark.sql.catalyst.catalog.{BucketSpec, CatalogTable, CatalogTablePartition}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.plans.QueryPlan
 import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partitioning, UnknownPartitioning}
@@ -168,13 +168,14 @@ case class FileSourceScanExec(
     optionalNumCoalescedBuckets: Option[Int],
     dataFilters: Seq[Expression],
     tableIdentifier: Option[TableIdentifier],
+    table: Option[CatalogTable] = None,
     disableBucketedScan: Boolean = false)
   extends DataSourceScanExec {
 
   // Note that some vals referring the file-based relation are lazy intentionally
   // so that this plan can be canonicalized on executor side too. See SPARK-23731.
   override lazy val supportsColumnar: Boolean = {
-    relation.fileFormat.supportBatch(relation.sparkSession, schema)
+    relation.fileFormat.supportBatch(relation.sparkSession, schema) && supportVectorized
   }
 
   private lazy val needsUnsafeRowConversion: Boolean = {
@@ -206,6 +207,9 @@ case class FileSourceScanExec(
 
   private def isDynamicPruningFilter(e: Expression): Boolean =
     e.find(_.isInstanceOf[PlanExpression[_]]).isDefined
+
+  private lazy val supportVectorized: Boolean =
+    dynamicallySelectedPartitions.filterNot(isSourceFormat).size == 0
 
   @transient lazy val selectedPartitions: Array[PartitionDirectory] = {
     val optimizerMetadataTimeNs = relation.location.metadataOpsTimeNs.getOrElse(0L)
@@ -404,14 +408,16 @@ case class FileSourceScanExec(
         requiredSchema = requiredSchema,
         filters = pushedDownFilters,
         options = relation.options,
-        hadoopConf = relation.sparkSession.sessionState.newHadoopConfWithOptions(relation.options))
+        hadoopConf = relation.sparkSession.sessionState.newHadoopConfWithOptions(
+          relation.options + ("vectorized.reader.enable" -> supportVectorized.toString)),
+        table,
+        None)
 
-    val readRDD = if (bucketedScan) {
-      createBucketedReadRDD(relation.bucketSpec.get, readFile, dynamicallySelectedPartitions,
-        relation)
-    } else {
-      createNonBucketedReadRDD(readFile, dynamicallySelectedPartitions, relation)
-    }
+    val readRDD = createReadRDD(
+      relation.bucketSpec,
+      readFile,
+      dynamicallySelectedPartitions,
+      relation)
     sendDriverMetrics()
     readRDD
   }
@@ -515,6 +521,67 @@ case class FileSourceScanExec(
   }
 
   override val nodeNamePrefix: String = "File"
+
+  private def createReadRDD(
+      bucketSpec: Option[BucketSpec],
+      tableReadFile: (PartitionedFile) => Iterator[InternalRow],
+      selectedPartitions: Array[PartitionDirectory],
+      fsRelation: HadoopFsRelation): RDD[InternalRow] = {
+    if (bucketedScan) {
+      // TODO: support read different file format partitions with bucket table.
+      createBucketedReadRDD(bucketSpec.get, tableReadFile, selectedPartitions, fsRelation)
+    } else {
+      val tablePartitions = selectedPartitions.filter(isSourceFormat)
+      val extraPartitions = selectedPartitions.filterNot(isSourceFormat)
+      if (extraPartitions.length > 0) {
+        val partReadRDDs = extraPartitions.map { part =>
+          val extraReadFile = createExtraReadFile(
+            part.partition.get.storage.inputFormat.get,
+            part.partition.get)
+          createNonBucketedReadRDD(extraReadFile, Array(part), fsRelation)
+        } ++ Seq(createNonBucketedReadRDD(tableReadFile, tablePartitions, fsRelation))
+        new UnionRDD(fsRelation.sparkSession.sparkContext, partReadRDDs)
+      } else {
+        createNonBucketedReadRDD(tableReadFile, tablePartitions, fsRelation)
+      }
+    }
+  }
+
+  private def isSourceFormat(p: PartitionDirectory): Boolean = {
+    val format = if (p.partition.isDefined && p.partition.get.storage.inputFormat.isDefined) {
+      p.partition.get.storage.inputFormat.get
+    } else ""
+    format.contains(relation.toString) || format.equals("")
+  }
+
+  private def createExtraReadFile(
+      format: String,
+      partition: CatalogTablePartition): (PartitionedFile) => Iterator[InternalRow] = {
+    val fileFormatClass = if (format.contains("parquet")) {
+      "org.apache.spark.sql.execution.datasources.parquet.ParquetFileFormat"
+    } else if (format.equals("org.apache.hadoop.mapred.TextInputFormat")) {
+      "org.apache.spark.sql.hive.text.HiveTextFileFormat"
+    } else {
+      if (SQLConf.get.getConf(SQLConf.ORC_IMPLEMENTATION) == "native") {
+        "org.apache.spark.sql.execution.datasources.orc.OrcFileFormat"
+      } else {
+        "org.apache.spark.sql.hive.orc.OrcFileFormat"
+      }
+    }
+    val fileFormat = Utils.classForName(fileFormatClass)
+      .getConstructor().newInstance().asInstanceOf[FileFormat]
+    fileFormat.buildReaderWithPartitionValues(
+      sparkSession = relation.sparkSession,
+      dataSchema = relation.dataSchema,
+      partitionSchema = relation.partitionSchema,
+      requiredSchema = requiredSchema,
+      filters = pushedDownFilters,
+      options = partition.storage.properties,
+      hadoopConf = relation.sparkSession.sessionState.newHadoopConfWithOptions(
+        relation.options + ("vectorized.reader.enable" -> supportVectorized.toString)),
+      table,
+      Some(partition))
+  }
 
   /**
    * Create an RDD for bucketed reads.
@@ -631,6 +698,7 @@ case class FileSourceScanExec(
       optionalBucketSet,
       optionalNumCoalescedBuckets,
       QueryPlan.normalizePredicates(dataFilters, output),
+      None,
       None,
       disableBucketedScan)
   }

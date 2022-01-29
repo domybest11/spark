@@ -537,10 +537,8 @@ class SqlMarioListener(sc: SparkContext,
     val SparkListenerSQLExecutionStart(executionId, description, details,
     physicalPlanDescription, sparkPlanInfo, time, properties, sqlText, userName) = event
     val now = System.nanoTime()
-    if (userName != null) {
-      user = userName
-    }
-    logInfo("userName: " + user)
+    val newUser = if (userName != null) userName else user
+    logInfo("userName: " + newUser)
     val startTime = if (time > 0) Some(new Date(time)) else Some(new Date(now))
     val sqlExecution = new SqlExecution(executionId, description, details,
       physicalPlanDescription, sparkPlanInfo, startTime, sqlText)
@@ -550,7 +548,7 @@ class SqlMarioListener(sc: SparkContext,
       appName,
       attemptId,
       traceId,
-      user,
+      newUser,
       executionId,
       "RUNNING",
       sqlText,
@@ -570,7 +568,7 @@ class SqlMarioListener(sc: SparkContext,
         appName,
         attemptId,
         traceId,
-        user,
+        "",
         execution.executionId,
         "COMPLETE",
         execution.sqlText,

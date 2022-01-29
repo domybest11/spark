@@ -367,8 +367,8 @@ class HadoopTableReader(
   }
 
   private def createOldHadoopRDD(
-                                  inputFormatClass: Class[oldInputClass[Writable, Writable]],
-                                  initializeJobConfFunc: JobConf => Unit): RDD[Writable] = {
+      inputFormatClass: Class[oldInputClass[Writable, Writable]],
+      initializeJobConfFunc: JobConf => Unit): RDD[Writable] = {
     val rdd = new HadoopRDD(
       sparkSession.sparkContext,
       _broadcastedHadoopConf.asInstanceOf[Broadcast[SerializableConfiguration]],
@@ -416,8 +416,8 @@ class HadoopTableReader(
   }
 
   private def createNewHadoopRDD(
-                                  inputFormatClass: Class[newInputClass[Writable, Writable]],
-                                  jobConf: JobConf): RDD[Writable] = {
+      inputFormatClass: Class[newInputClass[Writable, Writable]],
+      jobConf: JobConf): RDD[Writable] = {
     val rdd = new NewHadoopRDD(
       sparkSession.sparkContext,
       inputFormatClass,

@@ -72,14 +72,14 @@ abstract class PartitioningAwareFileIndex(
       isDataPath(f.getPath) && f.getLen > 0
     }
     val selectedPartitions = if (partitionSpec().partitionColumns.isEmpty) {
-      PartitionDirectory(InternalRow.empty, allFiles().filter(isNonEmptyFile)) :: Nil
+      PartitionDirectory(InternalRow.empty, allFiles().filter(isNonEmptyFile), None) :: Nil
     } else {
       if (recursiveFileLookup) {
         throw new IllegalArgumentException(
           "Datasource with partition do not allow recursive file loading.")
       }
       prunePartitions(partitionFilters, partitionSpec()).map {
-        case PartitionPath(values, path) =>
+        case PartitionPath(values, path, partition) =>
           val files: Seq[FileStatus] = leafDirToChildrenFiles.get(path) match {
             case Some(existingDir) =>
               // Directory has children files in it, return them
@@ -89,7 +89,7 @@ abstract class PartitioningAwareFileIndex(
               // Directory does not exist, or has no children files
               Nil
           }
-          PartitionDirectory(values, files)
+          PartitionDirectory(values, files, partition)
       }
     }
     logTrace("Selected files after partition pruning:\n\t" + selectedPartitions.mkString("\n\t"))
@@ -178,7 +178,7 @@ abstract class PartitioningAwareFileIndex(
       })
 
       val selected = partitions.filter {
-        case PartitionPath(values, _) => boundPredicate.eval(values)
+        case PartitionPath(values, _, _) => boundPredicate.eval(values)
       }
       logInfo {
         val total = partitions.length

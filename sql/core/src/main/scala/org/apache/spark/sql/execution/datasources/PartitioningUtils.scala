@@ -31,6 +31,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.analysis.TypeCoercion
+import org.apache.spark.sql.catalyst.catalog.CatalogTablePartition
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.{Attribute, Cast, Literal}
 import org.apache.spark.sql.catalyst.util.{CaseInsensitiveMap, DateFormatter, DateTimeUtils, TimestampFormatter}
@@ -48,7 +49,10 @@ object PartitionPath {
  * Holds a directory in a partitioned collection of files as well as the partition values
  * in the form of a Row.  Before scanning, the files at `path` need to be enumerated.
  */
-case class PartitionPath(values: InternalRow, path: Path)
+case class PartitionPath(
+    values: InternalRow,
+    path: Path,
+    partition: Option[CatalogTablePartition] = None)
 
 case class PartitionSpec(
     partitionColumns: StructType,

@@ -24,6 +24,7 @@ import org.apache.hadoop.mapreduce.Job
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition}
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection
 import org.apache.spark.sql.internal.SQLConf
@@ -125,7 +126,9 @@ trait FileFormat {
       requiredSchema: StructType,
       filters: Seq[Filter],
       options: Map[String, String],
-      hadoopConf: Configuration): PartitionedFile => Iterator[InternalRow] = {
+      hadoopConf: Configuration,
+      tableOpt: Option[CatalogTable],
+      partitionOpt: Option[CatalogTablePartition]): PartitionedFile => Iterator[InternalRow] = {
     val dataReader = buildReader(
       sparkSession, dataSchema, partitionSchema, requiredSchema, filters, options, hadoopConf)
 
