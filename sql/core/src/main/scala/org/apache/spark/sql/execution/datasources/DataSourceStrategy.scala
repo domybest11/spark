@@ -34,7 +34,7 @@ import org.apache.spark.sql.catalyst.encoders.RowEncoder
 import org.apache.spark.sql.catalyst.expressions
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{ConvertStatement, InsertIntoDir, InsertIntoStatement, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{ConvertStatement, InsertIntoDir, InsertIntoStatement, LogicalPlan, MergeTableStatement, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.catalyst.streaming.StreamingRelationV2
 import org.apache.spark.sql.connector.catalog.SupportsRead
@@ -241,6 +241,14 @@ object DataSourceAnalysis extends Rule[LogicalPlan] with CastSupport {
       }
       ConvertDataSourceTableCommand(table.get, query, fileFormat, compressType,
         updatePartitions, Some(t))
+
+    case MergeTableStatement(
+    LogicalRelation(t: HadoopFsRelation, _, table, _), query) =>
+      // Sanity check
+      if (t.location.rootPaths.size != 1) {
+        throw new AnalysisException("Can only write data to relations with a single path.")
+      }
+      MergeDataSourceTableCommand(table.get, query, Some(t))
   }
 }
 
@@ -299,6 +307,13 @@ class FindDataSourceTable(sparkSession: SparkSession) extends Rule[LogicalPlan] 
 //      c.copy(table = readDataSourceTable(tableMeta, options))
 
     case c @ ConvertStatement(UnresolvedCatalogRelation(tableMeta, _, false), _, _, _, _) =>
+      c.copy(table = DDLUtils.readHiveTable(tableMeta))
+
+//    case c @ MergeTableStatement(UnresolvedCatalogRelation(tableMeta, _, false), _)
+//      if DDLUtils.isDatasourceTable(tableMeta) =>
+//      c.copy(table = DDLUtils.readHiveTable(tableMeta))
+
+    case c @ MergeTableStatement(UnresolvedCatalogRelation(tableMeta, _, false), _) =>
       c.copy(table = DDLUtils.readHiveTable(tableMeta))
 
     case UnresolvedCatalogRelation(tableMeta, options, false)

@@ -27,9 +27,9 @@ import org.apache.spark.sql.catalyst.planning.ScanOperation
 import org.apache.spark.sql.catalyst.plans.logical.{Limit, LogicalPlan, RebalancePartitions, Repartition, RepartitionByExpression, Sort, Union}
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command.{CreateDataSourceTableAsSelectCommand, DataWritingCommand}
-import org.apache.spark.sql.execution.datasources.InsertIntoHadoopFsRelationCommand
+import org.apache.spark.sql.execution.datasources.{ConvertDataSourceTableCommand, InsertIntoHadoopFsRelationCommand, MergeDataSourceTableCommand}
 import org.apache.spark.sql.hive.RepartitionBeforeWriteHelper.{canInsertRebalancePartitions, createExtraExpression}
-import org.apache.spark.sql.hive.execution.{CreateHiveTableAsSelectCommand, InsertIntoHiveDirCommand, InsertIntoHiveTable, OptimizedCreateHiveTableAsSelectCommand}
+import org.apache.spark.sql.hive.execution.{ConvertHiveTableCommand, CreateHiveTableAsSelectCommand, InsertIntoHiveDirCommand, InsertIntoHiveTable, MergeHiveTableCommand, OptimizedCreateHiveTableAsSelectCommand}
 import org.apache.spark.sql.internal.{SQLConf, StaticSQLConf}
 
 /**
@@ -132,6 +132,22 @@ case class RebalancePartitionBeforeWriteTable(session: SparkSession) extends Rul
 
     case o @ CreateDataSourceTableAsSelectCommand(table, _, query, _)
         if query.resolved && canInsertRebalancePartitions(query) =>
+      applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
+
+    case o @ MergeHiveTableCommand(table, query, _)
+      if query.resolved && canInsertRebalancePartitions(query) =>
+      applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
+
+    case o @ MergeDataSourceTableCommand(table, query, _)
+      if query.resolved && canInsertRebalancePartitions(query) =>
+      applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
+
+    case o @ ConvertHiveTableCommand(table, query, _, _, _, _)
+      if query.resolved && canInsertRebalancePartitions(query) =>
+      applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
+
+    case o @ ConvertDataSourceTableCommand(table, query, _, _, _, _)
+      if query.resolved && canInsertRebalancePartitions(query) =>
       applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
 
     case _ => plan

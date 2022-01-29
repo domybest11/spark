@@ -173,6 +173,7 @@ case class ConvertPruning(session: SparkSession) extends Rule[LogicalPlan] {
           }
           updatePartition
       }
+
       updatePartitions = prunedPartition
       val filterExpression = prunedPartition.map{
         partition =>

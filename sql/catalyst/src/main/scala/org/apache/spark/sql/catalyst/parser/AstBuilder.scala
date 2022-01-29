@@ -166,6 +166,25 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
     ConvertStatement(unresolvedTable, query, convertFormat, compressType)
   }
 
+  override def visitMergeTable(ctx: MergeTableContext): LogicalPlan = withOrigin(ctx) {
+    val tableIdent = visitTableIdentifier(ctx.target)
+    val unresolvedTable = UnresolvedRelation(tableIdent)
+    val partitionClause =
+      if (ctx.partitionClause() == null) {
+        None
+      } else {
+        Option(expression(ctx.partitionClause().booleanExpressionSimple()))
+      }
+
+    val tableWithFilter = partitionClause match {
+      case Some(expr) => Filter(expr, unresolvedTable)
+      case None => unresolvedTable
+    }
+
+    val query = Project(Seq(UnresolvedStar(None)), tableWithFilter)
+    MergeTableStatement(unresolvedTable, query)
+  }
+
   override def visitQuerySimple(ctx: QuerySimpleContext): Expression = withOrigin(ctx) {
     val left = new UnresolvedAttribute(visitMultipartIdentifier(ctx.multipartIdentifier()))
     val right = expression(ctx.constant())
@@ -230,9 +249,6 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
     reduceToExpressionTree(0, expressions.size - 1)
   }
 
-//  override def visitMergeTable(ctx: MergeTableContext): LogicalPlan = withOrigin(ctx) {
-//
-//  }
 
   override def visitDmlStatement(ctx: DmlStatementContext): AnyRef = withOrigin(ctx) {
     val dmlStmt = plan(ctx.dmlStatementNoWith)

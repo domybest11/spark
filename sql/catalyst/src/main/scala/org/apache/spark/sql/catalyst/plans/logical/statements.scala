@@ -398,6 +398,13 @@ case class ConvertStatement(
   override def children: Seq[LogicalPlan] = query :: Nil
 }
 
+case class MergeTableStatement(
+    table: LogicalPlan,
+    query: LogicalPlan) extends ParsedStatement {
+
+  override def children: Seq[LogicalPlan] = query :: Nil
+}
+
 /**
  * A SHOW TABLE EXTENDED statement, as parsed from SQL.
  */
