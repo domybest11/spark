@@ -235,16 +235,6 @@ case class TaskKilled(
 
 /**
  * :: DeveloperApi ::
- * Task was killed intentionally and needs to be rescheduled.
- */
-@DeveloperApi
-case object TaskKilled extends TaskFailedReason {
-  override def toErrorString: String = "TaskKilled (killed intentionally)"
-  override def countTowardsTaskFailures: Boolean = false
-}
-
-/**
- * :: DeveloperApi ::
  * Task requested the driver to commit, but was denied.
  */
 @DeveloperApi
