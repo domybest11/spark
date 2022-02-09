@@ -32,8 +32,12 @@ import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.connector.catalog.CatalogManager
 import org.apache.spark.sql.execution._
+import org.apache.spark.sql.execution.datasources.BasicPartitionStats
+import org.apache.spark.sql.internal.SQLConf.{SAVE_WRITE_PARTITIONS_STATS_ENABLED, SAVE_WRITE_PARTITIONS_STATS_SIZE}
 import org.apache.spark.sql.streaming.StreamingQueryManager
 import org.apache.spark.sql.util.ExecutionListenerManager
+
+import scala.collection.mutable
 
 /**
  * A class that holds all session-specific state in a given [[SparkSession]].
@@ -90,6 +94,32 @@ private[sql] class SessionState(
   // The streamingQueryManager is lazy to avoid creating a StreamingQueryManager for each session
   // when connecting to ThriftServer.
   lazy val streamingQueryManager: StreamingQueryManager = streamingQueryManagerBuilder()
+
+  private lazy val updatedPartitionsWithStats =
+    mutable.HashMap[String, Map[String, BasicPartitionStats]]()
+
+  def addPartitionsStats(
+      table: String,
+      partitionsWithStats: Map[String, BasicPartitionStats]): Unit = {
+    if (conf.getConf(SAVE_WRITE_PARTITIONS_STATS_ENABLED)) {
+      if (updatedPartitionsWithStats.size < conf.getConf(SAVE_WRITE_PARTITIONS_STATS_SIZE)) {
+        val maybePartitionsWithStats = updatedPartitionsWithStats.get(table)
+        if (maybePartitionsWithStats.isDefined) {
+          updatedPartitionsWithStats(table) = maybePartitionsWithStats.get ++ partitionsWithStats
+        } else {
+          updatedPartitionsWithStats(table) = partitionsWithStats
+        }
+      } else {
+        updatedPartitionsWithStats.clear()
+        updatedPartitionsWithStats(table) = partitionsWithStats
+      }
+    }
+  }
+
+  def getAndRemovePartitionsStatsByTable(
+      tableName: String): Option[Map[String, BasicPartitionStats]] = {
+    updatedPartitionsWithStats.remove(tableName)
+  }
 
   def catalogManager: CatalogManager = analyzer.catalogManager
 

@@ -3217,6 +3217,29 @@ object SQLConf {
       .checkValue(_ > 0, "advisoryRebalancePartitionSizeInBytes must be positive")
       .createWithDefaultString("512MB")
 
+  val SAVE_WRITE_PARTITIONS_STATS_ENABLED =
+    buildConf("spark.sql.saveWritePartitionStats.enabled")
+      .doc("When true, save sql write partitions stats")
+      .version("3.1.0")
+      .booleanConf
+      .createWithDefault(false)
+
+  val SAVE_WRITE_PARTITIONS_STATS_SIZE =
+    buildConf("spark.sql.saveWritePartitionStats.size")
+      .doc("The max size of table which can save of write partitions stats " +
+        s"when $SAVE_WRITE_PARTITIONS_STATS_ENABLED is true")
+      .version("3.1.0")
+      .intConf
+      .checkValue(_ >= 0, "The value must be non-negative.")
+      .createWithDefault(10)
+
+  val SEND_EXPLAIN_SQL_EVENT_ENABLED =
+    buildConf("spark.sql.sendExplainSqlEvent.enabled")
+      .doc("When true, send explain sql end event.")
+      .version("3.1.0")
+      .booleanConf
+      .createWithDefault(false)
+
   /**
    * Holds information about keys that have been deprecated.
    *

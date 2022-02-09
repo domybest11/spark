@@ -30,6 +30,8 @@ import org.apache.spark.sql.connector.ExternalCommandRunner
 import org.apache.spark.sql.execution.{ExplainMode, LeafExecNode, SparkPlan, UnaryExecNode}
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.sql.execution.streaming.IncrementalExecution
+import org.apache.spark.sql.execution.ui.SparkListenerSQLExecutionEnd
+import org.apache.spark.sql.internal.SQLConf.SEND_EXPLAIN_SQL_EVENT_ENABLED
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -155,7 +157,18 @@ case class ExplainCommand(
 
   // Run through the optimizer to generate the physical plan.
   override def run(sparkSession: SparkSession): Seq[Row] = try {
-    val outputString = sparkSession.sessionState.executePlan(logicalPlan).explainString(mode)
+    val startTime = System.nanoTime()
+    val queryExecution = sparkSession.sessionState.executePlan(logicalPlan)
+    val endTime = System.nanoTime()
+    if (conf.getConf(SEND_EXPLAIN_SQL_EVENT_ENABLED)) {
+      val event = SparkListenerSQLExecutionEnd(queryExecution.id, System.currentTimeMillis())
+      event.executionName = Some("explain")
+      event.duration = endTime - startTime
+      event.qe = queryExecution
+      event.executionFailure = None
+      sparkSession.sparkContext.listenerBus.post(event)
+    }
+    val outputString = queryExecution.explainString(mode)
     Seq(Row(outputString))
   } catch { case cause: TreeNodeException[_] =>
     ("Error occurred during query planning: \n" + cause.getMessage).split("\n").map(Row(_))

@@ -261,7 +261,12 @@ case class InsertIntoHadoopFsRelationCommand(
             }
             throw cause
         }
-
+      if (catalogTable.isDefined) {
+        val identifier = catalogTable.get.identifier
+        val tableName = identifier.database.getOrElse(
+          sparkSession.catalog.currentDatabase) + "." + identifier.table
+        sparkSession.sessionState.addPartitionsStats(tableName, updatedPartitionsWithStats)
+      }
       var updatedPartitionPaths = updatedPartitionsWithStats.keySet
       logInfo("updated partition paths " + updatedPartitionPaths.mkString(","))
       logInfo("updated partition total " + updatedPartitionPaths.size)
