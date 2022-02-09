@@ -281,6 +281,9 @@ case class InsertIntoHiveTable(
         if (partitionStatsEnabled) {
           updateDynamicPartitionStats(externalCatalog, updatedPartitions, partitionStats)
         }
+        val tableName = table.identifier.database.getOrElse(
+          sparkSession.catalog.currentDatabase) + "." + table.identifier.table
+        sparkSession.sessionState.addPartitionsStats(tableName, writtenParts)
       } else {
         // scalastyle:off
         // ifNotExists is only valid with static partition, refer to
@@ -366,6 +369,10 @@ case class InsertIntoHiveTable(
                   table.database,
                   table.identifier.table,
                   Seq(updatedPartition.get.copy(parameters = newProps)))
+                val part = updatedPartition.get.spec.map { case (k, v) => s"$k=$v" }.mkString("/")
+                val tableName = table.identifier.database.getOrElse(
+                  sparkSession.catalog.currentDatabase) + "." + table.identifier.table
+                sparkSession.sessionState.addPartitionsStats(tableName, Map(part -> stat))
               }
             } catch {
               case e: Exception => logError("Update partitions statistics error", e)
