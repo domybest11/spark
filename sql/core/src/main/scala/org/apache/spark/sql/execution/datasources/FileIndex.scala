@@ -20,6 +20,7 @@ package org.apache.spark.sql.execution.datasources
 import org.apache.hadoop.fs._
 
 import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.catalyst.catalog.CatalogTablePartition
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.types.StructType
 
@@ -27,7 +28,10 @@ import org.apache.spark.sql.types.StructType
  * A collection of data files from a partitioned relation, along with the partition values in the
  * form of an [[InternalRow]].
  */
-case class PartitionDirectory(values: InternalRow, files: Seq[FileStatus])
+case class PartitionDirectory(
+    values: InternalRow,
+    files: Seq[FileStatus],
+    partition: Option[CatalogTablePartition])
 
 /**
  * An interface for objects capable of enumerating the root paths of a relation as well as the

@@ -73,6 +73,35 @@ abstract class SQLQuerySuiteBase extends QueryTest with SQLTestUtils with TestHi
   import hiveContext._
   import spark.implicits._
 
+  test("Support different partition input format on one table") {
+    withTempDatabase { db =>
+      Seq("ORC", "Parquet").foreach { format =>
+        withTable(s"$db.a") {
+          sql(s"CREATE TABLE $db.a(c INT) PARTITIONED BY(p STRING) " +
+            s"ROW FORMAT DELIMITED FIELDS TERMINATED BY ' ' " +
+            s"TBLPROPERTIES (parquet.compression='gzip', orc.compress='zlib') " +
+            s"stored as textfile")
+          sql(s"INSERT OVERWRITE TABLE $db.a PARTITION(p = 'p1') VALUES(1)")
+          sql(s"INSERT OVERWRITE TABLE $db.a PARTITION(p = 'p2') VALUES(2)")
+          sql(s"CONVERT TABLE $db.a FORMAT $format where p = 'p2'")
+          sql(s"INSERT OVERWRITE TABLE $db.a PARTITION(p = 'p3') VALUES(3)")
+          // Run Hive
+          withSQLConf("spark.sql.hive.convertMetastoreParquet" -> "false",
+            "spark.sql.hive.convertMetastoreOrc" -> "false") {
+            checkAnswer(sql(s"select c, p from $db.a"),
+              Seq(Row(1, "p1"), Row(2, "p2"), Row(3, "p3")))
+          }
+          // Run DataSource
+          withSQLConf("spark.sql.hive.convertMetastoreParquet" -> "true",
+            "spark.sql.hive.convertMetastoreOrc" -> "true") {
+            checkAnswer(sql(s"select c, p from $db.a"),
+              Seq(Row(1, "p1"), Row(2, "p2"), Row(3, "p3")))
+          }
+        }
+      }
+    }
+  }
+
   test("query global temp view") {
     val df = Seq(1).toDF("i1")
     df.createGlobalTempView("tbl1")

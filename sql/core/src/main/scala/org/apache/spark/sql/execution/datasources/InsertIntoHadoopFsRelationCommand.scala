@@ -214,7 +214,9 @@ case class InsertIntoHadoopFsRelationCommand(
                   val stat = partitionStats(p.spec)
                   val newProps = p.parameters ++
                     Map("totalSize" -> stat.numBytes.toString, "numRows" -> stat.numRows.toString)
-                  p.copy(parameters = newProps)
+                  p.copy(
+                    parameters = newProps,
+                    storage = catalogTable.get.storage.copy(locationUri = p.storage.locationUri))
                 })
               if (updatedPartitionStat.nonEmpty) {
                 sparkSession.sessionState.catalog.alterPartitions(catalogTable.get.identifier,

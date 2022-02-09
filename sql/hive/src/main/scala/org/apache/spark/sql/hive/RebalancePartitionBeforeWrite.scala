@@ -70,7 +70,7 @@ case class RebalancePartitionBeforeWriteTable(session: SparkSession) extends Rul
           dataWriting.isInstanceOf[CreateHiveTableAsSelectCommand] ||
           dataWriting.isInstanceOf[OptimizedCreateHiveTableAsSelectCommand]
         ) {
-          query
+          dataWriting
         } else {
           if (bucket.sortColumnNames.nonEmpty) {
             val sortExps = resolveColumnNames(bucket.sortColumnNames, query.output)
@@ -84,7 +84,7 @@ case class RebalancePartitionBeforeWriteTable(session: SparkSession) extends Rul
             )
           }
         }
-      case _ => query
+      case _ => dataWriting
     }
   }
 

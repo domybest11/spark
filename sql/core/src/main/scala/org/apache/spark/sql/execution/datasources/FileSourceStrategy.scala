@@ -223,7 +223,8 @@ object FileSourceStrategy extends Strategy with PredicateHelper with Logging {
           bucketSet,
           None,
           dataFilters,
-          table.map(_.identifier))
+          table.map(_.identifier),
+          table)
 
       val afterScanFilter = afterScanFilters.toSeq.reduceOption(expressions.And)
       val withFilter = afterScanFilter.map(execution.FilterExec(_, scan)).getOrElse(scan)

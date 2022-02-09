@@ -77,7 +77,8 @@ class CatalogFileIndex(
         val fs = path.getFileSystem(hadoopConf)
         PartitionPath(
           p.toRow(partitionSchema, sparkSession.sessionState.conf.sessionLocalTimeZone),
-          path.makeQualified(fs.getUri, fs.getWorkingDirectory))
+          path.makeQualified(fs.getUri, fs.getWorkingDirectory),
+          Some(p))
       }
       val partitionSpec = PartitionSpec(partitionSchema, partitions)
       val timeNs = System.nanoTime() - startTime
