@@ -31,6 +31,7 @@ import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.execution.datasources.v2.TableCapabilityCheck
 import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.hive.execution.PruneHiveTablePartitions
+import org.apache.spark.sql.hive.extensions.OptimizeLayoutBeforeWritingDatasource
 import org.apache.spark.sql.internal.{BaseSessionStateBuilder, SessionResourceLoader, SessionState}
 
 /**
@@ -101,6 +102,7 @@ class HiveSessionStateBuilder(
         PreprocessTableInsertion +:
         DataSourceAnalysis +:
         HiveAnalysis +:
+        OptimizeLayoutBeforeWritingDatasource() +:
         RebalancePartitionBeforeWriteTable(session) +:
         customPostHocResolutionRules
 
