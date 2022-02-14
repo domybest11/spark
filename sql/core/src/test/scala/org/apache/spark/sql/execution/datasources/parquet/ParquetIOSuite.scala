@@ -385,6 +385,7 @@ class ParquetIOSuite extends QueryTest with ParquetTest with SharedSparkSession 
     checkCompressionCodec(CompressionCodecName.UNCOMPRESSED)
     checkCompressionCodec(CompressionCodecName.GZIP)
     checkCompressionCodec(CompressionCodecName.SNAPPY)
+    checkCompressionCodec(CompressionCodecName.ZSTD)
   }
 
   test("read raw Parquet file") {
@@ -704,6 +705,12 @@ class ParquetIOSuite extends QueryTest with ParquetTest with SharedSparkSession 
           }
         }
       }
+    }
+  }
+
+  test("SPARK-36726: test incorrect Parquet row group file offset") {
+    readParquetFile(testFile("test-data/malformed-file-offset.parquet")) { df =>
+      assert(df.count() == 3650)
     }
   }
 
