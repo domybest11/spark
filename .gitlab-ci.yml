@@ -45,7 +45,7 @@ spark_shuffleservice_build:
     - export START_BUILD_TIME=`date "+%Y-%m-%d %H:%M:%S"`
     - mv conf conf_bak
     - mv bilibili-conf/shuffleservice-conf conf
-    - ./dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.9-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
+    - ./dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.10-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
     - export DEST_FILE_NAME="spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz"
     - export DEST_FILE_LOCAL_PATH=./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
     - export DEST_FILE_REMOTE_PATH=$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
@@ -109,7 +109,7 @@ jscs_spark_shuffleservice_build:
     - export START_BUILD_TIME=`date "+%Y-%m-%d %H:%M:%S"`
     - mv conf conf_bak
     - mv bilibili-conf/jscs-shuffleservice-conf conf
-    - ./dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.9-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
+    - ./dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.10-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
     - export DEST_FILE_NAME="spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz"
     - export DEST_FILE_LOCAL_PATH=./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
     - export DEST_FILE_REMOTE_PATH=$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
@@ -174,7 +174,7 @@ spark_engine_build:
     - export START_BUILD_TIME=`date "+%Y-%m-%d %H:%M:%S"`
     - mv conf conf_bak
     - mv bilibili-conf/engine-conf conf
-    - ./dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.9-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
+    - ./dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.10-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
     - export DEST_FILE_NAME="spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz"
     - export DEST_FILE_LOCAL_PATH=./spark-3.1.1-bili-SNAPSHOT-bin--hadoop-2.8.tgz
     - export DEST_FILE_REMOTE_PATH=$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
@@ -239,7 +239,7 @@ spark_client_build:
     - export BUILD_TIME=`date "+%Y%m%d-%H%M%S"`
     - mv bilibili-conf/client-conf conf
     - sed -i "s/hdfs:\/\/jssz\-bigdata\-ns4\/data\/spark\/production\/jars\/spark\-3.1\-20210806.zip/hdfs:\/\/jssz\-bigdata\-ns4\/data\/spark\/production\/jars\/spark\-3.1\-${CI_COMMIT_TAG}\-${BUILD_TIME}.zip/g" ./conf/spark-defaults.conf
-    - dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.9-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
+    - dev/make-distribution.sh --name -hadoop-2.8 --tgz -Dhadoop.version=2.8.4.10-bili-SNAPSHOT -Phive -Phive-thriftserver -Pyarn -Dmaven.test.skip=true -Denforcer.skip=true -Dremoteresources.skip=true -Dmaven.compile.fork=true
     - mkdir -p dest/tmp
     - mv *.tgz dest
     - tar -zxvf dest/*.tgz -C dest/tmp
