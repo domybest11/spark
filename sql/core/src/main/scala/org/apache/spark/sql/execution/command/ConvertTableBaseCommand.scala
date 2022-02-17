@@ -21,8 +21,10 @@ import java.util.Locale
 
 import org.apache.spark.sql.{Row, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition}
+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeReference}
 import org.apache.spark.sql.execution.SparkPlan
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
+import org.apache.spark.sql.types.LongType
 
 abstract class ConvertTableBaseCommand extends DataWritingCommand {
   def catalogTable: CatalogTable
@@ -36,39 +38,62 @@ abstract class ConvertTableBaseCommand extends DataWritingCommand {
       (catalogTable.provider.isDefined && "hive".equalsIgnoreCase(catalogTable.provider.get))
   }
 
-  override def outputColumnNames: Seq[String] = query.output.map(_.name)
+  override def outputColumnNames: Seq[String] = output.map(_.name)
+
+  override val output: Seq[Attribute] = {
+    AttributeReference("origin", LongType, nullable = false)() ::
+      AttributeReference("current", LongType, nullable = false)() :: Nil
+  }
 
   override def run(session: SparkSession, child: SparkPlan): Seq[Row] = {
     val command = getWritingCommand(session)
-    command.run(session, child)
+    val originSize = if (catalogTable.partitionColumnNames.isEmpty) {
+      catalogTable.properties.getOrElse("totalSize", "0").toLong
+    } else {
+      updatePartitions.map(p => p.parameters.getOrElse("totalSize", "0").toLong).sum
+    }
     session.sessionState.catalog.alterTable(catalogTable)
-    val partitionCompressKey = catalogTable.storage.outputFormat.getOrElse("")
-      .toLowerCase(Locale.ROOT) match {
-      case fileFormat if fileFormat.endsWith("parquetoutputformat") =>
-        "parquet.compression"
-      case fileFormat if fileFormat.endsWith("orcoutputformat") =>
-        "orc.compress"
-      case _ => ""
-    }
-    val refreshPartitions = updatePartitions.map{ partition =>
-      val partitionInfo = session.sessionState.catalog.getPartition(
-        catalogTable.identifier, partition.spec)
-      val map: Map[String, String] = if ("".equals(partitionCompressKey)) {
-        partitionInfo.parameters
-      } else {
-        if (catalogTable.properties.contains(partitionCompressKey)) {
-          partitionInfo.parameters +
-            (partitionCompressKey -> catalogTable.properties(partitionCompressKey))
-        } else {
-          partitionInfo.parameters
-        }
+    command.run(session, child)
+
+    val curSize = if (catalogTable.partitionColumnNames.isEmpty) {
+      session.sessionState.catalog.getTableMetadata(catalogTable.identifier)
+        .properties.getOrElse("totalSize", "0").toLong
+    } else {
+      val partitionCompressKey = catalogTable.storage.outputFormat.getOrElse("")
+        .toLowerCase(Locale.ROOT) match {
+        case fileFormat if fileFormat.endsWith("parquetoutputformat") =>
+          "parquet.compression"
+        case fileFormat if fileFormat.endsWith("orcoutputformat") =>
+          "orc.compress"
+        case _ => ""
       }
-      partitionInfo.copy(storage = partition.storage, parameters = map)
+
+      var tempRet = 0L
+      val refreshPartitions = updatePartitions.map{ partition =>
+        val partitionInfo = session.sessionState.catalog.getPartition(
+          catalogTable.identifier, partition.spec)
+
+        val map: Map[String, String] = if ("".equals(partitionCompressKey)) {
+          partitionInfo.parameters
+        } else {
+          if (catalogTable.properties.contains(partitionCompressKey)) {
+            partitionInfo.parameters +
+              (partitionCompressKey -> catalogTable.properties(partitionCompressKey))
+          } else {
+            partitionInfo.parameters
+          }
+        }
+        tempRet += partitionInfo.parameters.getOrElse("totalSize", "0").toLong
+        partitionInfo.copy(storage = partition.storage, parameters = map)
+      }
+
+      if (refreshPartitions.nonEmpty) {
+        session.sessionState.catalog.alterPartitions(catalogTable.identifier, refreshPartitions)
+      }
+      tempRet
     }
-    if (refreshPartitions.nonEmpty) {
-      session.sessionState.catalog.alterPartitions(catalogTable.identifier, refreshPartitions)
-    }
-    Seq.empty
+
+    Seq(Row(originSize, curSize))
   }
 
   def getWritingCommand(session: SparkSession): DataWritingCommand
