@@ -18,14 +18,11 @@
 package org.apache.spark.sql
 
 import java.io.{ByteArrayOutputStream, CharArrayWriter, DataOutputStream}
-
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.runtime.universe.TypeTag
 import scala.util.control.NonFatal
-
 import org.apache.commons.lang3.StringUtils
-
 import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.annotation.{DeveloperApi, Stable, Unstable}
 import org.apache.spark.api.java.JavaRDD
@@ -40,7 +37,7 @@ import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.catalog.HiveTableRelation
 import org.apache.spark.sql.catalyst.encoders._
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.json.{JacksonGenerator, JSONOptions}
+import org.apache.spark.sql.catalyst.json.{JSONOptions, JacksonGenerator}
 import org.apache.spark.sql.catalyst.optimizer.CombineUnions
 import org.apache.spark.sql.catalyst.parser.{ParseException, ParserUtils}
 import org.apache.spark.sql.catalyst.plans._
@@ -55,6 +52,7 @@ import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation, FileTable}
 import org.apache.spark.sql.execution.python.EvaluatePython
+import org.apache.spark.sql.execution.sparklock.SparkLockManager
 import org.apache.spark.sql.execution.stat.StatFunctions
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.streaming.DataStreamWriter
@@ -231,6 +229,7 @@ class Dataset[T] private[sql](
       case _ =>
         queryExecution.analyzed
     }
+    SparkLockManager.unlock(queryExecution)
     if (sparkSession.sessionState.conf.getConf(SQLConf.FAIL_AMBIGUOUS_SELF_JOIN_ENABLED) &&
         plan.getTagValue(Dataset.DATASET_ID_TAG).isEmpty) {
       plan.setTagValue(Dataset.DATASET_ID_TAG, id)

@@ -20,9 +20,7 @@ package org.apache.spark.sql.execution
 import java.io.{BufferedWriter, OutputStreamWriter}
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
-
 import org.apache.hadoop.fs.Path
-
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{AnalysisException, Row, SparkSession}
@@ -38,6 +36,7 @@ import org.apache.spark.sql.execution.adaptive.{AdaptiveExecutionContext, Insert
 import org.apache.spark.sql.execution.bucketing.{CoalesceBucketsInJoin, DisableUnnecessaryBucketedScan}
 import org.apache.spark.sql.execution.dynamicpruning.PlanDynamicPruningFilters
 import org.apache.spark.sql.execution.exchange.{EnsureRequirements, ReuseExchange}
+import org.apache.spark.sql.execution.sparklock.{SparkLockContext, SparkLockRule, SparkLockRuleContext}
 import org.apache.spark.sql.execution.streaming.{IncrementalExecution, OffsetSeqMetadata}
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.streaming.OutputMode
@@ -133,12 +132,15 @@ class QueryExecution(
   lazy val toRdd: RDD[InternalRow] = new SQLExecutionRDD(
     executedPlan.execute(), sparkSession.sessionState.conf)
 
+  val sparkLockContext: SparkLockContext = new SparkLockContext(this)
+
   /** Get the metrics observed during the execution of the query plan. */
   def observedMetrics: Map[String, Row] = CollectMetricsExec.collect(executedPlan)
 
   protected def preparations: Seq[Rule[SparkPlan]] = {
     QueryExecution.preparations(sparkSession,
-      Option(InsertAdaptiveSparkPlan(AdaptiveExecutionContext(sparkSession, this))))
+      Option(InsertAdaptiveSparkPlan(AdaptiveExecutionContext(sparkSession, this))),
+      Option(SparkLockRule(SparkLockRuleContext(this))))
   }
 
   protected def executePhase[T](phase: String)(block: => T): T = sparkSession.withActive {
@@ -341,7 +343,8 @@ object QueryExecution {
    */
   private[execution] def preparations(
       sparkSession: SparkSession,
-      adaptiveExecutionRule: Option[InsertAdaptiveSparkPlan] = None): Seq[Rule[SparkPlan]] = {
+      adaptiveExecutionRule: Option[InsertAdaptiveSparkPlan] = None,
+      sparkLockRule: Option[SparkLockRule] = None): Seq[Rule[SparkPlan]] = {
     // `AdaptiveSparkPlanExec` is a leaf node. If inserted, all the following rules will be no-op
     // as the original plan is hidden behind `AdaptiveSparkPlanExec`.
     adaptiveExecutionRule.toSeq ++
@@ -359,7 +362,7 @@ object QueryExecution {
       CollapseCodegenStages(),
       ReuseExchange,
       ReuseSubquery
-    )
+    ) ++ sparkLockRule.toSeq
   }
 
   /**
