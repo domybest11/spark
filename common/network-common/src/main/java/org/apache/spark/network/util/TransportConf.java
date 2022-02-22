@@ -212,6 +212,10 @@ public class TransportConf {
     return conf.getBoolean("spark.network.crypto.enabled", false);
   }
 
+  public boolean shuffleMutilPortEnabled() {
+    return conf.getBoolean("spark.shuffle.service.multiPort.enabled", false);
+  }
+
   /**
    * The cipher transformation to use for encrypting session data.
    */

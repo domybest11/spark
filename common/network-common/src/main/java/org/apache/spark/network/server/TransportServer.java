@@ -53,6 +53,7 @@ public class TransportServer implements Closeable {
 
   private ServerBootstrap bootstrap;
   private ChannelFuture channelFuture;
+  private ChannelFuture anotherFuture;
   private int port = -1;
   private final PooledByteBufAllocator pooledAllocator;
   private NettyMemoryMetrics metrics;
@@ -148,7 +149,14 @@ public class TransportServer implements Closeable {
         new InetSocketAddress(portToBind): new InetSocketAddress(hostToBind, portToBind);
     channelFuture = bootstrap.bind(address);
     channelFuture.syncUninterruptibly();
-
+    if (conf.shuffleMutilPortEnabled()) {
+      int anotherPort = conf.getInt("spark.shuffle.service.other.port",7339);
+      InetSocketAddress anotherAddress = hostToBind == null ?
+              new InetSocketAddress(portToBind): new InetSocketAddress(hostToBind, anotherPort);
+      anotherFuture = bootstrap.bind(anotherAddress);
+      anotherFuture.syncUninterruptibly();
+      logger.info("Shuffle server started on another port: {}", anotherPort);
+    }
     port = ((InetSocketAddress) channelFuture.channel().localAddress()).getPort();
     logger.debug("Shuffle server started on port: {}", port);
   }
