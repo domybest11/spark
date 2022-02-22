@@ -172,6 +172,11 @@ public class TransportServer implements Closeable {
       channelFuture.channel().close().awaitUninterruptibly(10, TimeUnit.SECONDS);
       channelFuture = null;
     }
+    if (anotherFuture != null) {
+      // close is a local operation and should finish within milliseconds; timeout just to be safe
+      anotherFuture.channel().close().awaitUninterruptibly(10, TimeUnit.SECONDS);
+      anotherFuture = null;
+    }
     if (bootstrap != null && bootstrap.config().group() != null) {
       bootstrap.config().group().shutdownGracefully();
     }
