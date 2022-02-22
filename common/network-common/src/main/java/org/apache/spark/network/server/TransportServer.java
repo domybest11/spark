@@ -152,7 +152,7 @@ public class TransportServer implements Closeable {
     if (conf.shuffleMutilPortEnabled()) {
       int anotherPort = conf.getInt("spark.shuffle.service.other.port",7339);
       InetSocketAddress anotherAddress = hostToBind == null ?
-              new InetSocketAddress(portToBind): new InetSocketAddress(hostToBind, anotherPort);
+              new InetSocketAddress(anotherPort): new InetSocketAddress(hostToBind, anotherPort);
       anotherFuture = bootstrap.bind(anotherAddress);
       anotherFuture.syncUninterruptibly();
       logger.info("Shuffle server started on another port: {}", anotherPort);
