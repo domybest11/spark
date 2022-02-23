@@ -149,7 +149,7 @@ class DetermineTableStats(session: SparkSession) extends Rule[LogicalPlan] {
       i.copy(table = hiveTableWithStats(relation))
 
     case c @ ConvertStatement(relation: HiveTableRelation, _, _, _, _)
-      if DDLUtils.isHiveTable(relation.tableMeta) && relation.tableMeta.stats.isEmpty =>
+      if relation.tableMeta.stats.isEmpty =>
       c.copy(table = hiveTableWithStats(relation))
 
     case c @ MergeTableStatement(relation: HiveTableRelation, _)
@@ -298,10 +298,27 @@ case class RelationConversions(
           formatRelation
         }
 
-        val hiveRelation = relation.copy(tableMeta = relation.tableMeta.copy(
-          provider = Some("hive")))
+        val hiveRelation = if (!DDLUtils.isHiveTable(relation.tableMeta)) {
+          val storage = if (relation.tableMeta.storage.locationUri.isEmpty) {
+            val (db, table) = (relation.tableMeta.identifier.database.get,
+              relation.tableMeta.identifier.table)
+            relation.tableMeta.storage.copy(
+              locationUri = sessionCatalog.externalCatalog.asInstanceOf[ExternalCatalogWithListener]
+                .unwrapped.asInstanceOf[HiveExternalCatalog]
+                .getRawTable(db, table).storage.locationUri
+            )
+          } else {
+            relation.tableMeta.storage
+          }
+          relation.copy(tableMeta = relation.tableMeta.copy(
+            provider = Some("hive"),
+            storage = storage
+          ))
+        } else {
+          relation
+        }
 
-        if (hiveRelation.isPartitioned && DDLUtils.isHiveTable(hiveRelation.tableMeta) &&
+        if (hiveRelation.isPartitioned &&
           isConvertible(hiveRelation)) {
           ConvertStatement(metastoreCatalog.convert(hiveRelation), query, fileFormat, compressType)
         } else {
