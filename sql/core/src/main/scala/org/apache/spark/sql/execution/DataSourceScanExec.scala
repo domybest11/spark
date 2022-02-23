@@ -168,7 +168,7 @@ case class FileSourceScanExec(
     optionalNumCoalescedBuckets: Option[Int],
     dataFilters: Seq[Expression],
     tableIdentifier: Option[TableIdentifier],
-    table: Option[CatalogTable] = None,
+    @transient table: Option[CatalogTable] = None,
     disableBucketedScan: Boolean = false)
   extends DataSourceScanExec {
 
