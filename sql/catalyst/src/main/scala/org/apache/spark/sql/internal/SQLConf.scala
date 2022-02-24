@@ -3262,6 +3262,11 @@ object SQLConf {
       .checkValues(ZorderBuildStrategy.values.map(_.toString))
       .createWithDefault(ZorderBuildStrategy.SAMPLE.toString)
 
+  val DATASOURCE_FORCE_CONVERT = buildConf("spark.sql.datasource.force.convert")
+    .booleanConf
+    .createWithDefault(false)
+
+
   /**
    * Holds information about keys that have been deprecated.
    *
@@ -3954,6 +3959,8 @@ class SQLConf extends Serializable with Logging {
 
   def layoutOptimizeZorderStrategy: ZorderBuildStrategy.Value =
     ZorderBuildStrategy.withName(getConf(SQLConf.LAYOUT_OPTIMIZE_ZORDER_STRATEGY))
+
+  def datasourceForceConvert: Boolean = getConf(SQLConf.DATASOURCE_FORCE_CONVERT)
 
   /** ********************** SQLConf functionality methods ************ */
 
