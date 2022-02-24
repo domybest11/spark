@@ -39,7 +39,7 @@ case class MergePruning(session: SparkSession) extends Rule[LogicalPlan] {
   }
 
   private def rewriteQuery(query: LogicalPlan): LogicalPlan = {
-
+    val catalog = session.sessionState.catalog
     var filter: Option[Filter] = None
     var source: Option[CatalogTable] = None
     query.find {
@@ -54,56 +54,59 @@ case class MergePruning(session: SparkSession) extends Rule[LogicalPlan] {
         false
       case _ => false
     }
+    if (source.isDefined && catalog.tableExists(source.get.identifier)) {
+      val rewriteQuery = if (source.get.partitionColumnNames.isEmpty) {
+        val tableProperties = source.get.properties
+        val totalSize = tableProperties.getOrElse("totalSize", "-1").toLong
+        val numFiles = tableProperties.getOrElse("numFiles", "-1").toLong
+        val needMerge = if (totalSize == -1L || numFiles == -1L) {
+          true
+        } else if (numFiles == 0) {
+          false
+        } else {
+          totalSize / numFiles < avgConditionSize
+        }
+        if (needMerge) {
+          query
+        } else {
+          throw new AnalysisException("table don't need merge.")
+        }
+      } else {
+        val prunedPartition = catalog.listPartitionsByFilter(
+          source.get.identifier, filter.map(f => f.condition).toSeq
+        ).filter {
+          partition =>
+            val totalSize = partition.parameters
+              .getOrElse("totalSize", "-1").toLong
+            val numFiles = partition.parameters
+              .getOrElse("numFiles", "-1").toLong
 
-    val rewriteQuery = if (source.get.partitionColumnNames.isEmpty) {
-      val tableProperties = source.get.properties
-      val totalSize = tableProperties.getOrElse("totalSize", "-1").toLong
-      val numFiles = tableProperties.getOrElse("numFiles", "-1").toLong
-      val needMerge = if (totalSize == -1L || numFiles == -1L) {
-        true
-      } else if (numFiles == 0) {
-        false
-      } else {
-        totalSize / numFiles < avgConditionSize
+            if (totalSize == -1L || numFiles == -1L) {
+              true
+            } else if (numFiles == 0) {
+              false
+            } else {
+              totalSize / numFiles < avgConditionSize
+            }
+        }
+        val filterExpression = prunedPartition.map{
+          partition =>
+            partition.spec.map(entry =>
+              EqualTo(UnresolvedAttribute(Seq(entry._1)), Literal(entry._2))
+            ).reduce((e1: Expression, e2: Expression) => And(e1, e2))
+        }.toArray
+        val filterQuery = if (filterExpression.isEmpty) {
+          throw new AnalysisException("table don't need merge.")
+        } else {
+          val condition = filterExpression
+            .reduce((pf1: Expression, pf2: Expression) => Or(pf1, pf2))
+          Filter(condition, UnresolvedRelation(source.get.identifier))
+        }
+        session.sessionState.analyzer.execute(filterQuery)
       }
-      if (needMerge) {
-        query
-      } else {
-        throw new AnalysisException("table don't need merge.")
-      }
+      rewriteQuery
     } else {
-      val prunedPartition = session.sessionState.catalog.listPartitionsByFilter(
-        source.get.identifier, filter.map(f => f.condition).toSeq
-      ).filter {
-        partition =>
-          val totalSize = partition.parameters
-            .getOrElse("totalSize", "-1").toLong
-          val numFiles = partition.parameters
-            .getOrElse("numFiles", "-1").toLong
-
-          if (totalSize == -1L || numFiles == -1L) {
-            true
-          } else if (numFiles == 0) {
-            false
-          } else {
-            totalSize / numFiles < avgConditionSize
-          }
-      }
-      val filterExpression = prunedPartition.map{
-        partition =>
-          partition.spec.map(entry =>
-            EqualTo(UnresolvedAttribute(Seq(entry._1)), Literal(entry._2))
-          ).reduce((e1: Expression, e2: Expression) => And(e1, e2))
-      }.toArray
-      val filterQuery = if (filterExpression.isEmpty) {
-        throw new AnalysisException("table don't need merge.")
-      } else {
-        val condition = filterExpression
-          .reduce((pf1: Expression, pf2: Expression) => Or(pf1, pf2))
-        Filter(condition, UnresolvedRelation(source.get.identifier))
-      }
-      session.sessionState.analyzer.execute(filterQuery)
+      throw new AnalysisException(s"Table or view not found: ${source.get.identifier}")
     }
-    rewriteQuery
   }
 }

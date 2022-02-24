@@ -149,7 +149,7 @@ class DetermineTableStats(session: SparkSession) extends Rule[LogicalPlan] {
       i.copy(table = hiveTableWithStats(relation))
 
     case c @ ConvertStatement(relation: HiveTableRelation, _, _, _, _)
-      if DDLUtils.isHiveTable(relation.tableMeta) && relation.tableMeta.stats.isEmpty =>
+      if relation.tableMeta.stats.isEmpty =>
       c.copy(table = hiveTableWithStats(relation))
 
     case c @ MergeTableStatement(relation: HiveTableRelation, _)
@@ -249,63 +249,87 @@ case class RelationConversions(
       // Convert table
       case ConvertStatement(r: HiveTableRelation, query, fileFormat, compressType, _)
         if query.resolved =>
-        val formatRelation = if (fileFormat.isDefined) {
-          val serde = fileFormat.get.toLowerCase(Locale.ROOT) match {
-            case "text" => HiveSerDe.serdeMap("textfile")
-            case _ => HiveSerDe.serdeMap(fileFormat.get.toLowerCase(Locale.ROOT))
-          }
-
-          val fileStorage = CatalogStorageFormat.empty.copy(
-            inputFormat = serde.inputFormat,
-            outputFormat = serde.outputFormat,
-            serde = serde.serde)
-
-          if (r.tableMeta.storage.serde.isDefined &&
-            r.tableMeta.storage.serde.get.equals(fileStorage.serde.get)) {
-            r
-          } else {
-            val storage = r.tableMeta.storage.copy(
-              inputFormat = fileStorage.inputFormat,
-              outputFormat = fileStorage.outputFormat,
-              serde = fileStorage.serde)
-            if (fileStorage.outputFormat.get.endsWith("TextOutputFormat")) {
-              r.copy(tableMeta = r.tableMeta.copy(storage = storage))
-            } else {
-              r.copy(tableMeta = r.tableMeta.copy(storage = storage))
+        if (DDLUtils.isHiveTable(r.tableMeta) || conf.datasourceForceConvert) {
+          val formatRelation = if (fileFormat.isDefined) {
+            val serde = fileFormat.get.toLowerCase(Locale.ROOT) match {
+              case "text" => HiveSerDe.serdeMap("textfile")
+              case _ => HiveSerDe.serdeMap(fileFormat.get.toLowerCase(Locale.ROOT))
             }
+
+            val fileStorage = CatalogStorageFormat.empty.copy(
+              inputFormat = serde.inputFormat,
+              outputFormat = serde.outputFormat,
+              serde = serde.serde)
+
+            if (r.tableMeta.storage.serde.isDefined &&
+              r.tableMeta.storage.serde.get.equals(fileStorage.serde.get)) {
+              r
+            } else {
+              val storage = r.tableMeta.storage.copy(
+                inputFormat = fileStorage.inputFormat,
+                outputFormat = fileStorage.outputFormat,
+                serde = fileStorage.serde)
+              if (fileStorage.outputFormat.get.endsWith("TextOutputFormat")) {
+                r.copy(tableMeta = r.tableMeta.copy(storage = storage))
+              } else {
+                r.copy(tableMeta = r.tableMeta.copy(storage = storage))
+              }
+            }
+          } else {
+            r
           }
-        } else {
-          r
-        }
-        val relation = if (compressType.isDefined) {
-          val outputFormat = formatRelation.tableMeta.storage.outputFormat
-          val compressKey = outputFormat.getOrElse("").toLowerCase(Locale.ROOT) match {
+          val relation = if (compressType.isDefined) {
+            val outputFormat = formatRelation.tableMeta.storage.outputFormat
+            val compressKey = outputFormat.getOrElse("").toLowerCase(Locale.ROOT) match {
               case fileFormat if fileFormat.endsWith("parquetoutputformat") => "parquet.compression"
               case fileFormat if fileFormat.endsWith("orcoutputformat") => "orc.compress"
               case _ => ""
-          }
+            }
 
-          val originCompressType = formatRelation.tableMeta.properties
-            .getOrElse(compressKey, "").toUpperCase(Locale.ROOT)
-          if (!compressKey.equals("") && !originCompressType.equals(compressType.get)) {
-            val map: Map[String, String] = formatRelation.tableMeta.properties +
-              (compressKey -> compressType.get)
-            formatRelation.copy(tableMeta = formatRelation.tableMeta.copy(properties = map))
+            val originCompressType = formatRelation.tableMeta.properties
+              .getOrElse(compressKey, "").toUpperCase(Locale.ROOT)
+            if (!compressKey.equals("") && !originCompressType.equals(compressType.get)) {
+              val map: Map[String, String] = formatRelation.tableMeta.properties +
+                (compressKey -> compressType.get)
+              formatRelation.copy(tableMeta = formatRelation.tableMeta.copy(properties = map))
+            } else {
+              formatRelation
+            }
           } else {
             formatRelation
           }
-        } else {
-          formatRelation
-        }
 
-        val hiveRelation = relation.copy(tableMeta = relation.tableMeta.copy(
-          provider = Some("hive")))
+          val hiveRelation = if (!DDLUtils.isHiveTable(relation.tableMeta)) {
+            val storage = if (relation.tableMeta.storage.locationUri.isEmpty) {
+              val (db, table) = (relation.tableMeta.identifier.database.get,
+                relation.tableMeta.identifier.table)
+              relation.tableMeta.storage.copy(
+                locationUri = sessionCatalog.externalCatalog
+                  .asInstanceOf[ExternalCatalogWithListener]
+                  .unwrapped.asInstanceOf[HiveExternalCatalog]
+                  .getRawTable(db, table).storage.locationUri
+              )
+            } else {
+              relation.tableMeta.storage
+            }
+            relation.copy(tableMeta = relation.tableMeta.copy(
+              provider = Some("hive"),
+              storage = storage
+            ))
+          } else {
+            relation
+          }
 
-        if (hiveRelation.isPartitioned && DDLUtils.isHiveTable(hiveRelation.tableMeta) &&
-          isConvertible(hiveRelation)) {
-          ConvertStatement(metastoreCatalog.convert(hiveRelation), query, fileFormat, compressType)
+          if (hiveRelation.isPartitioned &&
+            isConvertible(hiveRelation)) {
+            ConvertStatement(metastoreCatalog.convert(hiveRelation),
+              query, fileFormat, compressType)
+          } else {
+            ConvertStatement(hiveRelation, query, fileFormat, compressType)
+          }
         } else {
-          ConvertStatement(hiveRelation, query, fileFormat, compressType)
+          //scalastyle:off
+          throw new AnalysisException(s"Table provider is not hive, if you want to convert please set spark.sql.datasource.force.convert=true")
         }
 
       // CTAS

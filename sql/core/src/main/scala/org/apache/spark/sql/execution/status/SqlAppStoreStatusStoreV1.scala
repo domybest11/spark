@@ -59,14 +59,17 @@ class SqlAppStoreStatusStoreV1(
   def countResourceCost(applicationSQLExecutionData: ApplicationSQLExecutionData): String = {
     var rmClient: ApplicationClientProtocol = null
     try {
-    rmClient = ClientRMProxy.createRMProxy(hadoopConf, classOf[ApplicationClientProtocol])
-    val request = Records.newRecord(classOf[GetApplicationReportRequest])
-    val applicationId = ApplicationId.fromString(conf.get("spark.app.id"))
-    request.setApplicationId(applicationId)
-    val resourceUsage = rmClient.getApplicationReport(request).getApplicationReport
-      .getApplicationResourceUsageReport
-    val memorySeconds = resourceUsage.getMemorySeconds
-    val vcoreSeconds = resourceUsage.getVcoreSeconds
+    val (memorySeconds, vcoreSeconds) = if (conf.get("spark.app.id").startsWith("local")) {
+        (0, 0)
+      } else {
+        rmClient = ClientRMProxy.createRMProxy(hadoopConf, classOf[ApplicationClientProtocol])
+        val request = Records.newRecord(classOf[GetApplicationReportRequest])
+        val applicationId = ApplicationId.fromString(conf.get("spark.app.id"))
+        request.setApplicationId(applicationId)
+        val resourceUsage = rmClient.getApplicationReport(request).getApplicationReport
+          .getApplicationResourceUsageReport
+        (resourceUsage.getMemorySeconds, resourceUsage.getVcoreSeconds)
+    }
     var inputBytes: Long = 0
     var outputBytes: Long = 0
     val jobs: ListBuffer[SQLJobData] = applicationSQLExecutionData.sqlExecutionData.get.jobs
