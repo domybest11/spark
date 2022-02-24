@@ -92,9 +92,14 @@ private[sql] object Dataset {
   /** A variant of ofRows that allows passing in a tracker so we can track query parsing time. */
   def ofRows(sparkSession: SparkSession, logicalPlan: LogicalPlan, tracker: QueryPlanningTracker)
     : DataFrame = sparkSession.withActive {
-    val qe = new QueryExecution(sparkSession, logicalPlan, tracker)
-    qe.assertAnalyzed()
-    new Dataset[Row](qe, RowEncoder(qe.analyzed.schema))
+    var qe: QueryExecution = null
+    try {
+      qe = new QueryExecution(sparkSession, logicalPlan, tracker)
+      qe.assertAnalyzed()
+      new Dataset[Row](qe, RowEncoder(qe.analyzed.schema))
+    } finally {
+      SparkLockManager.unlock(qe)
+    }
   }
 }
 
@@ -229,7 +234,6 @@ class Dataset[T] private[sql](
       case _ =>
         queryExecution.analyzed
     }
-    SparkLockManager.unlock(queryExecution)
     if (sparkSession.sessionState.conf.getConf(SQLConf.FAIL_AMBIGUOUS_SELF_JOIN_ENABLED) &&
         plan.getTagValue(Dataset.DATASET_ID_TAG).isEmpty) {
       plan.setTagValue(Dataset.DATASET_ID_TAG, id)

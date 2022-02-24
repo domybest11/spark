@@ -6,17 +6,17 @@ import org.apache.spark.sql.execution.{QueryExecution, SparkPlan}
 
 case class SparkLockRule(context: SparkLockRuleContext) extends Rule[SparkPlan] {
 
-  override def apply(sparkPlan: SparkPlan): SparkPlan = applyInternal(sparkPlan)
+  override def apply(sparkPlan: SparkPlan): SparkPlan =
+    try {
+      applyInternal(sparkPlan)
+    } catch {
+      case e: Throwable =>
+        logError("failed to exec spark lock", e)
+        sparkPlan
+    }
 
   def applyInternal(sparkPlan: SparkPlan): SparkPlan = {
     val sparkLockContext = context.sparkLockContext
-
-    // 1. parse logic plan, find which table has tags (should lock)
-    //    val shouldLockTable: ArrayBuffer[TableIdentifier] =
-    //      parseLogicalPlan(logicalPlan.get, context).distinct
-
-    sparkLockContext.logicalPlan = sparkPlan.logicalLink
-    sparkLockContext.sparkPlan = Option(sparkPlan)
 
     // 2. parse spark plan, find input and output
     val hivePlan = HivePlanFinder.buildHivePlan(sparkPlan, sparkLockContext)
@@ -33,5 +33,5 @@ case class SparkLockRule(context: SparkLockRuleContext) extends Rule[SparkPlan] 
 
 case class SparkLockRuleContext(qe: QueryExecution) {
   val session: SparkSession = qe.sparkSession
-  val sparkLockContext: SparkLockContext = new SparkLockContext(qe)
+  val sparkLockContext: SparkLockContext = qe.sparkLockContext
 }

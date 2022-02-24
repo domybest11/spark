@@ -1,40 +1,37 @@
 package org.apache.spark.sql.execution.sparklock
 
-import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient
-import org.apache.hadoop.hive.metastore.api.Database
 import org.apache.hadoop.hive.ql.QueryPlan
-import org.apache.hadoop.hive.ql.hooks.{Entity, ReadEntity, WriteEntity}
-import org.apache.hadoop.hive.ql.metadata.{Partition, Table}
-import org.apache.spark.SparkConf
+import org.apache.hadoop.hive.ql.hooks.{ReadEntity, WriteEntity}
+import org.apache.hadoop.hive.ql.metadata.{DummyPartition, Table}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HiveTableRelation}
+import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.command.DataWritingCommandExec
 import org.apache.spark.sql.execution.datasources.InsertIntoHadoopFsRelationCommand
-import org.apache.spark.sql.execution.sparklock.SparkLockUtils.{getFieldVal, makeQueryId}
+import org.apache.spark.sql.execution.sparklock.SparkLockUtils.{buildHiveConf, getFieldVal, makeQueryId}
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
-import org.apache.spark.sql.internal.SessionState
 
 import java.util
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 object HivePlanFinder {
   lazy val hive: HiveMetaStoreClient = {
-    val sparkConf = new SparkConf
-    val hiveConf = new HiveConf(classOf[SessionState])
-    sparkConf.getAll.toMap.foreach { case (k, v) =>
-      hiveConf.set(k, v)
-    }
-    new HiveMetaStoreClient(hiveConf)
+    val sparkConf = SparkSession.active.sparkContext.conf
+    new HiveMetaStoreClient(buildHiveConf(sparkConf))
   }
 
 
   def buildHivePlan(plan: SparkPlan, context: SparkLockContext): QueryPlan = {
+    val writeEntities = new util.HashSet[WriteEntity]
+    val readEntities = new util.HashSet[ReadEntity]
+
     //1. 找出output，库/表/分区
-    val writeEntities = getOutputEntities(plan)
+    parseOutputs(plan, writeEntities)
+
     // 2. 找出input，库/表/分区
-    val readEntities = getInputEntities(plan, context.sparkSession)
+    parseInputs(plan, readEntities, context.sparkSession)
 
     val hivePlan = new QueryPlan
     hivePlan.setQueryId(makeQueryId)
@@ -44,25 +41,27 @@ object HivePlanFinder {
     hivePlan
   }
 
-  def getInputEntities(plan: SparkPlan, sparkSession: SparkSession): util.HashSet[ReadEntity] = {
-    def getTableMeta(identifier: TableIdentifier): (Database, Table) = {
+  def parseInputs(
+                          plan: SparkPlan,
+                          readEntities: util.HashSet[ReadEntity],
+                          sparkSession: SparkSession
+                        ): Unit = {
+    def getTableMeta(identifier: TableIdentifier): Table = {
       val dbName = identifier.database.getOrElse(sparkSession.catalog.currentDatabase)
       val tableName = identifier.table
       getTableInt(dbName, tableName)
     }
 
-    val readEntities = new util.HashSet[ReadEntity]
-
     plan transformDown {
       case dataSource: FileSourceScanExec =>
         if (dataSource.tableIdentifier.isDefined) {
           val identifier = dataSource.tableIdentifier.get
-          val (metaDatabase, table) = getTableMeta(identifier)
+          val table = getTableMeta(identifier)
 
           val partitions = new ArrayBuffer[String]()
           dataSource.selectedPartitions.foreach({ p =>
             val size = dataSource.relation.partitionSchema.size
-            if (p.values.numFields == size) {
+            if (size > 0 && p.values.numFields == size) {
               val partName = new ListBuffer[String]()
               for (i <- 0 until size) {
                 partName += s"${dataSource.relation.partitionSchema(i).name}=${p.values.getString(i)}"
@@ -71,112 +70,116 @@ object HivePlanFinder {
             }
           })
 
-          buildInputEntities(partitions, readEntities, metaDatabase, table)
+          buildInputEntities(partitions, readEntities, table)
         }
-
         dataSource
+
       case insertHive if insertHive.getClass.getSimpleName == "HiveTableScanExec" =>
         // HiveTableScanExec
-        val identifier = getFieldVal(insertHive, "relation")
+        val relation = getFieldVal(insertHive, "relation")
           .asInstanceOf[HiveTableRelation]
-          .tableMeta.identifier
-        val (metaDatabase, table) = getTableMeta(identifier)
-        val partitions = getFieldVal(insertHive, "prunedPartitions").asInstanceOf[Seq[Partition]].map(p =>
-          p.getName
-        )
-        buildInputEntities(partitions, readEntities, metaDatabase, table)
 
+        val table = getTableMeta(relation.tableMeta.identifier)
+        val partitions = new ArrayBuffer[String]()
+        relation.prunedPartitions.get.foreach(hd => {
+          val size = relation.partitionCols.size
+          val partSpec = hd.spec
+          if (size > 0 && partSpec.size == size) {
+            partitions += partSpec.map({ case (k, v) => s"$k=$v" }).mkString("/")
+          }
+        })
+        buildInputEntities(partitions, readEntities, table)
         insertHive
-    }
 
-    readEntities
+      case adp: AdaptiveSparkPlanExec =>
+        adp.inputPlan
+
+      case other: SparkPlan => other
+    }
   }
 
-  def getOutputEntities(plan: SparkPlan): util.HashSet[WriteEntity] = {
-    def getTableMeta(catalogTable: CatalogTable): (Database, Table) = {
+  def parseOutputs(
+                           plan: SparkPlan,
+                           writeEntities: util.HashSet[WriteEntity]
+                         ): Unit = {
+    def getTableMeta(catalogTable: CatalogTable): Table = {
       val dbName = catalogTable.database
       val tableName = catalogTable.identifier.table
       getTableInt(dbName, tableName)
     }
 
-    val writeEntities = new util.HashSet[WriteEntity]()
-    val writeEntity = new WriteEntity
-    writeEntity.setWriteType(WriteEntity.WriteType.INSERT_OVERWRITE)
     plan match {
       case dwc: DataWritingCommandExec =>
         dwc.cmd match {
-          case i@InsertIntoHadoopFsRelationCommand(_, staticPartitions, _, _, _, _, _, _, _, catalogTable, _, _) =>
+          case InsertIntoHadoopFsRelationCommand(_, staticPartitions, _, partitionColumns, _, _, _, _, _, catalogTable, _, _) =>
             // InsertIntoHadoopFsRelationCommand
             if (catalogTable.isDefined) {
-              val partName: Option[String] = {
-                if (staticPartitions.nonEmpty && !i.dynamicPartitionOverwrite) {
-                  Option(staticPartitions.map({ case (k, v) => s"$k=$v" }).mkString("/"))
+              val (dynamicPartWrite, partName: Option[String]) = {
+                if (staticPartitions.nonEmpty && staticPartitions.size == partitionColumns.length) {
+                  (false, Option(staticPartitions.map({ case (k, v) => s"$k=$v" }).mkString("/")))
                 } else {
-                  None
+                  (partitionColumns.nonEmpty, None)
                 }
               }
-              val (metaDatabase, table) = getTableMeta(catalogTable.get)
-              buildOutputEntities(writeEntity, metaDatabase, table, partName)
+              val table = getTableMeta(catalogTable.get)
+              buildOutputEntities(writeEntities, table, partName, dynamicPartWrite)
             }
           case insertHive if insertHive.nodeName == "InsertIntoHiveTable" =>
             // InsertIntoHiveTable
             val catalogTable = getFieldVal(insertHive, "table").asInstanceOf[CatalogTable]
             val _partition = getFieldVal(insertHive, "partition").asInstanceOf[Map[String, Option[String]]]
-            val partName: Option[String] = {
-              if (_partition.values.forall(_.isDefined)) {
-                Option(_partition.map({ case (k, v) => s"$k=${v.get}" }).mkString("/"))
+
+            val partTable = catalogTable.partitionColumnNames.nonEmpty
+            val (dynamicPartWrite, partName: Option[String]) = {
+              if (partTable && _partition.values.forall(_.isDefined)) {
+                (false, Option(_partition.map({ case (k, v) => s"$k=${v.get}" }).mkString("/")))
               } else {
-                None
+                (partTable, None)
               }
             }
-            val (metaDatabase, table) = getTableMeta(catalogTable)
-            buildOutputEntities(writeEntity, metaDatabase, table, partName)
-        }
-    }
-    writeEntities.add(writeEntity)
+            val table = getTableMeta(catalogTable)
+            buildOutputEntities(writeEntities, table, partName, dynamicPartWrite)
 
-    writeEntities
+          case _ =>
+        }
+      case _: SparkPlan =>
+    }
   }
 
   private def buildInputEntities(partitions: Seq[String],
                          readEntities: util.HashSet[ReadEntity],
-                         metaDatabase: Database,
                          table: Table): Unit = {
-    if (partitions.isEmpty) {
-      val readEntity = new ReadEntity()
-      readEntity.setTyp(Entity.Type.TABLE)
-      readEntity.setDatabase(metaDatabase)
-      readEntity.setT(table)
-      readEntities.add(readEntity)
-    } else {
+    val readEntity = new ReadEntity(table)
+    readEntities.add(readEntity)
+    if (partitions.nonEmpty) {
       partitions.foreach(p => {
-        val readEntity = new ReadEntity
-        readEntity.setTyp(Entity.Type.PARTITION)
-        readEntity.setDatabase(metaDatabase)
-        readEntity.setT(table)
-        val partition = hive.getPartition(metaDatabase.getName, table.getTableName, p)
-        readEntity.setP(new Partition(table, partition))
+        val partition = new DummyPartition(table, p)
+        val readEntity = new ReadEntity(partition)
         readEntities.add(readEntity)
       })
     }
   }
 
-  private def buildOutputEntities(writeEntity: WriteEntity, metaDatabase: Database, table: Table, partName: Option[String]): Unit = {
-    writeEntity.setDatabase(metaDatabase)
-    writeEntity.setT(table)
+  private def buildOutputEntities(
+                                   writeEntities: util.HashSet[WriteEntity],
+                                   table: Table,
+                                   partName: Option[String],
+                                   dynamicPartWrite: Boolean
+                                 ): Unit = {
     if (partName.isDefined) {
-      writeEntity.setTyp(Entity.Type.PARTITION)
-      val partition = hive.getPartition(table.getDbName, table.getTableName, partName.get)
-      writeEntity.setP(new Partition(table, partition))
+      val partition = new DummyPartition(table, partName.get)
+      val writeEntity = new WriteEntity(partition, WriteEntity.WriteType.INSERT_OVERWRITE)
+      writeEntities.add(writeEntity)
     } else {
-      writeEntity.setTyp(Entity.Type.TABLE)
+      val writeEntity = new WriteEntity(table, WriteEntity.WriteType.INSERT_OVERWRITE)
+      writeEntity.setDynamicPartitionWrite(dynamicPartWrite)
+      writeEntities.add(writeEntity)
     }
   }
 
-  def getTableInt(dbName: String, tableName: String): (Database, Table) = {
-    val metaDatabase = hive.getDatabase(dbName)
+  def getTableInt(dbName: String, tableName: String): Table = {
     val metaTable = hive.getTable(dbName, tableName)
     val table = new Table(metaTable)
-    (metaDatabase, table)
+    table
   }
 }
