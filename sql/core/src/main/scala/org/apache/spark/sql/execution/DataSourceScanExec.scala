@@ -209,7 +209,7 @@ case class FileSourceScanExec(
     e.find(_.isInstanceOf[PlanExpression[_]]).isDefined
 
   private lazy val supportVectorized: Boolean =
-    dynamicallySelectedPartitions.filterNot(isSourceFormat).size == 0
+    selectedPartitions.filterNot(isSourceFormat).size == 0
 
   @transient lazy val selectedPartitions: Array[PartitionDirectory] = {
     val optimizerMetadataTimeNs = relation.location.metadataOpsTimeNs.getOrElse(0L)

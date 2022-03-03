@@ -19,6 +19,8 @@ package org.apache.spark.sql.internal
 
 import java.io.File
 
+import scala.collection.mutable
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 
@@ -36,8 +38,6 @@ import org.apache.spark.sql.execution.datasources.BasicPartitionStats
 import org.apache.spark.sql.internal.SQLConf.{SAVE_WRITE_PARTITIONS_STATS_ENABLED, SAVE_WRITE_PARTITIONS_STATS_SIZE}
 import org.apache.spark.sql.streaming.StreamingQueryManager
 import org.apache.spark.sql.util.ExecutionListenerManager
-
-import scala.collection.mutable
 
 /**
  * A class that holds all session-specific state in a given [[SparkSession]].

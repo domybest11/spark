@@ -631,6 +631,7 @@ class SparkContext(config: SparkConf) extends Logging {
       System.setProperty("spark.app.id", _applicationId)
     }
     _conf.set("spark.app.id", _applicationId)
+    _hadoopConfiguration.set("mapreduce.app.id", s"${_applicationId}_spark_0")
     _applicationAttemptId.foreach { attemptId =>
       _conf.set(APP_ATTEMPT_ID, attemptId)
       _env.blockManager.blockStoreClient.setAppAttemptId(attemptId)
