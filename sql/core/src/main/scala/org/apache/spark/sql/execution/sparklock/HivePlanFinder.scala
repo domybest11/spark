@@ -145,17 +145,20 @@ object HivePlanFinder {
 
           case convert: ConvertTableBaseCommand =>
             val catalogTable = convert.catalogTable
-            val relation = convert.relation
             val table = getTableMeta(catalogTable)
 
             val partitions = new ArrayBuffer[String]()
-            val partColSize = relation.get.partitionSchema.size
+            val partColSize = catalogTable.partitionColumnNames.size
             if (partColSize > 0) {
               convert.updatePartitions.foreach({ p =>
                 buildPartName(p, partitions, partColSize)
               })
             }
-            partitions.foreach(part => buildOutputEntities(writeEntities, table, Option(part), dynamicPartWrite = false))
+            if (partitions.isEmpty) {
+              buildOutputEntities(writeEntities, table, None, dynamicPartWrite = false);
+            } else {
+              partitions.foreach(part => buildOutputEntities(writeEntities, table, Option(part), dynamicPartWrite = false))
+            }
 
           case _ =>
         }
