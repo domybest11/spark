@@ -68,8 +68,10 @@ trait OptimizeLayoutBeforeWriting extends Rule[LogicalPlan] {
     } else {
       val orderExpr = cols.map(attrs(_))
       if (orderExpr.length == 1) {
+        logInfo(s"Optimize data layout with global sort.")
         Sort(SortOrder(orderExpr.head, Ascending, NullsLast, Seq.empty) :: Nil, true, plan)
       } else {
+        logInfo(s"Optimize data layout with z-order.")
         conf.layoutOptimizeZorderStrategy match {
           case ZorderBuildStrategy.SAMPLE =>
             Sort(
