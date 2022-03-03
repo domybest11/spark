@@ -52,7 +52,6 @@ import org.apache.spark.sql.execution.command._
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation, FileTable}
 import org.apache.spark.sql.execution.python.EvaluatePython
-import org.apache.spark.sql.execution.sparklock.SparkLockManager
 import org.apache.spark.sql.execution.stat.StatFunctions
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.streaming.DataStreamWriter
@@ -92,14 +91,9 @@ private[sql] object Dataset {
   /** A variant of ofRows that allows passing in a tracker so we can track query parsing time. */
   def ofRows(sparkSession: SparkSession, logicalPlan: LogicalPlan, tracker: QueryPlanningTracker)
     : DataFrame = sparkSession.withActive {
-    var qe: QueryExecution = null
-    try {
-      qe = new QueryExecution(sparkSession, logicalPlan, tracker)
-      qe.assertAnalyzed()
-      new Dataset[Row](qe, RowEncoder(qe.analyzed.schema))
-    } finally {
-      SparkLockManager.unlock(qe)
-    }
+    val qe: QueryExecution = new QueryExecution(sparkSession, logicalPlan, tracker)
+    qe.assertAnalyzed()
+    new Dataset[Row](qe, RowEncoder(qe.analyzed.schema))
   }
 }
 

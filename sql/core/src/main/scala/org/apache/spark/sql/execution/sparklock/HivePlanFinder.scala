@@ -6,9 +6,9 @@ import org.apache.hadoop.hive.ql.hooks.{ReadEntity, WriteEntity}
 import org.apache.hadoop.hive.ql.metadata.{DummyPartition, Table}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HiveTableRelation}
+import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, HiveTableRelation}
 import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
-import org.apache.spark.sql.execution.command.DataWritingCommandExec
+import org.apache.spark.sql.execution.command.{ConvertTableBaseCommand, DataWritingCommandExec}
 import org.apache.spark.sql.execution.datasources.InsertIntoHadoopFsRelationCommand
 import org.apache.spark.sql.execution.sparklock.SparkLockUtils.{buildHiveConf, getFieldVal, makeQueryId}
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
@@ -59,37 +59,39 @@ object HivePlanFinder {
           val table = getTableMeta(identifier)
 
           val partitions = new ArrayBuffer[String]()
-          dataSource.selectedPartitions.foreach({ p =>
-            val size = dataSource.relation.partitionSchema.size
-            if (size > 0 && p.values.numFields == size) {
-              val partName = new ListBuffer[String]()
-              for (i <- 0 until size) {
-                partName += s"${dataSource.relation.partitionSchema(i).name}=${p.values.getString(i)}"
+          val partitionSchema = dataSource.relation.partitionSchema
+          val partColSize = partitionSchema.size
+          if (partColSize > 0) {
+            dataSource.selectedPartitions.foreach({ p =>
+              if (p.values.numFields == partColSize) {
+                val partName = new ListBuffer[String]()
+                for (i <- 0 until partColSize) {
+                  partName += s"${partitionSchema(i).name}=${p.values.get(i, partitionSchema(i).dataType)}"
+                }
+                partitions += partName.mkString("/")
               }
-              partitions += partName.mkString("/")
-            }
-          })
+            })
+          }
 
           buildInputEntities(partitions, readEntities, table)
         }
         dataSource
 
-      case insertHive if insertHive.getClass.getSimpleName == "HiveTableScanExec" =>
+      case hiveTableScan if hiveTableScan.getClass.getSimpleName == "HiveTableScanExec" =>
         // HiveTableScanExec
-        val relation = getFieldVal(insertHive, "relation")
+        val relation = getFieldVal(hiveTableScan, "relation")
           .asInstanceOf[HiveTableRelation]
 
         val table = getTableMeta(relation.tableMeta.identifier)
         val partitions = new ArrayBuffer[String]()
-        relation.prunedPartitions.get.foreach(hd => {
-          val size = relation.partitionCols.size
-          val partSpec = hd.spec
-          if (size > 0 && partSpec.size == size) {
-            partitions += partSpec.map({ case (k, v) => s"$k=$v" }).mkString("/")
-          }
-        })
+        val partColSize = relation.partitionCols.size
+        if (partColSize > 0) {
+          relation.prunedPartitions.get.foreach(hd =>
+            buildPartName(hd, partitions, partColSize)
+          )
+        }
         buildInputEntities(partitions, readEntities, table)
-        insertHive
+        hiveTableScan
 
       case adp: AdaptiveSparkPlanExec =>
         adp.inputPlan
@@ -124,6 +126,7 @@ object HivePlanFinder {
               val table = getTableMeta(catalogTable.get)
               buildOutputEntities(writeEntities, table, partName, dynamicPartWrite)
             }
+
           case insertHive if insertHive.nodeName == "InsertIntoHiveTable" =>
             // InsertIntoHiveTable
             val catalogTable = getFieldVal(insertHive, "table").asInstanceOf[CatalogTable]
@@ -139,6 +142,20 @@ object HivePlanFinder {
             }
             val table = getTableMeta(catalogTable)
             buildOutputEntities(writeEntities, table, partName, dynamicPartWrite)
+
+          case convert: ConvertTableBaseCommand =>
+            val catalogTable = convert.catalogTable
+            val relation = convert.relation
+            val table = getTableMeta(catalogTable)
+
+            val partitions = new ArrayBuffer[String]()
+            val partColSize = relation.get.partitionSchema.size
+            if (partColSize > 0) {
+              convert.updatePartitions.foreach({ p =>
+                buildPartName(p, partitions, partColSize)
+              })
+            }
+            partitions.foreach(part => buildOutputEntities(writeEntities, table, Option(part), dynamicPartWrite = false))
 
           case _ =>
         }
@@ -181,5 +198,12 @@ object HivePlanFinder {
     val metaTable = hive.getTable(dbName, tableName)
     val table = new Table(metaTable)
     table
+  }
+
+  private def buildPartName(p: CatalogTablePartition, partitions: ArrayBuffer[String], partColSize: Int): Unit = {
+    val spec = p.spec
+    if (spec.size == partColSize) {
+      partitions += spec.map({ case (k, v) => s"$k=$v" }).mkString("/")
+    }
   }
 }

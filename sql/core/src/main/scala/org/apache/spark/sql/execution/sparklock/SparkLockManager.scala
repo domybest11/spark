@@ -32,28 +32,23 @@ class SparkLockManager {
 }
 
 object SparkLockManager {
-  lazy val manager: HiveTxnManager = {
-    assert(SparkSession.getActiveSession.isDefined)
-    val hiveConf = buildHiveConf(SparkSession.getActiveSession.get.sparkContext.conf)
-    TxnManagerFactory.getTxnManagerFactory.getTxnManager(hiveConf)
-  }
-
   def apply(conf: SQLConf): SparkLockManager = new SparkLockManager
 
   def lock(context: SparkLockContext): Unit = {
-    manager.acquireLocks(context.hivePlan, context.hiveLockContext, context.sparkSession.sparkContext.sparkUser)
-    // 1. 构建 LockRequest
-    // 2. hms.lock() => lockId
-    // 3. 缓存qe和lockId的对应关系
-    // 4. 启动心跳汇报进程
-    // 5. 缓存qe和心跳会把进程的对应关系
+    val manager = context.manager
+    val hivePlan = context.hivePlan
+    val hiveLockContext = context.hiveLockContext
+    val sparkUser = context.sparkSession.sparkContext.sparkUser
+    manager.acquireLocks(hivePlan, hiveLockContext, sparkUser)
   }
 
   def unlock(qe: QueryExecution): Unit = {
     if (null == qe) {
       return
     }
-    val locks = qe.sparkLockContext.hiveLockContext.getHiveLocks
+    val context = qe.sparkLockContext
+    val locks = context.hiveLockContext.getHiveLocks
+    val manager = context.manager
     if (locks != null && locks.size() > 0) {
       manager.releaseLocks(locks)
     }
@@ -62,6 +57,11 @@ object SparkLockManager {
 
 
 class SparkLockContext(val qe: QueryExecution) extends Logging {
+  lazy val manager: HiveTxnManager = {
+    assert(SparkSession.getActiveSession.isDefined)
+    val hiveConf = buildHiveConf(SparkSession.getActiveSession.get.sparkContext.conf)
+    TxnManagerFactory.getTxnManagerFactory.getTxnManager(hiveConf)
+  }
   val sparkSession: SparkSession = qe.sparkSession
   val sessionState: SessionState = sparkSession.sessionState
   val hadoopConf: Configuration = sessionState.newHadoopConf()
