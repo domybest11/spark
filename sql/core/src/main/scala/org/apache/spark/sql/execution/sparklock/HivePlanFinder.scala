@@ -11,7 +11,7 @@ import org.apache.spark.sql.execution.adaptive.AdaptiveSparkPlanExec
 import org.apache.spark.sql.execution.command.{ConvertTableBaseCommand, DataWritingCommandExec}
 import org.apache.spark.sql.execution.datasources.InsertIntoHadoopFsRelationCommand
 import org.apache.spark.sql.execution.sparklock.SparkLockUtils.{buildHiveConf, getFieldVal, makeQueryId}
-import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan}
+import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan, UnionExec}
 
 import java.util
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
@@ -101,68 +101,83 @@ object HivePlanFinder {
   }
 
   def parseOutputs(
-                           plan: SparkPlan,
-                           writeEntities: util.HashSet[WriteEntity]
-                         ): Unit = {
+                    plan: SparkPlan,
+                    writeEntities: util.HashSet[WriteEntity]
+                  ): Unit = {
+    plan match {
+      case UnionExec(children) =>
+        children.foreach {
+          case dwc: DataWritingCommandExec =>
+            parseDataWritingCommand(dwc, writeEntities)
+          case _:SparkPlan =>
+        }
+
+      case dwc: DataWritingCommandExec =>
+        parseDataWritingCommand(dwc, writeEntities)
+
+      case _: SparkPlan =>
+    }
+  }
+
+  private def parseDataWritingCommand(
+                                       dwc: DataWritingCommandExec,
+                                       writeEntities: util.HashSet[WriteEntity]
+                                     ): Unit = {
     def getTableMeta(catalogTable: CatalogTable): Table = {
       val dbName = catalogTable.database
       val tableName = catalogTable.identifier.table
       getTableInt(dbName, tableName)
     }
 
-    plan match {
-      case dwc: DataWritingCommandExec =>
-        dwc.cmd match {
-          case InsertIntoHadoopFsRelationCommand(_, staticPartitions, _, partitionColumns, _, _, _, _, _, catalogTable, _, _) =>
-            // InsertIntoHadoopFsRelationCommand
-            if (catalogTable.isDefined) {
-              val (dynamicPartWrite, partName: Option[String]) = {
-                if (staticPartitions.nonEmpty && staticPartitions.size == partitionColumns.length) {
-                  (false, Option(staticPartitions.map({ case (k, v) => s"$k=$v" }).mkString("/")))
-                } else {
-                  (partitionColumns.nonEmpty, None)
-                }
-              }
-              val table = getTableMeta(catalogTable.get)
-              buildOutputEntities(writeEntities, table, partName, dynamicPartWrite)
-            }
-
-          case insertHive if insertHive.nodeName == "InsertIntoHiveTable" =>
-            // InsertIntoHiveTable
-            val catalogTable = getFieldVal(insertHive, "table").asInstanceOf[CatalogTable]
-            val _partition = getFieldVal(insertHive, "partition").asInstanceOf[Map[String, Option[String]]]
-
-            val partTable = catalogTable.partitionColumnNames.nonEmpty
-            val (dynamicPartWrite, partName: Option[String]) = {
-              if (partTable && _partition.values.forall(_.isDefined)) {
-                (false, Option(_partition.map({ case (k, v) => s"$k=${v.get}" }).mkString("/")))
-              } else {
-                (partTable, None)
-              }
-            }
-            val table = getTableMeta(catalogTable)
-            buildOutputEntities(writeEntities, table, partName, dynamicPartWrite)
-
-          case convert: ConvertTableBaseCommand =>
-            val catalogTable = convert.catalogTable
-            val table = getTableMeta(catalogTable)
-
-            val partitions = new ArrayBuffer[String]()
-            val partColSize = catalogTable.partitionColumnNames.size
-            if (partColSize > 0) {
-              convert.updatePartitions.foreach({ p =>
-                buildPartName(p, partitions, partColSize)
-              })
-            }
-            if (partitions.isEmpty) {
-              buildOutputEntities(writeEntities, table, None, dynamicPartWrite = false);
+    dwc.cmd match {
+      case InsertIntoHadoopFsRelationCommand(_, staticPartitions, _, partitionColumns, _, _, _, _, _, catalogTable, _, _) =>
+        // InsertIntoHadoopFsRelationCommand
+        if (catalogTable.isDefined) {
+          val (dynamicPartWrite, partName: Option[String]) = {
+            if (staticPartitions.nonEmpty && staticPartitions.size == partitionColumns.length) {
+              (false, Option(staticPartitions.map({ case (k, v) => s"$k=$v" }).mkString("/")))
             } else {
-              partitions.foreach(part => buildOutputEntities(writeEntities, table, Option(part), dynamicPartWrite = false))
+              (partitionColumns.nonEmpty, None)
             }
-
-          case _ =>
+          }
+          val table = getTableMeta(catalogTable.get)
+          buildOutputEntities(writeEntities, table, partName, dynamicPartWrite)
         }
-      case _: SparkPlan =>
+
+      case insertHive if insertHive.nodeName == "InsertIntoHiveTable" =>
+        // InsertIntoHiveTable
+        val catalogTable = getFieldVal(insertHive, "table").asInstanceOf[CatalogTable]
+        val _partition = getFieldVal(insertHive, "partition").asInstanceOf[Map[String, Option[String]]]
+
+        val partTable = catalogTable.partitionColumnNames.nonEmpty
+        val (dynamicPartWrite, partName: Option[String]) = {
+          if (partTable && _partition.values.forall(_.isDefined)) {
+            (false, Option(_partition.map({ case (k, v) => s"$k=${v.get}" }).mkString("/")))
+          } else {
+            (partTable, None)
+          }
+        }
+        val table = getTableMeta(catalogTable)
+        buildOutputEntities(writeEntities, table, partName, dynamicPartWrite)
+
+      case convert: ConvertTableBaseCommand =>
+        val catalogTable = convert.catalogTable
+        val table = getTableMeta(catalogTable)
+
+        val partitions = new ArrayBuffer[String]()
+        val partColSize = catalogTable.partitionColumnNames.size
+        if (partColSize > 0) {
+          convert.updatePartitions.foreach({ p =>
+            buildPartName(p, partitions, partColSize)
+          })
+        }
+        if (partitions.isEmpty) {
+          buildOutputEntities(writeEntities, table, None, dynamicPartWrite = false)
+        } else {
+          partitions.foreach(part => buildOutputEntities(writeEntities, table, Option(part), dynamicPartWrite = false))
+        }
+
+      case _ =>
     }
   }
 

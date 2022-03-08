@@ -39,7 +39,7 @@ object SparkLockManager extends Logging {
     val hivePlan = context.hivePlan
     val hiveLockContext = context.hiveLockContext
     val sparkUser = context.sparkSession.sparkContext.sparkUser
-    logInfo(s"Start lock for $hivePlan")
+    logInfo(s"Start lock for output: ${hivePlan.getOutputs} and input: ${hivePlan.getInputs}")
     manager.acquireLocks(hivePlan, hiveLockContext, sparkUser)
   }
 
