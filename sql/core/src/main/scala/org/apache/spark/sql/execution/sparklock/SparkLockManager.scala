@@ -31,7 +31,7 @@ class SparkLockManager {
 
 }
 
-object SparkLockManager {
+object SparkLockManager extends Logging {
   def apply(conf: SQLConf): SparkLockManager = new SparkLockManager
 
   def lock(context: SparkLockContext): Unit = {
@@ -39,6 +39,7 @@ object SparkLockManager {
     val hivePlan = context.hivePlan
     val hiveLockContext = context.hiveLockContext
     val sparkUser = context.sparkSession.sparkContext.sparkUser
+    logInfo(s"Start lock for $hivePlan")
     manager.acquireLocks(hivePlan, hiveLockContext, sparkUser)
   }
 
@@ -50,6 +51,7 @@ object SparkLockManager {
     val locks = context.hiveLockContext.getHiveLocks
     val manager = context.manager
     if (locks != null && locks.size() > 0) {
+      logInfo(s"Start unlock $locks")
       manager.releaseLocks(locks)
     }
   }
