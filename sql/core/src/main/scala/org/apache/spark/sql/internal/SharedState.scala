@@ -21,9 +21,7 @@ import java.net.URL
 import java.util.UUID
 import java.util.concurrent.{ConcurrentHashMap, CopyOnWriteArrayList}
 import java.util.function.BiFunction
-
 import javax.annotation.concurrent.GuardedBy
-
 import scala.reflect.ClassTag
 import scala.util.Random
 import scala.util.control.NonFatal
@@ -35,6 +33,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.SQL_APP_LISTENER_ENABLED
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.execution.CacheManager
+import org.apache.spark.sql.execution.sparklock.SparkUnlockListener
 import org.apache.spark.sql.execution.status.{JoinInflationDetectScheduler, SqlAppStatusScheduler, SqlAppStoreStatusStoreV1, SqlMarioListener}
 import org.apache.spark.sql.execution.streaming.StreamExecution
 import org.apache.spark.sql.execution.ui.{SQLAppStatusListener, SQLAppStatusStore, SQLTab, StreamingQueryStatusStore}
@@ -129,6 +128,7 @@ private[sql] class SharedState(
         new SqlMarioListener(sparkContext, sqlAppStatusStoreV1, live = true)
       )
     }
+    sparkContext.listenerBus.addToStatusQueue(new SparkUnlockListener)
     statusStore
   }
 
