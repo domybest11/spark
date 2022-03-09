@@ -11,7 +11,10 @@ class SparkUnlockListener extends SparkListener with Logging {
     case _ =>
   }
 
-  def onExecutionEnd(event: SparkListenerSQLExecutionEnd): Unit = {
-    SparkLockManager.unlock(event.qe)
-  }
+  def onExecutionEnd(event: SparkListenerSQLExecutionEnd): Unit = try {
+      SparkLockManager.unlock(event.qe)
+    } catch {
+      case t: Throwable =>
+        logError("unlock encounter an error", t)
+    }
 }
