@@ -208,4 +208,15 @@
     <name>hive.zookeeper.quorum</name>
     <value>hive.zookeeper.quorum.host1,hive.zookeeper.quorum.host2,hive.zookeeper.quorum.host3</value>
   </property>
+
+<!--  hive lock-->
+  <property>
+    <name>hive.txn.manager</name>
+    <value>org.apache.hadoop.hive.ql.lockmgr.DbTxnManager</value>
+  </property>
+  <property>
+    <name>hive.support.concurrency</name>
+    <value>true</value>
+  </property>
+
 </configuration>

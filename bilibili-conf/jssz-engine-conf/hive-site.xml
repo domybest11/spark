@@ -176,4 +176,15 @@
     <name>hbase.zookeeper.quorum</name>
     <value>10.69.8.16,10.69.8.17,10.69.8.15</value>
   </property>
+
+<!--  hive lock-->
+  <property>
+    <name>hive.txn.manager</name>
+    <value>org.apache.hadoop.hive.ql.lockmgr.DbTxnManager</value>
+  </property>
+  <property>
+    <name>hive.support.concurrency</name>
+    <value>true</value>
+  </property>
+
 </configuration>
