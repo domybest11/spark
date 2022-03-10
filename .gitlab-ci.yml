@@ -65,7 +65,7 @@ spark_shuffleservice_build:
          "commitId":"'"$CI_COMMIT_SHA"'",
          "commitMsg":"'"$CI_COMMIT_TITLE"'",
          "gitGroup":"'"$CI_PROJECT_NAMESPACE"'",
-         "componentName": "JSSZ-Spark3.1-ESS;JSCS-Spark3.1-ESS",
+         "componentName": "JSSZ-Spark3.1-ESS",
          "department": "datacenter",
          "team": "offline",
          "gitRepo":"'"$CI_PROJECT_NAME"'",
