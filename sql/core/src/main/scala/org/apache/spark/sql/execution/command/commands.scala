@@ -159,6 +159,7 @@ case class ExplainCommand(
   override def run(sparkSession: SparkSession): Seq[Row] = try {
     val startTime = System.nanoTime()
     val queryExecution = sparkSession.sessionState.executePlan(logicalPlan)
+    val outputString = queryExecution.explainString(mode)
     val endTime = System.nanoTime()
     if (conf.getConf(SEND_EXPLAIN_SQL_EVENT_ENABLED)) {
       val event = SparkListenerSQLExecutionEnd(queryExecution.id, System.currentTimeMillis())
@@ -168,7 +169,6 @@ case class ExplainCommand(
       event.executionFailure = None
       sparkSession.sparkContext.listenerBus.post(event)
     }
-    val outputString = queryExecution.explainString(mode)
     Seq(Row(outputString))
   } catch { case cause: TreeNodeException[_] =>
     ("Error occurred during query planning: \n" + cause.getMessage).split("\n").map(Row(_))
