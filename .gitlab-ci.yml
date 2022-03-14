@@ -51,7 +51,6 @@ spark_shuffleservice_build:
     - export DEST_FILE_REMOTE_PATH=$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
     - export DEST_FILE_MD5=`alterctl md5 $DEST_FILE_LOCAL_PATH`
     - alterctl fs upload $DEST_FILE_LOCAL_PATH $DEST_FILE_REMOTE_PATH --debug
-    - 
     - |
       curl -v -X POST 'http://alter.bilibili.co/api/alter/metadata/pack/ci/open/add/one' \
       --header 'Content-Type: application/json' \
