@@ -69,7 +69,13 @@ class SparkLockContext(val qe: QueryExecution) extends Logging {
   val hadoopConf: Configuration = sessionState.newHadoopConf()
   lazy val hiveConf: HiveConf = {
     val sparkConf = sparkSession.sparkContext.conf
-    buildHiveConf(sparkConf)
+    val hiveConf =buildHiveConf(sparkConf)
+    val ss = org.apache.hadoop.hive.ql.session.SessionState.get
+    if (ss == null) {
+      hiveConf.set("_hive.hdfs.session.path", "/tmp")
+      hiveConf.set("_hive.local.session.path", "/tmp")
+    }
+    hiveConf
   }
   val hiveLockContext: Context = new Context(hiveConf)
   var hivePlan: QueryPlan = _
