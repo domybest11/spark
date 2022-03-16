@@ -61,7 +61,7 @@ object HivePlanFinder {
           val partitions = new ArrayBuffer[String]()
           val partitionSchema = dataSource.relation.partitionSchema
           val partColSize = partitionSchema.size
-          if (partColSize > 0) {
+          if (partColSize > 0 && dataSource.selectedPartitions.nonEmpty) {
             dataSource.selectedPartitions.foreach({ p =>
               if (p.values.numFields == partColSize) {
                 val partName = new ListBuffer[String]()
@@ -85,7 +85,10 @@ object HivePlanFinder {
         val table = getTableMeta(relation.tableMeta.identifier)
         val partitions = new ArrayBuffer[String]()
         val partColSize = relation.partitionCols.size
-        if (partColSize > 0) {
+        if (partColSize > 0
+          && relation.prunedPartitions.isDefined
+          && relation.prunedPartitions.get.nonEmpty
+        ) {
           relation.prunedPartitions.get.foreach(hd =>
             buildPartName(hd, partitions, partColSize)
           )
@@ -166,7 +169,7 @@ object HivePlanFinder {
 
         val partitions = new ArrayBuffer[String]()
         val partColSize = catalogTable.partitionColumnNames.size
-        if (partColSize > 0) {
+        if (partColSize > 0 && convert.updatePartitions.nonEmpty) {
           convert.updatePartitions.foreach({ p =>
             buildPartName(p, partitions, partColSize)
           })
