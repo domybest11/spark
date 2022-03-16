@@ -184,6 +184,16 @@ spark_client_build:
     - zip -r -j dest/$DEST_FILE_NAME dest/tmp/spark*/jars/*
     - rm -rf dest/tmp
     - alterctl fs upload dest/$DEST_FILE_NAME $CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
+    - |
+      curl --location --request POST 'http://alter.bilibili.co/api/alter/cicd/pack/hdfs/open/spark/jars/upload' \
+        --header 'Content-Type: application/json' \
+        --header 'Alter-Token: 3m3q8pC7T0KsdJW0KcNsvMgKXH' \
+        --data '{
+          "bossPath":"'"$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME"'",
+          "fileName":"'"$DEST_FILE_NAME"'",
+           "replica": 100
+        }'
+
 
 hive_build:
   stage: build
