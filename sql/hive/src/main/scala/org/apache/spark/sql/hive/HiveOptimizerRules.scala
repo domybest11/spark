@@ -26,7 +26,7 @@ import org.apache.hadoop.hive.common.StatsSetupConst
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, HiveTableRelation}
-import org.apache.spark.sql.catalyst.expressions.{AttributeSet, PredicateHelper}
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, AttributeSet, PredicateHelper}
 import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command.DDLUtils
@@ -41,7 +41,12 @@ case class DeterminePartitionedTableStats(sparkSession: SparkSession)
         sparkSession.sessionState.conf.metastorePartitionPruning =>
       val predicates = splitConjunctivePredicates(condition)
       val partitionSet = AttributeSet(relation.partitionCols)
-      val pruningPredicates = predicates.filter { predicate =>
+      val pruningPredicates = predicates.map { e =>
+        e transform {
+          case a: AttributeReference =>
+            a.withName(relation.output.find(_.semanticEquals(a)).getOrElse(a).name)
+        }
+      }.filter { predicate =>
         !predicate.references.isEmpty &&
           predicate.references.subsetOf(partitionSet)
       }
