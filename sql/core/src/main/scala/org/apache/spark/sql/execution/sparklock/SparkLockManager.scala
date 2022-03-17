@@ -39,7 +39,7 @@ object SparkLockManager extends Logging {
     val hivePlan = context.hivePlan
     val hiveLockContext = context.hiveLockContext
     val sparkUser = context.sparkSession.sparkContext.sparkUser
-    logInfo(s"Start lock for output: ${hivePlan.getOutputs} and input: ${hivePlan.getInputs}")
+    logDebug(s"Start lock for output: ${hivePlan.getOutputs} and input: ${hivePlan.getInputs}")
     manager.acquireLocks(hivePlan, hiveLockContext, sparkUser)
   }
 
@@ -51,7 +51,7 @@ object SparkLockManager extends Logging {
     val locks = context.hiveLockContext.getHiveLocks
     val manager = context.manager
     if (locks != null && locks.size() > 0) {
-      logInfo(s"Start unlock $locks")
+      logDebug(s"Start unlock $locks")
       manager.releaseLocks(locks)
     }
   }
