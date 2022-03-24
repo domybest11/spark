@@ -41,9 +41,11 @@ public class FailureJobCollector<T extends WrapEvent>{
   }
 
   public FailureJobCollector(Properties setting, String threadName) {
-    SparkConf conf  = new SparkConf();
+    SparkConf sparkConf = new SparkConf();
+    Utils.loadDefaultSparkProperties(sparkConf, null);
+    setConf(sparkConf);
     setting.forEach((key, value)->{
-      conf.set(key.toString(), value.toString());
+      this.conf.set(key.toString(), value.toString());
     });
     this.setting = setting;
     this.threadName = threadName;
