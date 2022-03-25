@@ -1,12 +1,9 @@
 package org.apache.spark.sql.execution.sparklock
 
-import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient
 import org.apache.hadoop.hive.ql.QueryPlan
 import org.apache.hadoop.hive.ql.hooks.{ReadEntity, WriteEntity}
 import org.apache.hadoop.hive.ql.metadata.{DummyPartition, Table}
-import org.apache.hadoop.security.UserGroupInformation
-import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTablePartition, HiveTableRelation}
@@ -17,27 +14,12 @@ import org.apache.spark.sql.execution.sparklock.SparkLockUtils.{buildHiveConf, g
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan, UnionExec}
 
 import java.util
-import java.util.concurrent.ConcurrentHashMap
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
-object HivePlanFinder extends Logging {
-  lazy val hiveConf: HiveConf = {
+object HivePlanFinder {
+  lazy val hive: HiveMetaStoreClient = {
     val sparkConf = SparkSession.active.sparkContext.conf
-    buildHiveConf(sparkConf)
-  }
-
-  private val hiveClientList = new ConcurrentHashMap[String, HiveMetaStoreClient]
-
-  def hive: HiveMetaStoreClient = {
-    val user = UserGroupInformation.getCurrentUser.getShortUserName
-    hiveClientList.compute(user, (_, client: HiveMetaStoreClient) => {
-      if (client == null) {
-        logDebug(s"create a new hms client for $user")
-        new HiveMetaStoreClient(hiveConf)
-      } else {
-        client
-      }
-    })
+    new HiveMetaStoreClient(buildHiveConf(sparkConf))
   }
 
 
@@ -60,10 +42,10 @@ object HivePlanFinder extends Logging {
   }
 
   def parseInputs(
-                   plan: SparkPlan,
-                   readEntities: util.HashSet[ReadEntity],
-                   sparkSession: SparkSession
-                 ): Unit = {
+                          plan: SparkPlan,
+                          readEntities: util.HashSet[ReadEntity],
+                          sparkSession: SparkSession
+                        ): Unit = {
     def getTableMeta(identifier: TableIdentifier): Table = {
       val dbName = identifier.database.getOrElse(sparkSession.catalog.currentDatabase)
       val tableName = identifier.table
@@ -130,7 +112,7 @@ object HivePlanFinder extends Logging {
         children.foreach {
           case dwc: DataWritingCommandExec =>
             parseDataWritingCommand(dwc, writeEntities)
-          case _: SparkPlan =>
+          case _:SparkPlan =>
         }
 
       case dwc: DataWritingCommandExec =>
@@ -203,8 +185,8 @@ object HivePlanFinder extends Logging {
   }
 
   private def buildInputEntities(partitions: Seq[String],
-                                 readEntities: util.HashSet[ReadEntity],
-                                 table: Table): Unit = {
+                         readEntities: util.HashSet[ReadEntity],
+                         table: Table): Unit = {
     val readEntity = new ReadEntity(table)
     readEntities.add(readEntity)
     if (partitions.nonEmpty) {
