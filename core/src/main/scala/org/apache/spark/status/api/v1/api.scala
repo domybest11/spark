@@ -276,6 +276,7 @@ class StageData private[spark](
     val shuffleWriteTime: Long,
     val shuffleWriteRecords: Long,
     val shuffleBlocksPushed: Long,
+    val shuffleAvgPushedBlockSize: Long,
     val shuffleBlocksNotPushed: Long,
     val shuffleBlocksCollided: Long,
     val shuffleBlocksTooLate: Long,
@@ -294,7 +295,7 @@ class StageData private[spark](
     @JsonSerialize(using = classOf[ExecutorMetricsJsonSerializer])
     @JsonDeserialize(using = classOf[ExecutorMetricsJsonDeserializer])
     val peakExecutorMetrics: Option[ExecutorMetrics],
-    val isPushBasedShuffleEnabled: Boolean,
+    val isPushBasedShuffleEnabled: Int,
     val shuffleMergersCount: Int)
 
 class TaskData private[spark](
@@ -365,6 +366,7 @@ class ShuffleReadMetrics private[spark](
 
 class ShufflePushWriteMetrics private[spark](
     val blocksPushed: Long,
+    val avgPushedBlockSize: Long,
     val blocksNotPushed: Long,
     val blocksCollided: Long,
     val blocksTooLate: Long)
@@ -436,6 +438,7 @@ class ShufflePushReadMetricDistributions private[spark](
 
 class ShufflePushWriteMetricDistributions private[spark](
      val blocksPushed: IndexedSeq[Double],
+     val shuffleAvgPushedBlockSize: IndexedSeq[Double],
      val blocksNotPushed: IndexedSeq[Double],
      val blocksCollided: IndexedSeq[Double],
      val blocksTooLate: IndexedSeq[Double])

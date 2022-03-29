@@ -119,6 +119,9 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
 
     val localitySummary = store.localitySummary(stageData.stageId, stageData.attemptId)
 
+    val taskSummary =
+      store.taskSummary(stageData.stageId, stageData.attemptId, Array(0, 0.25, 0.5, 0.75, 1.0))
+
     val totalTasks = stageData.numActiveTasks + stageData.numCompleteTasks +
       stageData.numFailedTasks + stageData.numKilledTasks
     if (totalTasks == 0) {
@@ -205,7 +208,7 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
               <strong>Push Based Shuffle Enabled: </strong>
               {s"${stageData.isPushBasedShuffleEnabled}"}
             </li>
-            if (stageData.isPushBasedShuffleEnabled)
+            if (stageData.isPushBasedShuffleEnabled != 0)
               {
                 <li>
                   <strong>Fall Back Count: </strong>
@@ -242,7 +245,7 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
                 <strong>Push Based Shuffle Enabled: </strong>
                 {s"${stageData.isPushBasedShuffleEnabled}"}
              </li>
-          if (stageData.isPushBasedShuffleEnabled)
+          if (stageData.isPushBasedShuffleEnabled != 0)
           {
               <li>
                 <strong>Blocks Pushed: </strong>
@@ -259,6 +262,12 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
               <li>
                 <strong>Blocks Collided: </strong>
                 {s"${stageData.shuffleBlocksCollided}"}
+              </li>
+              <li>
+                <strong>Avg Pushed Block Size: </strong>
+                {s"${Utils.bytesToString(
+                taskSummary.get.shuffleWriteMetrics
+                  .pushBased.shuffleAvgPushedBlockSize(2).asInstanceOf[Long])}"}
               </li>
           }
         }}

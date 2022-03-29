@@ -103,6 +103,9 @@ object KafkaProducerUtil extends Logging {
       val json = mapper.writeValueAsString(record)
       val className = record.getClass.getSimpleName
       kafkaProducer.send(className, json)
+      if (record.isInstanceOf[StageDataRecord]) {
+        logInfo(s"StageDataRecord:=> $json")
+      }
     } catch {
       case e: Exception =>
         logWarning("convert2ProducerRecord error", e)
@@ -217,7 +220,7 @@ private[spark] class StageDataRecord(
     var shuffleWriteBytes: Long = 0,
     var shuffleWriteTime: Long = 0,
     var shuffleWriteRecords: Long = 0,
-    var isPushBasedShuffleEnabled: Boolean = false,
+    var isPushBasedShuffleEnabled: Int = 0,
     var shuffleCorruptMergedBlockChunks: Long = 0,
     var shuffleFallbackCount: Long = 0,
     var shuffleMergedRemoteBlocksFetched: Long = 0,
@@ -229,6 +232,7 @@ private[spark] class StageDataRecord(
     var shuffleRemoteReqsDuration: Long = 0,
     var shuffleMergedRemoteReqsDuration: Long = 0,
     var shuffleBlocksPushed: Long = 0,
+    var shuffleAvgPushedBlockSize: Double = 0.0,
     var shuffleBlocksNotPushed: Long = 0,
     var shuffleBlocksCollided: Long = 0,
     var shuffleBlocksTooLate: Long = 0,

@@ -2646,6 +2646,20 @@ private[spark] object Utils extends Logging {
           conf.get(SparkLauncher.SPARK_MASTER, null) == "yarn"))
   }
 
+
+  def getPushBasedShuffleType(conf: SparkConf): Int = {
+    if (conf.get(PUSH_BASED_SHUFFLE_ENABLED)) {
+      if (conf.get(SHUFFLE_REMOTE_SERVICE_ENABLED)) {
+        2
+      } else {
+        1
+      }
+    } else {
+      0
+    }
+  }
+
+
   /**
    * Return whether dynamic allocation is enabled in the given conf.
    */

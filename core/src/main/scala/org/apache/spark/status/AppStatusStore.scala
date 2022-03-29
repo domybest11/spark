@@ -251,6 +251,7 @@ private[spark] class AppStatusStore(
           toValues(_.shuffleWriteTime),
           new v1.ShufflePushWriteMetricDistributions(
             toValues(_.shuffleBlocksPushed),
+            toValues(_.shuffleAvgPushedBlockSize),
             toValues(_.shuffleBlocksNotPushed),
             toValues(_.shuffleBlocksCollided),
             toValues(_.shuffleBlocksTooLate))))
@@ -366,6 +367,8 @@ private[spark] class AppStatusStore(
         scanTasks(TaskIndexNames.SHUFFLE_WRITE_TIME) { t => t.shuffleWriteTime },
         new v1.ShufflePushWriteMetricDistributions(
           scanTasks(TaskIndexNames.SHUFFLE_BLOCKS_NOT_PUSHED) { t => t.shuffleBlocksPushed},
+          scanTasks(TaskIndexNames.SHUFFLE_AVG_PUSHED_BLOCK_SIZE) {
+            t => t.shuffleAvgPushedBlockSize},
           scanTasks(TaskIndexNames.SHUFFLE_BLOCKS_NOT_PUSHED) { t => t.shuffleBlocksNotPushed},
           scanTasks(TaskIndexNames.SHUFFLE_BLOCKS_COLLIDED) { t => t.shuffleBlocksCollided},
           scanTasks(TaskIndexNames.SHUFFLE_BLOCKS_TOO_LATE) { t => t.shuffleBlocksTooLate})))
@@ -429,6 +432,8 @@ private[spark] class AppStatusStore(
           shuffleWriteTime = computedQuantiles.shuffleWriteMetrics.writeTime(idx),
           shuffleBlocksPushed =
             computedQuantiles.shuffleWriteMetrics.pushBased.blocksPushed(idx),
+          shuffleAvgPushedBlockSize =
+            computedQuantiles.shuffleWriteMetrics.pushBased.shuffleAvgPushedBlockSize(idx),
           shuffleBlocksNotPushed =
             computedQuantiles.shuffleWriteMetrics.pushBased.blocksNotPushed(idx),
           shuffleBlocksCollided =
@@ -583,6 +588,7 @@ private[spark] class AppStatusStore(
       shuffleWriteTime = stage.shuffleWriteTime,
       shuffleWriteRecords = stage.shuffleWriteRecords,
       shuffleBlocksPushed = stage.shuffleBlocksPushed,
+      shuffleAvgPushedBlockSize = stage.shuffleAvgPushedBlockSize,
       shuffleBlocksNotPushed = stage.shuffleBlocksNotPushed,
       shuffleBlocksCollided = stage.shuffleBlocksCollided,
       shuffleBlocksTooLate = stage.shuffleBlocksTooLate,
