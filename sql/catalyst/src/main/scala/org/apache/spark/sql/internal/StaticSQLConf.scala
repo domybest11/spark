@@ -77,6 +77,21 @@ object StaticSQLConf {
       .intConf
       .createWithDefault(1)
 
+  val LOCK_SPECIAL_USERS =
+    buildStaticConf("spark.sql.lockSpecialUsers")
+      .doc("SPARK LOCK MANAGER special user for hms client")
+      .internal()
+      .stringConf
+      .toSequence
+      .createOptional
+
+  val LOCK_MAX_HMS_CLIENTS_COUNT =
+    buildStaticConf("spark.sql.lock.maxHmsClientCount")
+      .doc("Spark Lock Manager max hms clients for spark.sql.locSpecialUsers")
+      .internal()
+      .intConf
+      .createWithDefault(10)
+
   val FILESOURCE_TABLE_RELATION_CACHE_SIZE =
     buildStaticConf("spark.sql.filesourceTableRelationCacheSize")
       .internal()

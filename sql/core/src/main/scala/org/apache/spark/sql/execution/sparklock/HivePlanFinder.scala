@@ -6,6 +6,7 @@ import org.apache.hadoop.hive.ql.QueryPlan
 import org.apache.hadoop.hive.ql.hooks.{ReadEntity, WriteEntity}
 import org.apache.hadoop.hive.ql.metadata.{DummyPartition, Table}
 import org.apache.hadoop.security.UserGroupInformation
+import org.apache.spark.SparkConf
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.TableIdentifier
@@ -15,29 +16,50 @@ import org.apache.spark.sql.execution.command.{ConvertTableBaseCommand, DataWrit
 import org.apache.spark.sql.execution.datasources.InsertIntoHadoopFsRelationCommand
 import org.apache.spark.sql.execution.sparklock.SparkLockUtils.{buildHiveConf, getFieldVal, makeQueryId}
 import org.apache.spark.sql.execution.{FileSourceScanExec, SparkPlan, UnionExec}
+import org.apache.spark.sql.internal.StaticSQLConf.{LOCK_MAX_HMS_CLIENTS_COUNT, LOCK_SPECIAL_USERS}
 
 import java.util
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, CopyOnWriteArrayList}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.util.Random
 
 object HivePlanFinder extends Logging {
+  val sparkConf: SparkConf = SparkSession.active.sparkContext.conf
+  val specialHmsUsers: Seq[String] =
+    sparkConf.get(LOCK_SPECIAL_USERS).getOrElse(Seq.empty)
+  lazy val maxHmsClientCount: Int =
+    sparkConf.get(LOCK_MAX_HMS_CLIENTS_COUNT)
   lazy val hiveConf: HiveConf = {
-    val sparkConf = SparkSession.active.sparkContext.conf
     buildHiveConf(sparkConf)
   }
 
-  private val hiveClientList = new ConcurrentHashMap[String, HiveMetaStoreClient]
+  private val hiveClientList =
+    new ConcurrentHashMap[String, CopyOnWriteArrayList[HiveMetaStoreClient]]
 
   def hive: HiveMetaStoreClient = {
     val user = UserGroupInformation.getCurrentUser.getShortUserName
-    hiveClientList.compute(user, (_, client: HiveMetaStoreClient) => {
-      if (client == null) {
-        logDebug(s"create a new hms client for $user")
-        new HiveMetaStoreClient(hiveConf)
+    val clients = hiveClientList.compute(user, (_, oldClients) => {
+      if (oldClients == null) {
+        val newClients = new CopyOnWriteArrayList[HiveMetaStoreClient]
+        if (specialHmsUsers.contains(user)) {
+          logInfo(s"create $maxHmsClientCount hms clients for $user")
+          (0 until maxHmsClientCount).foreach(
+            _ => newClients.add(new HiveMetaStoreClient(hiveConf))
+          )
+        } else {
+          logInfo(s"create one hms client for $user")
+          newClients.add(new HiveMetaStoreClient(hiveConf))
+        }
+        newClients
       } else {
-        client
+        oldClients
       }
     })
+    if (clients.size() == 1) {
+      clients.get(0)
+    } else {
+      clients.get(Random.nextInt(maxHmsClientCount))
+    }
   }
 
 
