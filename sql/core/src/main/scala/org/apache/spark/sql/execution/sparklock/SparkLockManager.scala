@@ -60,8 +60,7 @@ object SparkLockManager extends Logging {
 
 class SparkLockContext(val qe: QueryExecution) extends Logging {
   lazy val manager: HiveTxnManager = {
-    assert(SparkSession.getActiveSession.isDefined)
-    val hiveConf = buildHiveConf(SparkSession.getActiveSession.get.sparkContext.conf)
+    val hiveConf = buildHiveConf(SparkSession.active.sparkContext.conf)
     TxnManagerFactory.getTxnManagerFactory.getTxnManager(hiveConf)
   }
   val sparkSession: SparkSession = qe.sparkSession
