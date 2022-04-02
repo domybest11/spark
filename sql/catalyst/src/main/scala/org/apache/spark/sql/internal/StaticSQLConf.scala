@@ -92,6 +92,13 @@ object StaticSQLConf {
       .intConf
       .createWithDefault(10)
 
+  val SPARK_LOCK_ENABLE =
+    buildStaticConf("spark.sql.lock.enable")
+      .doc("enable spark lock")
+      .internal()
+      .booleanConf
+      .createWithDefault(true)
+
   val FILESOURCE_TABLE_RELATION_CACHE_SIZE =
     buildStaticConf("spark.sql.filesourceTableRelationCacheSize")
       .internal()
