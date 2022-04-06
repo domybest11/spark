@@ -44,6 +44,7 @@ import scala.util.control.{ControlThrowable, NonFatal}
 import scala.util.matching.Regex
 
 import _root_.io.netty.channel.unix.Errors.NativeIoException
+
 import com.google.common.cache.{CacheBuilder, CacheLoader, LoadingCache}
 import com.google.common.io.{ByteStreams, Files => GFiles}
 import com.google.common.net.InetAddresses
@@ -2553,6 +2554,14 @@ private[spark] object Utils extends Logging {
   def getCurrentUserName(): String = {
     Option(System.getenv("SPARK_USER"))
       .getOrElse(UserGroupInformation.getCurrentUser().getShortUserName())
+  }
+
+  def setTaskUserName(sparkConf: SparkConf): String = {
+    if (sparkConf.getBoolean("spark.proxyuser.enabled", false)) {
+      UserGroupInformation.getCurrentUser.getUserName
+    } else {
+      getCurrentUserName
+    }
   }
 
   val EMPTY_USER_GROUPS = Set.empty[String]

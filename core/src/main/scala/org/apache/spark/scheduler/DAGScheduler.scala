@@ -903,7 +903,7 @@ private[spark] class DAGScheduler(
     }
 
     if (properties != null) {
-      properties.setProperty("user", Utils.getCurrentUserName())
+        properties.setProperty("user", Utils.setTaskUserName(sc.conf))
     }
 
     assert(partitions.nonEmpty)
@@ -972,7 +972,9 @@ private[spark] class DAGScheduler(
       timeout: Long,
       properties: Properties): PartialResult[R] = {
     val jobId = nextJobId.getAndIncrement()
-    properties.setProperty("user", Utils.getCurrentUserName())
+    if (properties != null) {
+      properties.setProperty("user", Utils.setTaskUserName(sc.conf))
+    }
     if (rdd.partitions.isEmpty) {
       // Return immediately if the job is running 0 tasks
       val time = clock.getTimeMillis()
@@ -1013,7 +1015,7 @@ private[spark] class DAGScheduler(
     }
 
     if (properties != null) {
-      properties.setProperty("user", Utils.getCurrentUserName())
+      properties.setProperty("user", Utils.setTaskUserName(sc.conf))
     }
 
     // We create a JobWaiter with only one "task", which will be marked as complete when the whole
