@@ -70,6 +70,7 @@ class AdaptiveQueryExecSuite
     }
     spark.sparkContext.addSparkListener(listener)
 
+
     val dfAdaptive = sql(query)
     val planBefore = dfAdaptive.queryExecution.executedPlan
     assert(planBefore.toString.startsWith("AdaptiveSparkPlan isFinalPlan=false"))
@@ -1308,70 +1309,6 @@ class AdaptiveQueryExecSuite
     }
   }
 
-  test("SPARK-35455: Unify empty relation optimization between normal and AQE optimizer " +
-    "- single join") {
-    withSQLConf(SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true",
-      SQLConf.AUTO_BROADCASTJOIN_THRESHOLD.key -> "-1") {
-      Seq(
-        // left semi join and empty left side
-        ("SELECT * FROM (SELECT * FROM testData WHERE value = '0')t1 LEFT SEMI JOIN " +
-          "testData2 t2 ON t1.key = t2.a", true),
-        // left anti join and empty left side
-        ("SELECT * FROM (SELECT * FROM testData WHERE value = '0')t1 LEFT ANTI JOIN " +
-          "testData2 t2 ON t1.key = t2.a", true),
-        // left outer join and empty left side
-        ("SELECT * FROM (SELECT * FROM testData WHERE key = 0)t1 LEFT JOIN testData2 t2 ON " +
-          "t1.key = t2.a", true),
-        // left outer join and non-empty left side
-        ("SELECT * FROM testData t1 LEFT JOIN testData2 t2 ON " +
-          "t1.key = t2.a", false),
-        // right outer join and empty right side
-        ("SELECT * FROM testData t1 RIGHT JOIN (SELECT * FROM testData2 WHERE b = 0)t2 ON " +
-          "t1.key = t2.a", true),
-        // right outer join and non-empty right side
-        ("SELECT * FROM testData t1 RIGHT JOIN testData2 t2 ON " +
-          "t1.key = t2.a", false),
-        // full outer join and both side empty
-        ("SELECT * FROM (SELECT * FROM testData WHERE key = 0)t1 FULL JOIN " +
-          "(SELECT * FROM testData2 WHERE b = 0)t2 ON t1.key = t2.a", true),
-        // full outer join and left side empty right side non-empty
-        ("SELECT * FROM (SELECT * FROM testData WHERE key = 0)t1 FULL JOIN " +
-          "testData2 t2 ON t1.key = t2.a", true)
-      ).foreach { case (query, isEliminated) =>
-        val (plan, adaptivePlan) = runAdaptiveAndVerifyResult(query)
-        assert(findTopLevelBaseJoin(plan).size == 1)
-        assert(findTopLevelBaseJoin(adaptivePlan).isEmpty == isEliminated, adaptivePlan)
-      }
-    }
-  }
-
-  test("SPARK-35455: Unify empty relation optimization between normal and AQE optimizer " +
-    "- multi join") {
-    withSQLConf(SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true",
-      SQLConf.AUTO_BROADCASTJOIN_THRESHOLD.key -> "-1") {
-      Seq(
-        """
-         |SELECT * FROM testData t1
-         | JOIN (SELECT * FROM testData2 WHERE b = 0) t2 ON t1.key = t2.a
-         | LEFT JOIN testData2 t3 ON t1.key = t3.a
-         |""".stripMargin,
-        """
-         |SELECT * FROM (SELECT * FROM testData WHERE key = 0) t1
-         | LEFT ANTI JOIN testData2 t2
-         | FULL JOIN (SELECT * FROM testData2 WHERE b = 0) t3 ON t1.key = t3.a
-         |""".stripMargin,
-        """
-         |SELECT * FROM testData t1
-         | LEFT SEMI JOIN (SELECT * FROM testData2 WHERE b = 0)
-         | RIGHT JOIN testData2 t3 on t1.key = t3.a
-         |""".stripMargin
-      ).foreach { query =>
-        val (plan, adaptivePlan) = runAdaptiveAndVerifyResult(query)
-        assert(findTopLevelBaseJoin(plan).size == 2)
-        assert(findTopLevelBaseJoin(adaptivePlan).isEmpty)
-      }
-    }
-  }
 
   test("SPARK-32753: Only copy tags to node with no tags") {
     withSQLConf(SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true") {
@@ -1893,11 +1830,78 @@ class AdaptiveQueryExecSuite
     }
   }
 
+  test("SPARK-35455: Unify empty relation optimization between normal and AQE optimizer " +
+    "- single join") {
+    withSQLConf(SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true",
+      SQLConf.AUTO_BROADCASTJOIN_THRESHOLD.key -> "-1") {
+      Seq(
+        // left semi join and empty left side
+        ("SELECT * FROM (SELECT * FROM testData WHERE value = '0')t1 LEFT SEMI JOIN " +
+          "testData2 t2 ON t1.key = t2.a", true),
+        // left anti join and empty left side
+        ("SELECT * FROM (SELECT * FROM testData WHERE value = '0')t1 LEFT ANTI JOIN " +
+          "testData2 t2 ON t1.key = t2.a", true),
+        // left outer join and empty left side
+        ("SELECT * FROM (SELECT * FROM testData WHERE key = 0)t1 LEFT JOIN testData2 t2 ON " +
+          "t1.key = t2.a", true),
+        // left outer join and non-empty left side
+        ("SELECT * FROM testData t1 LEFT JOIN testData2 t2 ON " +
+          "t1.key = t2.a", false),
+        // right outer join and empty right side
+        ("SELECT * FROM testData t1 RIGHT JOIN (SELECT * FROM testData2 WHERE b = 0)t2 ON " +
+          "t1.key = t2.a", true),
+        // right outer join and non-empty right side
+        ("SELECT * FROM testData t1 RIGHT JOIN testData2 t2 ON " +
+          "t1.key = t2.a", false),
+        // full outer join and both side empty
+        ("SELECT * FROM (SELECT * FROM testData WHERE key = 0)t1 FULL JOIN " +
+          "(SELECT * FROM testData2 WHERE b = 0)t2 ON t1.key = t2.a", true),
+        // full outer join and left side empty right side non-empty
+        ("SELECT * FROM (SELECT * FROM testData WHERE key = 0)t1 FULL JOIN " +
+          "testData2 t2 ON t1.key = t2.a", true)
+      ).foreach { case (query, isEliminated) =>
+        val (plan, adaptivePlan) = runAdaptiveAndVerifyResult(query)
+        assert(findTopLevelBaseJoin(plan).size == 1)
+        assert(findTopLevelBaseJoin(adaptivePlan).isEmpty == isEliminated, adaptivePlan)
+      }
+    }
+  }
+
+  test("SPARK-35455: Unify empty relation optimization between normal and AQE optimizer " +
+    "- multi join") {
+    withSQLConf(SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true",
+      SQLConf.AUTO_BROADCASTJOIN_THRESHOLD.key -> "-1") {
+      Seq(
+        """
+          |SELECT * FROM testData t1
+          | JOIN (SELECT * FROM testData2 WHERE b = 0) t2 ON t1.key = t2.a
+          | LEFT JOIN testData2 t3 ON t1.key = t3.a
+          |""".stripMargin,
+        """
+          |SELECT * FROM (SELECT * FROM testData WHERE key = 0) t1
+          | LEFT ANTI JOIN testData2 t2
+          | FULL JOIN (SELECT * FROM testData2 WHERE b = 0) t3 ON t1.key = t3.a
+          |""".stripMargin,
+        """
+          |SELECT * FROM testData t1
+          | LEFT SEMI JOIN (SELECT * FROM testData2 WHERE b = 0)
+          | RIGHT JOIN testData2 t3 on t1.key = t3.a
+          |""".stripMargin
+      ).foreach { query =>
+        val (plan, adaptivePlan) = runAdaptiveAndVerifyResult(query)
+        assert(findTopLevelBaseJoin(plan).size == 2)
+        assert(findTopLevelBaseJoin(adaptivePlan).isEmpty)
+      }
+    }
+  }
+
   test("SPARK-35264: Support AQE side shuffled hash join formula") {
     withTempView("t1", "t2") {
       def checkJoinStrategy(shouldShuffleHashJoin: Boolean): Unit = {
         Seq("100", "100000").foreach { size =>
-          withSQLConf(SQLConf.ADVISORY_PARTITION_SIZE_IN_BYTES.key -> size) {
+          withSQLConf(SQLConf.ADVISORY_PARTITION_SIZE_IN_BYTES.key -> size,
+            SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true"
+          ) {
             val (origin1, adaptive1) = runAdaptiveAndVerifyResult(
               "SELECT t1.c1, t2.c1 FROM t1 JOIN t2 ON t1.c1 = t2.c1")
             assert(findTopLevelSortMergeJoin(origin1).size === 1)
@@ -1910,11 +1914,16 @@ class AdaptiveQueryExecSuite
             }
           }
         }
+
         // respect user specified join hint
-        val (origin2, adaptive2) = runAdaptiveAndVerifyResult(
-          "SELECT /*+ MERGE(t1) */ t1.c1, t2.c1 FROM t1 JOIN t2 ON t1.c1 = t2.c1")
-        assert(findTopLevelSortMergeJoin(origin2).size === 1)
-        assert(findTopLevelSortMergeJoin(adaptive2).size === 1)
+        withSQLConf(
+          SQLConf.ADAPTIVE_EXECUTION_ENABLED.key -> "true"
+        ) {
+          val (origin2, adaptive2) = runAdaptiveAndVerifyResult(
+            "SELECT /*+ MERGE(t1) */ t1.c1, t2.c1 FROM t1 JOIN t2 ON t1.c1 = t2.c1")
+          assert(findTopLevelSortMergeJoin(origin2).size === 1)
+          assert(findTopLevelSortMergeJoin(adaptive2).size === 1)
+        }
       }
 
       spark.sparkContext.parallelize(
