@@ -252,12 +252,16 @@ trait JoinSelectionHelper {
     val buildLeft = if (hintOnly) {
       hintToShuffleHashJoinLeft(hint)
     } else {
-      canBuildLocalHashMapBySize(left, conf) && muchSmaller(left, right)
+      hintToPreferShuffleHashJoinLeft(hint) ||
+        (!conf.preferSortMergeJoin && canBuildLocalHashMapBySize(left, conf) &&
+          muchSmaller(left, right))
     }
     val buildRight = if (hintOnly) {
       hintToShuffleHashJoinRight(hint)
     } else {
-      canBuildLocalHashMapBySize(right, conf) && muchSmaller(right, left)
+      hintToPreferShuffleHashJoinRight(hint) ||
+        (!conf.preferSortMergeJoin && canBuildLocalHashMapBySize(right, conf) &&
+          muchSmaller(right, left))
     }
     getBuildSide(
       canBuildShuffledHashJoinLeft(joinType) && buildLeft,
@@ -342,6 +346,14 @@ trait JoinSelectionHelper {
 
   def hintToShuffleHashJoinRight(hint: JoinHint): Boolean = {
     hint.rightHint.exists(_.strategy.contains(SHUFFLE_HASH))
+  }
+
+  def hintToPreferShuffleHashJoinLeft(hint: JoinHint): Boolean = {
+    hint.leftHint.exists(_.strategy.contains(PREFER_SHUFFLE_HASH))
+  }
+
+  def hintToPreferShuffleHashJoinRight(hint: JoinHint): Boolean = {
+    hint.rightHint.exists(_.strategy.contains(PREFER_SHUFFLE_HASH))
   }
 
   def hintToSortMergeJoin(hint: JoinHint): Boolean = {
