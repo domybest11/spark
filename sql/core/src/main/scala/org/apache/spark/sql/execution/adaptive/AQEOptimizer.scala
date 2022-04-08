@@ -31,7 +31,8 @@ class AQEOptimizer(conf: SQLConf) extends RuleExecutor[LogicalPlan] {
     Batch("Propagate Empty Relations", Once,
       AQEPropagateEmptyRelation,
       UpdateAttributeNullability),
-    Batch("Dynamic Join Selection", Once, DynamicJoinSelection)
+    Batch("Dynamic Join Selection", Once, DynamicJoinSelection),
+    Batch("Optimize bloom filter Join pruning", Once, OptimizeBloomFilterJoin)
   )
 
   final override protected def batches: Seq[Batch] = {
