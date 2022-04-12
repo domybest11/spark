@@ -103,9 +103,6 @@ object KafkaProducerUtil extends Logging {
       val json = mapper.writeValueAsString(record)
       val className = record.getClass.getSimpleName
       kafkaProducer.send(className, json)
-      if (record.isInstanceOf[StageDataRecord]) {
-        logInfo(s"StageDataRecord:=> $json")
-      }
     } catch {
       case e: Exception =>
         logWarning("convert2ProducerRecord error", e)
