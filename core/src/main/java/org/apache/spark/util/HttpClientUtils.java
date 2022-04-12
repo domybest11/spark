@@ -101,6 +101,20 @@ public class HttpClientUtils {
       return null;
     }
 
+    public int getGreyDeployLevel() {
+      StringBuilder url = new StringBuilder();
+      url.append("http://luckbear-api.bilibili.co/api/statistics/config/grey_level");
+      try {
+        Optional<String> resp = HttpClientUtils.getInstance().doGet(url.toString(), 10);
+        if (resp.isPresent()) {
+          return Integer.valueOf(resp.get());
+        }
+      } catch (Exception e) {
+        logger.warn("Get grey deploy level failed");
+      }
+      return -1;
+    }
+
     public static byte[] compress(String str, String encoding) {
         if (str == null || str.isEmpty()) {
             return null;

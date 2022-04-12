@@ -177,6 +177,15 @@ case class RackResolveRule(sparkConf: SparkConf) extends SparkConfRule {
     if (!sparkConf.contains("spark.hadoop.rackAware.skip") && ("jscs".equals(dcInfo) ||
       "/etc/hadoop-jscs".equals(hadoopConf) || "/etc/hadoop-jscs/".equals(hadoopConf))) {
       helper.setConf("spark.hadoop.rackAware.skip", "true")
+    } else {
+      val grayLevel = helper.getGreyLevel()
+      val appName = sparkConf.getOption("spark.app.name")
+      if (enabled(sparkConf) && grayLevel > 0 && appName.getOrElse("").startsWith("a_h")) {
+        val jobId = appName.get.split("_")(3)
+        if (jobId.toLong % 100 < grayLevel) {
+          helper.setConf("spark.hadoop.rackAware.skip", "true")
+        }
+      }
     }
   }
 }
