@@ -419,6 +419,7 @@ private[spark] object JsonProtocol {
         ("Push Based" -> shufflePushReadMetrics)
     val shufflePushWriteMetrics: JValue =
       ("Shuffle Blocks Pushed" -> taskMetrics.shuffleWriteMetrics.blocksPushed) ~
+      ("Shuffle Avg Pushed Block Size" -> taskMetrics.shuffleWriteMetrics.avgPushedBlockSize) ~
       ("Shuffle Blocks Not Pushed" -> taskMetrics.shuffleWriteMetrics.blocksNotPushed) ~
         ("Shuffle Blocks Collided" -> taskMetrics.shuffleWriteMetrics.blocksCollided) ~
         ("Shuffle Blocks Too Late" -> taskMetrics.shuffleWriteMetrics.blocksTooLate)
@@ -925,7 +926,7 @@ private[spark] object JsonProtocol {
       }
     }
     val isPushBasedShuffleEnabled =
-      jsonOption(json \ "Push based shuffle enabled").map(_.extract[Boolean]).getOrElse(false)
+      jsonOption(json \ "Push based shuffle enabled").map(_.extract[Int]).getOrElse(0)
     val shufflePushMergersCount =
       jsonOption(json \ "Shuffle push mergers count").map(_.extract[Int]).getOrElse(0)
 
@@ -1087,6 +1088,8 @@ private[spark] object JsonProtocol {
       // Push-based write metrics
       jsonOption(writeJson \ "Push Based").foreach { v =>
         writeMetrics.incBlocksPushed(jsonOption(v \ "Shuffle Blocks Pushed")
+          .map(_.extract[Long]).getOrElse(0L))
+        writeMetrics.incAvgPushedBlockSize(jsonOption(v \ "Shuffle Avg Pushed Block Size")
           .map(_.extract[Long]).getOrElse(0L))
         writeMetrics.incBlocksNotPushed(jsonOption(v \ "Shuffle Blocks Not Pushed")
           .map(_.extract[Long]).getOrElse(0L))

@@ -92,6 +92,7 @@ class StagePageSuite extends SparkFunSuite with LocalSparkContext {
         shuffleWriteTime = 1L,
         shuffleWriteRecords = 1L,
         shuffleBlocksPushed = 1L,
+        shuffleAvgPushedBlockSize = 1L,
         shuffleBlocksNotPushed = 1L,
         shuffleBlocksCollided = 1L,
         shuffleBlocksTooLate = 1L,
@@ -108,7 +109,7 @@ class StagePageSuite extends SparkFunSuite with LocalSparkContext {
         killedTasksSummary = Map.empty,
         ResourceProfile.DEFAULT_RESOURCE_PROFILE_ID,
         peakExecutorMetrics = None,
-        isPushBasedShuffleEnabled = false,
+        isPushBasedShuffleEnabled = 0,
         shuffleMergersCount = 0
       )
       val taskTable = new TaskPagedTable(
