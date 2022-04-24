@@ -38,7 +38,8 @@ case class ConvertHiveTableCommand(
 
     InsertIntoHiveTable(
       catalogTable,
-      catalogTable.partitionColumnNames.map(colName => (colName, None)).toMap,
+      catalogTable.partitionColumnNames.map(colName =>
+        (colName, staticPartitions.get(colName))).toMap,
       query,
       overwrite = true,
       ifPartitionNotExists = false,

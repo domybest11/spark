@@ -38,6 +38,26 @@ abstract class ConvertTableBaseCommand extends DataWritingCommand {
       (catalogTable.provider.isDefined && "hive".equalsIgnoreCase(catalogTable.provider.get))
   }
 
+  val staticPartitions = {
+    if (catalogTable.partitionColumnNames.nonEmpty) {
+      val map = scala.collection.mutable.Map[String, String]()
+      val firstPartitionName = catalogTable.partitionColumnNames.head
+      updatePartitions.foreach{
+        partition =>
+          val value = partition.spec(firstPartitionName)
+          map += value -> firstPartitionName
+      }
+      if (map.size == 1) {
+        val (value, key) = map.head
+        Map[String, String](key -> value)
+      } else {
+        Map.empty[String, String]
+      }
+    } else {
+      Map.empty[String, String]
+    }
+  }
+
   override def outputColumnNames: Seq[String] = output.map(_.name)
 
   override val output: Seq[Attribute] = {

@@ -42,7 +42,7 @@ case class ConvertDataSourceTableCommand(
 
     InsertIntoHadoopFsRelationCommand(
       hadoopFsRelation.location.rootPaths.head,
-      Map.empty[String, String],
+      staticPartitions,
       ifPartitionNotExists = false,
       partitionSchema,
       hadoopFsRelation.bucketSpec,

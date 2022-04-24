@@ -243,12 +243,12 @@ object DataSourceAnalysis extends Rule[LogicalPlan] with CastSupport {
         updatePartitions, Some(t))
 
     case MergeTableStatement(
-    LogicalRelation(t: HadoopFsRelation, _, table, _), query) =>
+    LogicalRelation(t: HadoopFsRelation, _, table, _), query, staticPartitions) =>
       // Sanity check
       if (t.location.rootPaths.size != 1) {
         throw new AnalysisException("Can only write data to relations with a single path.")
       }
-      MergeDataSourceTableCommand(table.get, query, Some(t))
+      MergeDataSourceTableCommand(table.get, query, Some(t), staticPartitions)
   }
 }
 
@@ -313,7 +313,7 @@ class FindDataSourceTable(sparkSession: SparkSession) extends Rule[LogicalPlan] 
 //      if DDLUtils.isDatasourceTable(tableMeta) =>
 //      c.copy(table = DDLUtils.readHiveTable(tableMeta))
 
-    case c @ MergeTableStatement(UnresolvedCatalogRelation(tableMeta, _, false), _) =>
+    case c @ MergeTableStatement(UnresolvedCatalogRelation(tableMeta, _, false), _, _) =>
       c.copy(table = DDLUtils.readHiveTable(tableMeta))
 
     case UnresolvedCatalogRelation(tableMeta, options, false)

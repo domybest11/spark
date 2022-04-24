@@ -23,7 +23,7 @@ import org.apache.spark.sql.catalyst.catalog.{CatalogTable, HiveTableRelation}
 import org.apache.spark.sql.catalyst.expressions.{And, EqualTo, Expression, Literal, Or}
 import org.apache.spark.sql.catalyst.plans.logical.{Filter, LogicalPlan, MergeTableStatement}
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.internal.SQLConf
 
 
@@ -32,13 +32,15 @@ case class MergePruning(session: SparkSession) extends Rule[LogicalPlan] {
 
   override def apply(plan: LogicalPlan): LogicalPlan = {
     plan resolveOperators {
-      case MergeTableStatement(tableRelation, query) =>
-        val pruning = rewriteQuery(query)
-        MergeTableStatement(tableRelation, pruning)
+      case MergeTableStatement(tableRelation @ LogicalRelation(
+      t: HadoopFsRelation, _, _, _), query, _) =>
+        val (pruning, staticPartitions) = rewriteQuery(query, t)
+        MergeTableStatement(tableRelation, pruning, staticPartitions)
     }
   }
 
-  private def rewriteQuery(query: LogicalPlan): LogicalPlan = {
+  private def rewriteQuery(query: LogicalPlan, relation: HadoopFsRelation):
+  (LogicalPlan, Map[String, String]) = {
     val catalog = session.sessionState.catalog
     var filter: Option[Filter] = None
     var source: Option[CatalogTable] = None
@@ -55,6 +57,7 @@ case class MergePruning(session: SparkSession) extends Rule[LogicalPlan] {
       case _ => false
     }
     if (source.isDefined && catalog.tableExists(source.get.identifier)) {
+      val map = scala.collection.mutable.Map[String, String]()
       val rewriteQuery = if (source.get.partitionColumnNames.isEmpty) {
         val tableProperties = source.get.properties
         val totalSize = tableProperties.getOrElse("totalSize", "-1").toLong
@@ -89,8 +92,12 @@ case class MergePruning(session: SparkSession) extends Rule[LogicalPlan] {
               totalSize / numFiles < avgConditionSize
             }
         }
+
+        val firstPartitionField = relation.partitionSchema.fields(0)
         val filterExpression = prunedPartition.map{
           partition =>
+            val value = partition.spec(firstPartitionField.name)
+            map += value ->firstPartitionField.name
             partition.spec.map(entry =>
               EqualTo(UnresolvedAttribute(Seq(entry._1)), Literal(entry._2))
             ).reduce((e1: Expression, e2: Expression) => And(e1, e2))
@@ -104,7 +111,12 @@ case class MergePruning(session: SparkSession) extends Rule[LogicalPlan] {
         }
         session.sessionState.analyzer.execute(filterQuery)
       }
-      rewriteQuery
+      if (map.size == 1) {
+        val (value, key) = map.head
+        (rewriteQuery, Map[String, String](key -> value))
+      } else {
+        (rewriteQuery, Map.empty)
+      }
     } else {
       throw new AnalysisException(s"Table or view not found: ${source.get.identifier}")
     }
