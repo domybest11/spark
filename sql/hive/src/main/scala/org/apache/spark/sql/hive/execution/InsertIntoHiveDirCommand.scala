@@ -59,10 +59,14 @@ case class InsertIntoHiveDirCommand(
 
   override def run(sparkSession: SparkSession, child: SparkPlan): Seq[Row] = {
     assert(storage.locationUri.nonEmpty)
-    SchemaUtils.checkColumnNameDuplication(
-      outputColumnNames,
-      s"when inserting into ${storage.locationUri.get}",
-      sparkSession.sessionState.conf.caseSensitiveAnalysis)
+    if (storage.outputFormat.isDefined &&
+      !storage.outputFormat.get.equals("org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat") &&
+      !storage.outputFormat.get.equals("org.apache.hadoop.hive.contrib.fileformat.base64.Base64TextOutputFormat")) {
+      SchemaUtils.checkColumnNameDuplication(
+        outputColumnNames,
+        s"when inserting into ${storage.locationUri.get}",
+        sparkSession.sessionState.conf.caseSensitiveAnalysis)
+    }
 
     val table = CatalogTable(
       identifier = TableIdentifier(storage.locationUri.get.toString, Some("default")),
