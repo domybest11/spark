@@ -565,28 +565,24 @@ class HivePartitionFilteringSuite(version: String)
     // does not need time zone
     Seq(("true", "20200104" :: Nil), ("false", dateStrValue)).foreach {
       case (pruningFastFallbackEnabled, prunedPartition) =>
-        withSQLConf(pruningFastFallback -> pruningFastFallbackEnabled) {
-          testMetastorePartitionFiltering(
-            attr("datestr").cast(IntegerType) === 20200104,
-            dsValue,
-            hValue,
-            chunkValue,
-            dateValue,
-            prunedPartition)
-        }
-    }
-
-    // need time zone
-    Seq("true", "false").foreach { pruningFastFallbackEnabled =>
-      withSQLConf(pruningFastFallback -> pruningFastFallbackEnabled) {
         testMetastorePartitionFiltering(
-          attr("datestr").cast(DateType) === Date.valueOf("2020-01-01"),
+          attr("datestr").cast(IntegerType) === 20200104,
           dsValue,
           hValue,
           chunkValue,
           dateValue,
-          dateStrValue)
-      }
+          prunedPartition)
+    }
+
+    // need time zone
+    Seq("true", "false").foreach { pruningFastFallbackEnabled =>
+      testMetastorePartitionFiltering(
+        attr("datestr").cast(DateType) === Date.valueOf("2020-01-01"),
+        dsValue,
+        hValue,
+        chunkValue,
+        dateValue,
+        dateStrValue)
     }
   }
 
