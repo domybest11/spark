@@ -1148,7 +1148,7 @@ class Analyzer(override val catalogManager: CatalogManager)
           case other => convert.copy(table = other)
         }
 
-      case mergeTable @ MergeTableStatement(table, _) if mergeTable.query.resolved =>
+      case mergeTable @ MergeTableStatement(table, _, _) if mergeTable.query.resolved =>
         val relation = table match {
           case u @ UnresolvedRelation(_, _, false) =>
             lookupRelation(u.multipartIdentifier, u.options, false).getOrElse(u)

@@ -134,11 +134,11 @@ case class RebalancePartitionBeforeWriteTable(session: SparkSession) extends Rul
         if query.resolved && canInsertRebalancePartitions(query) =>
       applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
 
-    case o @ MergeHiveTableCommand(table, query, _)
+    case o @ MergeHiveTableCommand(table, query, _, _)
       if query.resolved && canInsertRebalancePartitions(query) =>
       applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
 
-    case o @ MergeDataSourceTableCommand(table, query, _)
+    case o @ MergeDataSourceTableCommand(table, query, _, _)
       if query.resolved && canInsertRebalancePartitions(query) =>
       applyRebalancePartition(o, table.bucketSpec, getRebalanceColumns(query, table))
 

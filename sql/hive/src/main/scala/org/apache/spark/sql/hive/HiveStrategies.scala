@@ -152,7 +152,7 @@ class DetermineTableStats(session: SparkSession) extends Rule[LogicalPlan] {
       if relation.tableMeta.stats.isEmpty =>
       c.copy(table = hiveTableWithStats(relation))
 
-    case c @ MergeTableStatement(relation: HiveTableRelation, _)
+    case c @ MergeTableStatement(relation: HiveTableRelation, _, _)
       if DDLUtils.isHiveTable(relation.tableMeta) && relation.tableMeta.stats.isEmpty =>
       c.copy(table = hiveTableWithStats(relation))
   }
@@ -176,9 +176,9 @@ object HiveAnalysis extends Rule[LogicalPlan] {
       if DDLUtils.isHiveTable(r.tableMeta) =>
       ConvertHiveTableCommand(r.tableMeta, query, fileFormat, compressType, updatePartitions)
 
-    case MergeTableStatement(r: HiveTableRelation, query)
+    case MergeTableStatement(r: HiveTableRelation, query, staticPartitions)
       if DDLUtils.isHiveTable(r.tableMeta) =>
-      MergeHiveTableCommand(r.tableMeta, query)
+      MergeHiveTableCommand(r.tableMeta, query, staticPartitions = staticPartitions)
 
     case CreateTable(tableDesc, mode, None) if DDLUtils.isHiveTable(tableDesc) =>
       CreateTableCommand(tableDesc, ignoreIfExists = mode == SaveMode.Ignore)
@@ -237,7 +237,7 @@ case class RelationConversions(
         metastoreCatalog.convert(relation)
 
       // Merge table
-      case MergeTableStatement(r: HiveTableRelation, query)
+      case MergeTableStatement(r: HiveTableRelation, query, _)
         if query.resolved && isConvertible(r) =>
         val hiveRelation = r.copy(tableMeta = r.tableMeta.copy(provider = Some("hive")))
         if (hiveRelation.isPartitioned) {
