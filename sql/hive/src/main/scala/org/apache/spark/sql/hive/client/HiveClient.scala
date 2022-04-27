@@ -182,8 +182,9 @@ private[hive] trait HiveClient {
   final def getPartition(
       dbName: String,
       tableName: String,
-      spec: TablePartitionSpec): CatalogTablePartition = {
-    getPartitionOption(dbName, tableName, spec).getOrElse {
+      spec: TablePartitionSpec,
+      includeUnCommit: Option[Boolean]): CatalogTablePartition = {
+    getPartitionOption(dbName, tableName, spec, includeUnCommit).getOrElse {
       throw new NoSuchPartitionException(dbName, tableName, spec)
     }
   }
@@ -202,14 +203,16 @@ private[hive] trait HiveClient {
   final def getPartitionOption(
       db: String,
       table: String,
-      spec: TablePartitionSpec): Option[CatalogTablePartition] = {
-    getPartitionOption(getTable(db, table), spec)
+      spec: TablePartitionSpec,
+      includeUnCommit: Option[Boolean]): Option[CatalogTablePartition] = {
+    getPartitionOption(getTable(db, table), spec, includeUnCommit)
   }
 
   /** Returns the specified partition or None if it does not exist. */
   def getPartitionOption(
       table: CatalogTable,
-      spec: TablePartitionSpec): Option[CatalogTablePartition]
+      spec: TablePartitionSpec,
+      includeUnCommit: Option[Boolean]): Option[CatalogTablePartition]
 
   /**
    * Returns the partitions for the given table that match the supplied partition spec.
@@ -218,8 +221,9 @@ private[hive] trait HiveClient {
   final def getPartitions(
       db: String,
       table: String,
-      partialSpec: Option[TablePartitionSpec]): Seq[CatalogTablePartition] = {
-    getPartitions(getTable(db, table), partialSpec)
+      partialSpec: Option[TablePartitionSpec],
+      includeUnCommit: Option[Boolean]): Seq[CatalogTablePartition] = {
+    getPartitions(getTable(db, table), partialSpec, includeUnCommit)
   }
 
   /**
@@ -228,13 +232,15 @@ private[hive] trait HiveClient {
    */
   def getPartitions(
       catalogTable: CatalogTable,
-      partialSpec: Option[TablePartitionSpec] = None): Seq[CatalogTablePartition]
+      partialSpec: Option[TablePartitionSpec] = None,
+      includeUnCommit: Option[Boolean]): Seq[CatalogTablePartition]
 
   /** Returns partitions filtered by predicates for the given table. */
   def getPartitionsByFilter(
       catalogTable: CatalogTable,
       predicates: Seq[Expression],
-      timeZoneId: String): Seq[CatalogTablePartition]
+      timeZoneId: String,
+      includeUnCommit: Option[Boolean]): Seq[CatalogTablePartition]
 
   /** Loads a static partition into an existing table. */
   def loadPartition(

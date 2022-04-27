@@ -714,7 +714,7 @@ private[hive] class HiveClientImpl(
     val catalogTable = getTable(db, table)
     val hiveTable = toHiveTable(catalogTable, Some(userName))
     specs.zip(newSpecs).foreach { case (oldSpec, newSpec) =>
-      val hivePart = getPartitionOption(catalogTable, oldSpec)
+      val hivePart = getPartitionOption(catalogTable, oldSpec, None)
         .map { p => toHivePartition(p.copy(spec = newSpec), hiveTable) }
         .getOrElse { throw new NoSuchPartitionException(db, table, oldSpec) }
       client.renamePartition(hiveTable, oldSpec.asJava, hivePart)
@@ -762,9 +762,11 @@ private[hive] class HiveClientImpl(
 
   override def getPartitionOption(
       table: CatalogTable,
-      spec: TablePartitionSpec): Option[CatalogTablePartition] = withHiveState {
+      spec: TablePartitionSpec,
+      includeUnCommit: Option[Boolean]): Option[CatalogTablePartition] = withHiveState {
     val hiveTable = toHiveTable(table, Some(userName))
-    val hivePartition = client.getPartition(hiveTable, spec.asJava, false)
+    val hivePartition = client
+      .getPartition(hiveTable, spec.asJava, false, includeUnCommit.getOrElse(false))
     Option(hivePartition).map(fromHivePartition)
   }
 
@@ -774,7 +776,8 @@ private[hive] class HiveClientImpl(
    */
   override def getPartitions(
       table: CatalogTable,
-      spec: Option[TablePartitionSpec]): Seq[CatalogTablePartition] = withHiveState {
+      spec: Option[TablePartitionSpec],
+      includeUnCommit: Option[Boolean]): Seq[CatalogTablePartition] = withHiveState {
     val hiveTable = toHiveTable(table, Some(userName))
     val partSpec = spec match {
       case None => CatalogTypes.emptyTablePartitionSpec
@@ -782,7 +785,9 @@ private[hive] class HiveClientImpl(
         assert(s.values.forall(_.nonEmpty), s"partition spec '$s' is invalid")
         s
     }
-    val parts = client.getPartitions(hiveTable, partSpec.asJava).asScala.map(fromHivePartition)
+    val parts = client
+      .getPartitions(hiveTable, partSpec.asJava, includeUnCommit.getOrElse(false))
+      .asScala.map(fromHivePartition)
     HiveCatalogMetrics.incrementFetchedPartitions(parts.length)
     parts.toSeq
   }
@@ -790,9 +795,11 @@ private[hive] class HiveClientImpl(
   override def getPartitionsByFilter(
       table: CatalogTable,
       predicates: Seq[Expression],
-      timeZoneId: String): Seq[CatalogTablePartition] = withHiveState {
+      timeZoneId: String,
+      includeUnCommit: Option[Boolean]): Seq[CatalogTablePartition] = withHiveState {
     val hiveTable = toHiveTable(table, Some(userName))
-    val parts = shim.getPartitionsByFilter(client, hiveTable, predicates, timeZoneId, table)
+    val parts = shim
+      .getPartitionsByFilter(client, hiveTable, predicates, timeZoneId, table, includeUnCommit)
       .map(fromHivePartition)
     HiveCatalogMetrics.incrementFetchedPartitions(parts.length)
     parts
