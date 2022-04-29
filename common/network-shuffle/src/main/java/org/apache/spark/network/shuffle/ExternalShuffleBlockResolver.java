@@ -24,6 +24,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.builder.ToStringBuilder;
@@ -117,19 +118,22 @@ public class ExternalShuffleBlockResolver {
     this.registeredExecutorFile = registeredExecutorFile;
     String indexCacheSize = conf.get("spark.shuffle.service.index.cache.size", "100m");
     CacheLoader<File, ShuffleIndexInformation> indexCacheLoader =
-        new CacheLoader<File, ShuffleIndexInformation>() {
-          public ShuffleIndexInformation load(File file) throws IOException {
-            return new ShuffleIndexInformation(file);
-          }
-        };
-    shuffleIndexCache = CacheBuilder.newBuilder()
-      .maximumWeight(JavaUtils.byteStringAsBytes(indexCacheSize))
-      .weigher(new Weigher<File, ShuffleIndexInformation>() {
-        public int weigh(File file, ShuffleIndexInformation indexInfo) {
-          return indexInfo.getSize();
+      new CacheLoader<File, ShuffleIndexInformation>() {
+        public ShuffleIndexInformation load(File file) throws IOException {
+          return new ShuffleIndexInformation(file);
         }
-      })
-      .build(indexCacheLoader);
+    };
+    CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
+      .maximumWeight(JavaUtils.byteStringAsBytes(indexCacheSize))
+      .weigher((Weigher<String, ShuffleIndexInformation>)
+           (filePath, indexInfo) -> indexInfo.getSize());
+    int expireTimeSeconds = conf.shuffleIndexCacheExpireTimeSeconds();
+    if (expireTimeSeconds > 0) {
+      shuffleIndexCache = cacheBuilder.expireAfterAccess(expireTimeSeconds, TimeUnit.SECONDS)
+        .build(indexCacheLoader);
+    } else {
+      shuffleIndexCache = cacheBuilder.build(indexCacheLoader);
+    }
     db = LevelDBProvider.initLevelDB(this.registeredExecutorFile, CURRENT_VERSION, mapper);
     if (db != null) {
       executors = reloadRegisteredExecutors(db);
