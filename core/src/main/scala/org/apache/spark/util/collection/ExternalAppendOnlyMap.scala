@@ -23,15 +23,17 @@ import java.util.Comparator
 import scala.collection.BufferedIterator
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-
 import com.google.common.io.ByteStreams
-
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FSDataInputStream, FileSystem, Path}
 import org.apache.spark.{SparkEnv, TaskContext}
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.executor.ShuffleWriteMetrics
-import org.apache.spark.internal.{config, Logging}
+import org.apache.spark.internal.config.EVENT_LOG_COMPRESSION_CODEC
+import org.apache.spark.internal.{Logging, config}
+import org.apache.spark.io.CompressionCodec
 import org.apache.spark.serializer.{DeserializationStream, Serializer, SerializerManager}
-import org.apache.spark.storage.{BlockId, BlockManager}
+import org.apache.spark.storage.{BlockId, BlockManager, ShuffleStorageUtils}
 import org.apache.spark.util.CompletionIterator
 import org.apache.spark.util.collection.ExternalAppendOnlyMap.HashComparator
 
@@ -84,10 +86,10 @@ class ExternalAppendOnlyMap[K, V, C](
    * Exposed for testing
    */
   @volatile private[collection] var currentMap = new SizeTrackingAppendOnlyMap[K, C]
-  private val spilledMaps = new ArrayBuffer[DiskMapIterator]
+  private val spilledMaps = new ArrayBuffer[Iterator[(K, C)]]
   private val sparkConf = SparkEnv.get.conf
   private val diskBlockManager = blockManager.diskBlockManager
-
+  private val hadoopConf: Configuration = null
   /**
    * Size of object batches when reading/writing from serializers.
    *
@@ -184,8 +186,13 @@ class ExternalAppendOnlyMap[K, V, C](
    */
   override protected[this] def spill(collection: SizeTracker): Unit = {
     val inMemoryIterator = currentMap.destructiveSortedIterator(keyComparator)
-    val diskMapIterator = spillMemoryIteratorToDisk(inMemoryIterator)
-    spilledMaps += diskMapIterator
+    val mapIterator =
+    if (sparkConf.get(config.SHUFFLE_SPILL_HDFS_ENABLE)) {
+      spillMemoryIteratorToHdfs(inMemoryIterator)
+    } else {
+      spillMemoryIteratorToDisk(inMemoryIterator)
+    }
+    spilledMaps += mapIterator
   }
 
   /**
@@ -294,6 +301,66 @@ class ExternalAppendOnlyMap[K, V, C](
       releaseMemory()
     }
   }
+
+
+  /**
+   * Spill the in-memory Iterator to a temporary file on hdfs.
+   */
+  private[this] def spillMemoryIteratorToHdfs(inMemoryIterator: Iterator[(K, C)])
+  : HdfsMapIterator = {
+    val (blockId, path) = diskBlockManager.createTempHdfsBlock(sparkConf.get("spark.app.id"),
+      sparkConf.get("spark.app.attempt.id"), context.stageId(), context.stageAttemptNumber,
+      context.taskAttemptId, context.attemptNumber, hadoopConf)
+    val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
+    val writer = blockManager.getHdfsWriter(blockId, path, ser, fileBufferSize, writeMetrics,
+      hadoopConf, sparkConf)
+    var objectsWritten = 0
+    // List of batch sizes (bytes) in the order they are written to hdfs
+    val batchSizes = new ArrayBuffer[Long]
+    // Flush the disk writer's contents to disk, and update relevant variables
+    def flush(): Unit = {
+      val segment = writer.commitAndGet()
+      batchSizes += segment.length
+      _diskBytesSpilled += segment.length
+      objectsWritten = 0
+    }
+
+    var success = false
+    try {
+      while (inMemoryIterator.hasNext) {
+        val kv = inMemoryIterator.next()
+        writer.write(kv._1, kv._2)
+        objectsWritten += 1
+
+        if (objectsWritten == serializerBatchSize) {
+          flush()
+        }
+      }
+      if (objectsWritten > 0) {
+        flush()
+        writer.close()
+      } else {
+        writer.revertPartialWritesAndClose()
+      }
+      success = true
+    } finally {
+      if (!success) {
+        // This code path only happens if an exception was thrown above before we set success;
+        // close our stuff and let the exception be thrown further
+        writer.revertPartialWritesAndClose()
+        if (fileSystem.exists(path)) {
+          if (!fileSystem.delete(path)) {
+            logWarning(s"Error deleting ${path.toString}")
+          }
+        }
+      }
+    }
+
+    new HdfsMapIterator(path, blockId, batchSizes)
+  }
+
+
+
 
   /**
    * An iterator that sort-merges (K, C) pairs from the in-memory map and the spilled maps
@@ -624,6 +691,137 @@ class ExternalAppendOnlyMap[K, V, C](
   override def toString(): String = {
     this.getClass.getName + "@" + java.lang.Integer.toHexString(this.hashCode())
   }
+
+  /**
+   * An iterator that returns (K, C) pairs in sorted order from an on-hdfs map
+   */
+  private class HdfsMapIterator(path: Path, blockId: BlockId, batchSizes: ArrayBuffer[Long])
+    extends Iterator[(K, C)]
+  {
+    private val batchOffsets = batchSizes.scanLeft(0L)(_ + _)  // Size will be batchSize.length + 1
+    private var batchIndex = 0  // Which batch we're in
+    var fsDataInputStream: FSDataInputStream = null
+    val shouldCompress =
+      sparkConf.get("spark.spill.data.compress", "false").toBoolean
+    val compressionCodec =
+      if (shouldCompress) {
+        Some(CompressionCodec.createCodec(sparkConf, sparkConf.get(EVENT_LOG_COMPRESSION_CODEC)))
+      } else {
+        None
+      }
+    private var cstream: InputStream = null
+    // An intermediate stream that reads from exactly one batch
+    // This guards against pre-fetching and other arbitrary behavior of higher level streams
+    private var deserializeStream: DeserializationStream = null
+    private var nextItem: (K, C) = null
+    private var objectsRead = 0
+
+    /**
+     * Construct a stream that reads only from the next batch.
+     */
+    private def nextBatchStream(): DeserializationStream = {
+      // Note that batchOffsets.length = numBatches + 1 since we did a scan above; check whether
+      // we're still in a valid batch.
+      if (batchIndex < batchOffsets.length - 1) {
+        if (deserializeStream != null) {
+          deserializeStream.close()
+          cstream.close()
+          deserializeStream = null
+          cstream = null
+        }
+
+        val start = batchOffsets(batchIndex)
+        val fileSystem: FileSystem =
+          ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
+        fsDataInputStream = fileSystem.open(path)
+        cstream = compressionCodec.map(_.compressedContinuousInputStream(fsDataInputStream))
+          .getOrElse(fsDataInputStream)
+        fsDataInputStream.seek(start)
+        batchIndex += 1
+
+        val end = batchOffsets(batchIndex)
+
+        assert(end >= start, "start = " + start + ", end = " + end +
+          ", batchOffsets = " + batchOffsets.mkString("[", ", ", "]"))
+
+        val bufferedStream = new BufferedInputStream(ByteStreams.limit(cstream, end - start))
+        val wrappedStream = serializerManager.wrapStream(blockId, bufferedStream)
+        ser.deserializeStream(wrappedStream)
+      } else {
+        // No more batches left
+        cleanup()
+        null
+      }
+    }
+
+    /**
+     * Return the next (K, C) pair from the deserialization stream.
+     *
+     * If the current batch is drained, construct a stream for the next batch and read from it.
+     * If no more pairs are left, return null.
+     */
+    private def readNextItem(): (K, C) = {
+      try {
+        val k = deserializeStream.readKey().asInstanceOf[K]
+        val c = deserializeStream.readValue().asInstanceOf[C]
+        val item = (k, c)
+        objectsRead += 1
+        if (objectsRead == serializerBatchSize) {
+          objectsRead = 0
+          deserializeStream = nextBatchStream()
+        }
+        item
+      } catch {
+        case e: EOFException =>
+          cleanup()
+          null
+      }
+    }
+
+    override def hasNext: Boolean = {
+      if (nextItem == null) {
+        if (deserializeStream == null) {
+          // In case of deserializeStream has not been initialized
+          deserializeStream = nextBatchStream()
+          if (deserializeStream == null) {
+            return false
+          }
+        }
+        nextItem = readNextItem()
+      }
+      nextItem != null
+    }
+
+    override def next(): (K, C) = {
+      if (!hasNext) {
+        throw new NoSuchElementException
+      }
+      val item = nextItem
+      nextItem = null
+      item
+    }
+
+    private def cleanup(): Unit = {
+      batchIndex = batchOffsets.length  // Prevent reading any other batch
+      if (deserializeStream != null) {
+        deserializeStream.close()
+        deserializeStream = null
+      }
+      if (fileStream != null) {
+        fileStream.close()
+        fileStream = null
+      }
+      if (file.exists()) {
+        if (!file.delete()) {
+          logWarning(s"Error deleting ${file}")
+        }
+      }
+    }
+
+    context.addTaskCompletionListener[Unit](context => cleanup())
+  }
+
+
 }
 
 private[spark] object ExternalAppendOnlyMap {

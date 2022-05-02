@@ -1589,12 +1589,22 @@ package object config {
       .booleanConf
       .createWithDefault(false)
 
+
+
   private[spark] val SHUFFLE_UNSAFE_FAST_MERGE_ENABLE =
     ConfigBuilder("spark.shuffle.unsafe.fastMergeEnabled")
       .doc("Whether to perform a fast spill merge.")
       .version("1.4.0")
       .booleanConf
       .createWithDefault(true)
+
+  private[spark] val SHUFFLE_SPILL_HDFS_ENABLE =
+    ConfigBuilder("spark.shuffle.spill.hdfs.enabled")
+      .doc("Whether to spill to remote hdfs.")
+      .version("1.4.0")
+      .booleanConf
+      .createWithDefault(false)
+
 
   private[spark] val SHUFFLE_SORT_USE_RADIXSORT =
     ConfigBuilder("spark.shuffle.sort.useRadixSort")
