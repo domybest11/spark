@@ -19,15 +19,14 @@ package org.apache.spark.sql.hive.execution
 
 import java.io.File
 import java.net.URI
+import java.nio.file.Files
 import java.sql.Timestamp
 import java.util.Locale
 
 import scala.util.Try
-
 import org.apache.commons.lang3.{JavaVersion, SystemUtils}
 import org.apache.hadoop.hive.conf.HiveConf.ConfVars
 import org.scalatest.BeforeAndAfter
-
 import org.apache.spark.{SparkFiles, TestUtils}
 import org.apache.spark.sql.{AnalysisException, DataFrame, Row, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.Cast
@@ -955,6 +954,57 @@ class HiveQuerySuite extends HiveComparisonTest with SQLTestUtils with BeforeAnd
         """INSERT INTO TABLE dp_test PARTITION(dp, sp = 1)
           |SELECT key, value, key % 5 FROM src
         """.stripMargin)
+    }
+  }
+
+
+  test("ADD ARCHIVE/LIST ARCHIVES commands") {
+    withTempDir { dir =>
+      val file1 = File.createTempFile("someprefix1", "somesuffix1", dir)
+      val file2 = File.createTempFile("someprefix2", "somesuffix2", dir)
+
+      Files.write(file1.toPath, "file1".getBytes)
+      Files.write(file2.toPath, "file2".getBytes)
+
+      val zipFile = new File(dir, "test.zip")
+      val jarFile = new File(dir, "test.jar")
+      TestUtils.createJar(Seq(file1), zipFile)
+      TestUtils.createJar(Seq(file2), jarFile)
+
+      sql(s"ADD ARCHIVE ${zipFile.getAbsolutePath}#foo")
+      sql(s"ADD ARCHIVE ${jarFile.getAbsolutePath}#bar")
+
+      val checkAddArchive =
+        sparkContext.parallelize(
+          Seq(
+            "foo",
+            s"foo/${file1.getName}",
+            "nonexistence",
+            "bar",
+            s"bar/${file2.getName}"), 1).map { name =>
+          val file = new File(SparkFiles.get(name))
+          val contents =
+            if (file.isFile) {
+              Some(String.join("", new String(Files.readAllBytes(file.toPath))))
+            } else {
+              None
+            }
+          (name, file.canRead, contents)
+        }.collect()
+
+      assert(checkAddArchive(0) === ("foo", true, None))
+      assert(checkAddArchive(1) === (s"foo/${file1.getName}", true, Some("file1")))
+      assert(checkAddArchive(2) === ("nonexistence", false, None))
+      assert(checkAddArchive(3) === ("bar", true, None))
+      assert(checkAddArchive(4) === (s"bar/${file2.getName}", true, Some("file2")))
+      assert(sql("list archives").
+        filter(_.getString(0).contains(s"${zipFile.getAbsolutePath}")).count() > 0)
+      assert(sql("list archive").
+        filter(_.getString(0).contains(s"${jarFile.getAbsolutePath}")).count() > 0)
+      assert(sql(s"list archive ${zipFile.getAbsolutePath}").count() === 1)
+      assert(sql(s"list archives ${zipFile.getAbsolutePath} nonexistence").count() === 1)
+      assert(sql(s"list archives ${zipFile.getAbsolutePath} " +
+        s"${jarFile.getAbsolutePath}").count === 2)
     }
   }
 
