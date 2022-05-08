@@ -19,14 +19,20 @@ package org.apache.spark.storage
 
 import java.io.{BufferedOutputStream, File, FileOutputStream, OutputStream}
 import java.nio.channels.{ClosedByInterruptException, FileChannel}
+import java.util.concurrent.atomic.AtomicLong
 import java.util.zip.Checksum
 
+import scala.collection.mutable.ArrayBuffer
+
+import org.apache.spark.TaskContext
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.MutableCheckedOutputStream
 import org.apache.spark.serializer.{SerializationStream, SerializerInstance, SerializerManager}
 import org.apache.spark.shuffle.ShuffleWriteMetricsReporter
 import org.apache.spark.util.Utils
-import org.apache.spark.util.collection.PairsWriter
+import org.apache.spark.util.collection.{PairsWriter, WritablePartitionedIterator}
+
+
 
 /**
  * A class for writing JVM objects directly to a file on disk. This class allows data to be appended
@@ -38,7 +44,7 @@ import org.apache.spark.util.collection.PairsWriter
  * This class does not support concurrent writes. Also, once the writer has been opened it cannot be
  * reopened again.
  */
-private[spark] class DiskBlockObjectWriter(
+private[spark] class DiskBlockObjectWriter (
     val file: File,
     serializerManager: SerializerManager,
     serializerInstance: SerializerInstance,
@@ -275,6 +281,69 @@ private[spark] class DiskBlockObjectWriter(
     recordWritten()
   }
 
+  override def spillMemoryIteratorToStorage(inMemoryIterator: WritablePartitionedIterator,
+             diskBlockManager: DiskBlockManager, numPartitions: Int, diskBytesSpilled: AtomicLong,
+             serializerBatchSize: Long, context: Option[TaskContext]): SpilledFile = {
+
+    // These variables are reset after each flush
+    var objectsWritten: Long = 0
+
+    // List of batch sizes (bytes) in the order they are written to disk
+    val batchSizes = new ArrayBuffer[Long]
+
+    // How many elements we have in each partition
+    val elementsPerPartition = new Array[Long](numPartitions)
+
+    // Flush the disk writer's contents to disk, and update relevant variables.
+    // The writer is committed at the end of this process.
+    def flush(): Unit = {
+      val segment = commitAndGet()
+      batchSizes += segment.length
+      diskBytesSpilled.getAndAdd(segment.length)
+      objectsWritten = 0
+    }
+
+    var success = false
+    try {
+      while (inMemoryIterator.hasNext) {
+        val partitionId = inMemoryIterator.nextPartition()
+        require(partitionId >= 0 && partitionId < numPartitions,
+          s"partition Id: ${partitionId} should be in the range [0, ${numPartitions})")
+        inMemoryIterator.writeNext(this)
+        elementsPerPartition(partitionId) += 1
+        objectsWritten += 1
+
+        if (objectsWritten == serializerBatchSize) {
+          flush()
+        }
+      }
+      if (objectsWritten > 0) {
+        flush()
+      } else {
+        revertPartialWritesAndClose()
+      }
+      success = true
+    } catch {
+      case e: Exception =>
+        e.printStackTrace()
+    } finally {
+      if (success) {
+        close()
+      } else {
+        // This code path only happens if an exception was thrown above before we set success;
+        // close our stuff and let the exception be thrown further
+       revertPartialWritesAndClose()
+        if (file.exists()) {
+          if (!file.delete()) {
+            logWarning(s"Error deleting ${file}")
+          }
+        }
+      }
+    }
+
+    SpilledFile(file, blockId, batchSizes.toArray, elementsPerPartition)
+  }
+
   override def write(b: Int): Unit = throw new UnsupportedOperationException()
 
   override def write(kvBytes: Array[Byte], offs: Int, len: Int): Unit = {
@@ -311,5 +380,61 @@ private[spark] class DiskBlockObjectWriter(
   private[spark] override def flush(): Unit = {
     objOut.flush()
     bs.flush()
+  }
+
+  override def spillMemoryOnlyMapToStorage(inMemoryIterator: Iterator[(Any, Any)],
+       diskBlockManager: DiskBlockManager, diskBytesSpilled: AtomicLong,
+       serializerBatchSize: Long, context: Option[TaskContext] = None):
+  Iterator[(Any, Any)] = {
+
+    var objectsWritten = 0
+
+    // List of batch sizes (bytes) in the order they are written to disk
+    val batchSizes = new ArrayBuffer[Long]
+
+    // Flush the disk writer's contents to disk, and update relevant variables
+    def flush(): Unit = {
+      val segment = commitAndGet()
+      batchSizes += segment.length
+      diskBytesSpilled.getAndAdd(segment.length)
+      objectsWritten = 0
+    }
+
+    var success = false
+    try {
+      while (inMemoryIterator.hasNext) {
+        val kv = inMemoryIterator.next()
+        write(kv._1, kv._2)
+        objectsWritten += 1
+
+        if (objectsWritten == serializerBatchSize) {
+          flush()
+        }
+      }
+      if (objectsWritten > 0) {
+        flush()
+        close()
+      } else {
+        revertPartialWritesAndClose()
+      }
+      success = true
+    } catch {
+      case e: Exception =>
+        e.printStackTrace()
+    } finally {
+      if (!success) {
+        // This code path only happens if an exception was thrown above before we set success;
+        // close our stuff and let the exception be thrown further
+        revertPartialWritesAndClose()
+        if (file.exists()) {
+          if (!file.delete()) {
+            logWarning(s"Error deleting ${file}")
+          }
+        }
+      }
+    }
+
+    new DiskMapIterator(file, blockId, batchSizes, serializerManager,
+      serializerInstance, serializerBatchSize, context.get)
   }
 }

@@ -17,22 +17,25 @@
 
 package org.apache.spark.storage
 
-import java.io.{BufferedOutputStream, File, FileOutputStream, OutputStream}
-import java.nio.channels.{ClosedByInterruptException, FileChannel}
+import java.io.{BufferedOutputStream, File, OutputStream}
+import java.nio.channels.ClosedByInterruptException
+import java.util.concurrent.atomic.AtomicLong
+
+import scala.collection.mutable.ArrayBuffer
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FSDataOutputStream, Path}
 
-import org.apache.spark.SparkConf
+import org.apache.spark.{SparkConf, TaskContext}
 import org.apache.spark.internal.Logging
-import org.apache.spark.internal.config.EVENT_LOG_COMPRESSION_CODEC
-import org.apache.spark.io.{CompressionCodec, MutableCheckedOutputStream}
 import org.apache.spark.serializer.{SerializationStream, SerializerInstance, SerializerManager}
 import org.apache.spark.shuffle.ShuffleWriteMetricsReporter
 import org.apache.spark.util.Utils
-import org.apache.spark.util.collection.PairsWriter
+import org.apache.spark.util.collection.{PairsWriter, WritablePartitionedIterator}
 
-private[spark] class HdfsBlockObjectWriter(
+
+
+private[spark] class HdfsBlockObjectWriter (
     serializerManager: SerializerManager,
     serializerInstance: SerializerInstance,
     bufferSize: Int,
@@ -60,16 +63,8 @@ private[spark] class HdfsBlockObjectWriter(
       super.close()
     }
   }
+
   private var fsDataOutputStream: FSDataOutputStream = null
-  private var cstream: OutputStream = null
-  private val shouldCompress =
-    sparkConf.get("spark.spill.data.compress", "false").toBoolean
-  private val compressionCodec =
-    if (shouldCompress) {
-      Some(CompressionCodec.createCodec(sparkConf, sparkConf.get(EVENT_LOG_COMPRESSION_CODEC)))
-    } else {
-      None
-    }
 
   private var mcs: ManualCloseOutputStream = null
   private var bs: OutputStream = null
@@ -87,8 +82,6 @@ private[spark] class HdfsBlockObjectWriter(
     if (fileSystem.isFile(path)) {
       if (hadoopConf.getBoolean("dfs.support.append", true)) {
         fsDataOutputStream = fileSystem.append(path)
-        cstream = compressionCodec.map(_.compressedContinuousOutputStream(fsDataOutputStream))
-          .getOrElse(fsDataOutputStream)
         committedPosition = fsDataOutputStream.getPos
       } else {
         val msg = s"$path exists but append mode is not support!"
@@ -101,12 +94,11 @@ private[spark] class HdfsBlockObjectWriter(
       throw new IllegalStateException(msg)
     } else {
       fsDataOutputStream = fileSystem.create(path)
-      cstream = compressionCodec.map(_.compressedContinuousOutputStream(fsDataOutputStream))
-        .getOrElse(fsDataOutputStream)
       committedPosition = fsDataOutputStream.getPos
     }
+    ts = new TimeTrackingOutputStream(writeMetrics, fsDataOutputStream)
     class ManualCloseBufferedOutputStream
-      extends BufferedOutputStream(cstream, bufferSize)
+      extends BufferedOutputStream(ts, bufferSize)
         with ManualCloseOutputStream
     mcs = new ManualCloseBufferedOutputStream
   }
@@ -170,7 +162,6 @@ private[spark] class HdfsBlockObjectWriter(
       bs.flush()
       objOut.close()
       streamOpen = false
-
       val pos = fsDataOutputStream.getPos
       val fileSegment = new FileSegment(null, committedPosition, pos - committedPosition,
         Some(path))
@@ -230,6 +221,61 @@ private[spark] class HdfsBlockObjectWriter(
     recordWritten()
   }
 
+  override def spillMemoryIteratorToStorage(inMemoryIterator: WritablePartitionedIterator,
+            diskBlockManager: DiskBlockManager, numPartitions: Int, diskBytesSpilled: AtomicLong,
+             serializerBatchSize: Long, context: Option[TaskContext]):
+  SpilledFile = {
+
+    val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
+    var objectsWritten: Long = 0
+    val batchSizes = new ArrayBuffer[Long]
+    val elementsPerPartition = new Array[Long](numPartitions)
+
+    def flush(): Unit = {
+      val segment = commitAndGet()
+      batchSizes += segment.length
+      diskBytesSpilled.getAndAdd(segment.length)
+      objectsWritten = 0
+    }
+
+    var success = false
+    try {
+      while (inMemoryIterator.hasNext) {
+        val partitionId = inMemoryIterator.nextPartition()
+        require(partitionId >= 0 && partitionId < numPartitions,
+          s"partition Id: ${partitionId} should be in the range [0, ${numPartitions})")
+        inMemoryIterator.writeNext(this)
+        elementsPerPartition(partitionId) += 1
+        objectsWritten += 1
+
+        if (objectsWritten == serializerBatchSize) {
+          flush()
+        }
+      }
+      if (objectsWritten > 0) {
+        flush()
+      } else {
+        revertPartialWritesAndClose()
+      }
+      success = true
+    } catch {
+      case e: Exception =>
+        e.printStackTrace()
+    } finally {
+      if (success) {
+        close()
+      } else {
+        revertPartialWritesAndClose()
+        if (fileSystem.exists(path)) {
+          if (!fileSystem.delete(path)) {
+            logWarning(s"Error deleting ${path.toString}")
+          }
+        }
+      }
+    }
+    SpilledFile(null, blockId, batchSizes.toArray, elementsPerPartition, Some(path))
+  }
+
   override def write(b: Int): Unit = throw new UnsupportedOperationException()
 
   override def write(kvBytes: Array[Byte], offs: Int, len: Int): Unit = {
@@ -255,4 +301,60 @@ private[spark] class HdfsBlockObjectWriter(
     objOut.flush()
     bs.flush()
   }
+
+  override def spillMemoryOnlyMapToStorage(inMemoryIterator: Iterator[(Any, Any)],
+    diskBlockManager: DiskBlockManager, diskBytesSpilled: AtomicLong,
+    serializerBatchSize: Long, context: Option[TaskContext] = None):
+  Iterator[(Any, Any)] = {
+
+    val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
+    var objectsWritten = 0
+    // List of batch sizes (bytes) in the order they are written to hdfs
+    val batchSizes = new ArrayBuffer[Long]
+    // Flush the disk writer's contents to disk, and update relevant variables
+    def flush(): Unit = {
+      val segment = commitAndGet()
+      batchSizes += segment.length
+      diskBytesSpilled.getAndAdd(segment.length)
+      objectsWritten = 0
+    }
+
+    var success = false
+    try {
+      while (inMemoryIterator.hasNext) {
+        val kv = inMemoryIterator.next()
+        write(kv._1, kv._2)
+        objectsWritten += 1
+
+        if (objectsWritten == serializerBatchSize) {
+          flush()
+        }
+      }
+      if (objectsWritten > 0) {
+        flush()
+        close()
+      } else {
+        revertPartialWritesAndClose()
+      }
+      success = true
+    } catch {
+      case e: Exception =>
+        e.printStackTrace()
+    } finally {
+      if (!success) {
+        // This code path only happens if an exception was thrown above before we set success;
+        // close our stuff and let the exception be thrown further
+        revertPartialWritesAndClose()
+        if (fileSystem.exists(path)) {
+          if (!fileSystem.delete(path)) {
+            logWarning(s"Error deleting ${path.toString}")
+          }
+        }
+      }
+    }
+
+    new HdfsMapIterator(path, blockId, batchSizes, serializerManager, serializerInstance,
+      serializerBatchSize, context.get, hadoopConf)
+  }
+
 }

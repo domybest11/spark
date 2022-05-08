@@ -17,6 +17,11 @@
 
 package org.apache.spark.util.collection
 
+import java.util.concurrent.atomic.AtomicLong
+
+import org.apache.spark.TaskContext
+import org.apache.spark.storage.{DiskBlockManager, SpilledFile}
+
 /**
  * An abstraction of a consumer of key-value pairs, primarily used when
  * persisting partitioned data, either through the shuffle writer plugins
@@ -25,4 +30,14 @@ package org.apache.spark.util.collection
 private[spark] trait PairsWriter {
 
   def write(key: Any, value: Any): Unit
+
+  def spillMemoryIteratorToStorage(inMemoryIterator: WritablePartitionedIterator,
+                                   diskBlockManager: DiskBlockManager, numPartitions: Int,
+                                   diskBytesSpilled: AtomicLong, serializerBatchSize: Long,
+                                   context: Option[TaskContext] = None): SpilledFile
+
+  def spillMemoryOnlyMapToStorage(inMemoryIterator: Iterator[(Any, Any)],
+                                   diskBlockManager: DiskBlockManager,
+                                   diskBytesSpilled: AtomicLong, serializerBatchSize: Long,
+                                   context: Option[TaskContext] = None): Iterator[(Any, Any)]
 }

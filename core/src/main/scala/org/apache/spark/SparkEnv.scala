@@ -141,6 +141,7 @@ class SparkEnv (
 
 object SparkEnv extends Logging {
   @volatile private var env: SparkEnv = _
+  @volatile private var hadoopConf: Configuration = _
   private[spark] var driverRpcEndpoint: Option[RpcEndpointRef] = None
 
   private[spark] val driverSystemName = "sparkDriver"
@@ -155,6 +156,14 @@ object SparkEnv extends Logging {
    */
   def get: SparkEnv = {
     env
+  }
+
+  def setConf(conf: Configuration): Unit = {
+    hadoopConf = conf
+  }
+
+  def getConf: Configuration = {
+    hadoopConf
   }
 
   /**

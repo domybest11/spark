@@ -172,12 +172,13 @@ private[spark] class DiskBlockManager(conf: SparkConf, deleteFilesOnStop: Boolea
   def createTempHdfsBlock(appId: String, appAttempt: String, stageId: Int,
       stageAttempt: Int, taskId: Long, taskAttempt: Int,
       hadoopConf: Configuration): (TempLocalBlockId, Path) = {
-    val basePath = s"$appId/${appAttempt}/$stageId/$stageAttempt/$taskId/$taskAttempt"
-    var blockId = new TempLocalBlockId(UUID.randomUUID())
-    val path = new Path(s"$basePath/${blockId.name}")
+    val basePath = conf.get(config.SHUFFLE_SPILL_BASE_PATH)
+    val dir = s"$appId/${appAttempt}/$stageId/$stageAttempt/$taskId/$taskAttempt"
+    var blockId = TempLocalBlockId(UUID.randomUUID())
+    val path = new Path(s"$basePath/$dir/${blockId.name}")
     val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
     while (fileSystem.exists(path)) {
-      blockId = new TempLocalBlockId(UUID.randomUUID())
+      blockId = TempLocalBlockId(UUID.randomUUID())
     }
     (blockId, path)
   }
@@ -194,12 +195,13 @@ private[spark] class DiskBlockManager(conf: SparkConf, deleteFilesOnStop: Boolea
   def createTempHdfsShuffleBlock(appId: String, appAttempt: String, stageId: Int,
        stageAttempt: Int, taskId: Long, taskAttempt: Int,
        hadoopConf: Configuration): (TempShuffleBlockId, Path) = {
-    val basePath = s"$appId/${appAttempt}/$stageId/$stageAttempt/$taskId/$taskAttempt"
-    var blockId = new TempShuffleBlockId(UUID.randomUUID())
-    val path = new Path(s"$basePath/${blockId.name}")
+    val basePath = conf.get(config.SHUFFLE_SPILL_BASE_PATH)
+    val dir = s"$appId/${appAttempt}/$stageId/$stageAttempt/$taskId/$taskAttempt"
+    var blockId = TempShuffleBlockId(UUID.randomUUID())
+    val path = new Path(s"$basePath/$dir/${blockId.name}")
     val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
     while (fileSystem.exists(path)) {
-      blockId = new TempShuffleBlockId(UUID.randomUUID())
+      blockId = TempShuffleBlockId(UUID.randomUUID())
     }
     (blockId, path)
   }
@@ -345,6 +347,7 @@ private[spark] class DiskBlockManager(conf: SparkConf, deleteFilesOnStop: Boolea
         }
       }
     }
+
   }
 }
 

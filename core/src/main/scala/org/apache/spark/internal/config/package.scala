@@ -1598,13 +1598,26 @@ package object config {
       .booleanConf
       .createWithDefault(true)
 
-  private[spark] val SHUFFLE_SPILL_HDFS_ENABLE =
-    ConfigBuilder("spark.shuffle.spill.hdfs.enabled")
-      .doc("Whether to spill to remote hdfs.")
+  private[spark] val SHUFFLE_SPILL_REMOTE_ENABLE =
+    ConfigBuilder("spark.shuffle.spill.remote.enabled")
+      .doc("Whether to spill to remote storage.")
       .version("1.4.0")
       .booleanConf
       .createWithDefault(false)
 
+  private[spark] val SHUFFLE_SPILL_STOREA_TYPE =
+    ConfigBuilder("spark.shuffle.spill.storage.type")
+      .doc("chose to spill to storage type. such as disk, hdfs and alluxio")
+      .version("1.4.0")
+      .stringConf
+      .createWithDefault("disk")
+
+  private[spark] val SHUFFLE_SPILL_BASE_PATH =
+    ConfigBuilder("spark.shuffle.spill.base.path")
+      .doc("the base path of the spill data")
+      .version("1.4.0")
+      .stringConf
+      .createWithDefault("/spill/data")
 
   private[spark] val SHUFFLE_SORT_USE_RADIXSORT =
     ConfigBuilder("spark.shuffle.sort.useRadixSort")

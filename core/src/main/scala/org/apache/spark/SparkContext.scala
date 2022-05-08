@@ -542,6 +542,8 @@ class SparkContext(config: SparkConf) extends Logging {
     // clone the parent's properties.
     _hadoopConfiguration.size()
 
+    SparkEnv.setConf(hadoopConfiguration)
+
     // Add each JAR given through the constructor
     if (jars != null) {
       jars.foreach(jar => addJar(jar, true))
@@ -2194,6 +2196,24 @@ class SparkContext(config: SparkConf) extends Logging {
       } catch {
         case NonFatal(e) =>
           logWarning("Unable to stop jvmPauseMonitor", e)
+      }
+    }
+
+    if (conf.get(SHUFFLE_SPILL_REMOTE_ENABLE)) {
+      try {
+      conf.get(SHUFFLE_SPILL_STOREA_TYPE) match {
+        case "hdfs" =>
+          val workerDir = s"${conf.get(SHUFFLE_SPILL_BASE_PATH)}/${conf.get("spark.app.id")}"
+          val path = new Path(workerDir)
+          val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, _hadoopConfiguration)
+          if (workerDir.contains("application_") || workerDir.contains("local-")) {
+            fileSystem.deleteOnExit(path)
+          }
+        case _ =>
+       }
+      } catch {
+        case e: Exception =>
+          logWarning(s"Unable to delete spill storage path.", e)
       }
     }
 

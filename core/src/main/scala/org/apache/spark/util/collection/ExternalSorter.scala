@@ -19,22 +19,21 @@ package org.apache.spark.util.collection
 
 import java.io._
 import java.util.Comparator
+import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import com.google.common.io.ByteStreams
+
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.{FSDataInputStream, FileSystem, Path}
+
 import org.apache.spark._
 import org.apache.spark.executor.ShuffleWriteMetrics
-import org.apache.spark.internal.config.EVENT_LOG_COMPRESSION_CODEC
-import org.apache.spark.internal.{Logging, config}
-import org.apache.spark.io.CompressionCodec
+import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.serializer._
 import org.apache.spark.shuffle.ShufflePartitionPairsWriter
 import org.apache.spark.shuffle.api.{ShuffleMapOutputWriter, ShufflePartitionWriter}
 import org.apache.spark.shuffle.checksum.ShuffleChecksumSupport
-import org.apache.spark.storage.{BlockId, DiskBlockObjectWriter, HdfsBlockObjectWriter, ShuffleBlockId, ShuffleStorageUtils}
+import org.apache.spark.storage.{BlockId, BlockObjectWriterFactory, ShuffleBlockId, ShuffleStorageUtils, SpilledFile, SpillReaderFactory, SpillType}
 import org.apache.spark.util.{Utils => TryUtils}
 
 /**
@@ -102,7 +101,7 @@ private[spark] class ExternalSorter[K, V, C](
   with Logging with ShuffleChecksumSupport {
 
   private val conf = SparkEnv.get.conf
-  private val hadoopConf: Configuration = null
+  private val hadoopConf: Configuration = SparkEnv.getConf
 
   private val numPartitions = partitioner.map(_.numPartitions).getOrElse(1)
   private val shouldPartition = numPartitions > 1
@@ -117,7 +116,7 @@ private[spark] class ExternalSorter[K, V, C](
 
   // Use getSizeAsKb (not bytes) to maintain backwards compatibility if no units are provided
   private val fileBufferSize = conf.get(config.SHUFFLE_FILE_BUFFER_SIZE).toInt * 1024
-  private val spillHdfsEnabled = conf.get(config.SHUFFLE_SPILL_HDFS_ENABLE)
+  private val spillHdfsEnabled = conf.get(config.SHUFFLE_SPILL_REMOTE_ENABLE)
 
   // Size of object batches when reading/writing from serializers.
   //
@@ -135,8 +134,8 @@ private[spark] class ExternalSorter[K, V, C](
   @volatile private var buffer = new PartitionedPairBuffer[K, C]
 
   // Total spilling statistics
-  private var _diskBytesSpilled = 0L
-  def diskBytesSpilled: Long = _diskBytesSpilled
+  private var _diskBytesSpilled: AtomicLong = new AtomicLong()
+  def diskBytesSpilled: Long = _diskBytesSpilled.get()
 
   // Peak size of the in-memory data structure observed so far, in bytes
   private var _peakMemoryUsedBytes: Long = 0L
@@ -168,17 +167,6 @@ private[spark] class ExternalSorter[K, V, C](
       None
     }
   }
-
-  // Information about a spilled file. Includes sizes in bytes of "batches" written by the
-  // serializer as we periodically reset its stream, as well as number of elements in each
-  // partition, used to efficiently keep track of partitions when merging.
-  private case class SpilledFile(
-    file: File,
-    blockId: BlockId,
-    serializerBatchSizes: Array[Long],
-    elementsPerPartition: Array[Long],
-    path: Option[Path] = None)
-
 
   private val spills = new ArrayBuffer[SpilledFile]
 
@@ -249,12 +237,12 @@ private[spark] class ExternalSorter[K, V, C](
    */
   override protected[this] def spill(collection: WritablePartitionedPairCollection[K, C]): Unit = {
     val inMemoryIterator = collection.destructiveSortedWritablePartitionedIterator(comparator)
+    val write =
+      BlockObjectWriterFactory.createBlockObjectWriter(SpillType.OnlyMap, serInstance,
+        fileBufferSize, new ShuffleWriteMetrics, blockManager, context, hadoopConf)
     val spillFile =
-    if (spillHdfsEnabled) {
-      spillMemoryIteratorToHdfs(inMemoryIterator)
-    } else {
-      spillMemoryIteratorToDisk(inMemoryIterator)
-    }
+    write.spillMemoryIteratorToStorage(inMemoryIterator, blockManager.diskBlockManager,
+      numPartitions, _diskBytesSpilled, serializerBatchSize, Some(context))
     spills += spillFile
   }
 
@@ -277,75 +265,6 @@ private[spark] class ExternalSorter[K, V, C](
   }
 
   /**
-   * Spill contents of in-memory iterator to a temporary file on disk.
-   */
-  private[this] def spillMemoryIteratorToDisk(inMemoryIterator: WritablePartitionedIterator)
-      : SpilledFile = {
-    // Because these files may be read during shuffle, their compression must be controlled by
-    // spark.shuffle.compress instead of spark.shuffle.spill.compress, so we need to use
-    // createTempShuffleBlock here; see SPARK-3426 for more context.
-    val (blockId, file) = diskBlockManager.createTempShuffleBlock()
-
-    // These variables are reset after each flush
-    var objectsWritten: Long = 0
-    val spillMetrics: ShuffleWriteMetrics = new ShuffleWriteMetrics
-    val writer: DiskBlockObjectWriter =
-      blockManager.getDiskWriter(blockId, file, serInstance, fileBufferSize, spillMetrics)
-
-    // List of batch sizes (bytes) in the order they are written to disk
-    val batchSizes = new ArrayBuffer[Long]
-
-    // How many elements we have in each partition
-    val elementsPerPartition = new Array[Long](numPartitions)
-
-    // Flush the disk writer's contents to disk, and update relevant variables.
-    // The writer is committed at the end of this process.
-    def flush(): Unit = {
-      val segment = writer.commitAndGet()
-      batchSizes += segment.length
-      _diskBytesSpilled += segment.length
-      objectsWritten = 0
-    }
-
-    var success = false
-    try {
-      while (inMemoryIterator.hasNext) {
-        val partitionId = inMemoryIterator.nextPartition()
-        require(partitionId >= 0 && partitionId < numPartitions,
-          s"partition Id: ${partitionId} should be in the range [0, ${numPartitions})")
-        inMemoryIterator.writeNext(writer)
-        elementsPerPartition(partitionId) += 1
-        objectsWritten += 1
-
-        if (objectsWritten == serializerBatchSize) {
-          flush()
-        }
-      }
-      if (objectsWritten > 0) {
-        flush()
-      } else {
-        writer.revertPartialWritesAndClose()
-      }
-      success = true
-    } finally {
-      if (success) {
-        writer.close()
-      } else {
-        // This code path only happens if an exception was thrown above before we set success;
-        // close our stuff and let the exception be thrown further
-        writer.revertPartialWritesAndClose()
-        if (file.exists()) {
-          if (!file.delete()) {
-            logWarning(s"Error deleting ${file}")
-          }
-        }
-      }
-    }
-
-    SpilledFile(file, blockId, batchSizes.toArray, elementsPerPartition)
-  }
-
-  /**
    * Merge a sequence of sorted files, giving an iterator over partitions and then over elements
    * inside each partition. This can be used to either write out a new file or return data to
    * the user.
@@ -357,12 +276,10 @@ private[spark] class ExternalSorter[K, V, C](
    */
   private def merge(spills: Seq[SpilledFile], inMemory: Iterator[((Int, K), C)])
       : Iterator[(Int, Iterator[Product2[K, C]])] = {
+    val spillReaderFactory = new SpillReaderFactory()
     val readers =
-    if (conf.get(config.SHUFFLE_SPILL_HDFS_ENABLE)) {
-      spills.map(new SpillHdfsReader(_))
-    } else {
-      spills.map(new SpillReader(_))
-    }
+    spills.map(spillReaderFactory.createSpillReader(_, serializerManager,
+      serInstance, numPartitions, serializerBatchSize, conf, hadoopConf))
     val inMemBuffered = inMemory.buffered
     (0 until numPartitions).iterator.map { p =>
       val inMemIterator = new IteratorForPartition(p, inMemBuffered)
@@ -491,157 +408,6 @@ private[spark] class ExternalSorter[K, V, C](
     }
   }
 
-  abstract class SpillBasedReader() {
-    def readNextPartition(): Iterator[Product2[K, C]]
-  }
-
-  /**
-   * An internal class for reading a spilled file partition by partition. Expects all the
-   * partitions to be requested in order.
-   */
-  private[this] class SpillReader(spill: SpilledFile) extends SpillBasedReader {
-    // Serializer batch offsets; size will be batchSize.length + 1
-    val batchOffsets = spill.serializerBatchSizes.scanLeft(0L)(_ + _)
-
-    // Track which partition and which batch stream we're in. These will be the indices of
-    // the next element we will read. We'll also store the last partition read so that
-    // readNextPartition() can figure out what partition that was from.
-    var partitionId = 0
-    var indexInPartition = 0L
-    var batchId = 0
-    var indexInBatch = 0
-    var lastPartitionId = 0
-
-    skipToNextPartition()
-
-    // Intermediate file and deserializer streams that read from exactly one batch
-    // This guards against pre-fetching and other arbitrary behavior of higher level streams
-    var fileStream: FileInputStream = null
-    var deserializeStream = nextBatchStream()  // Also sets fileStream
-
-    var nextItem: (K, C) = null
-    var finished = false
-
-    /** Construct a stream that only reads from the next batch */
-    def nextBatchStream(): DeserializationStream = {
-      // Note that batchOffsets.length = numBatches + 1 since we did a scan above; check whether
-      // we're still in a valid batch.
-      if (batchId < batchOffsets.length - 1) {
-        if (deserializeStream != null) {
-          deserializeStream.close()
-          fileStream.close()
-          deserializeStream = null
-          fileStream = null
-        }
-
-        val start = batchOffsets(batchId)
-        fileStream = new FileInputStream(spill.file)
-        fileStream.getChannel.position(start)
-        batchId += 1
-
-        val end = batchOffsets(batchId)
-
-        assert(end >= start, "start = " + start + ", end = " + end +
-          ", batchOffsets = " + batchOffsets.mkString("[", ", ", "]"))
-
-        val bufferedStream = new BufferedInputStream(ByteStreams.limit(fileStream, end - start))
-
-        val wrappedStream = serializerManager.wrapStream(spill.blockId, bufferedStream)
-        serInstance.deserializeStream(wrappedStream)
-      } else {
-        // No more batches left
-        cleanup()
-        null
-      }
-    }
-
-    /**
-     * Update partitionId if we have reached the end of our current partition, possibly skipping
-     * empty partitions on the way.
-     */
-    private def skipToNextPartition(): Unit = {
-      while (partitionId < numPartitions &&
-          indexInPartition == spill.elementsPerPartition(partitionId)) {
-        partitionId += 1
-        indexInPartition = 0L
-      }
-    }
-
-    /**
-     * Return the next (K, C) pair from the deserialization stream and update partitionId,
-     * indexInPartition, indexInBatch and such to match its location.
-     *
-     * If the current batch is drained, construct a stream for the next batch and read from it.
-     * If no more pairs are left, return null.
-     */
-    private def readNextItem(): (K, C) = {
-      if (finished || deserializeStream == null) {
-        return null
-      }
-      val k = deserializeStream.readKey().asInstanceOf[K]
-      val c = deserializeStream.readValue().asInstanceOf[C]
-      lastPartitionId = partitionId
-      // Start reading the next batch if we're done with this one
-      indexInBatch += 1
-      if (indexInBatch == serializerBatchSize) {
-        indexInBatch = 0
-        deserializeStream = nextBatchStream()
-      }
-      // Update the partition location of the element we're reading
-      indexInPartition += 1
-      skipToNextPartition()
-      // If we've finished reading the last partition, remember that we're done
-      if (partitionId == numPartitions) {
-        finished = true
-        if (deserializeStream != null) {
-          deserializeStream.close()
-        }
-      }
-      (k, c)
-    }
-
-    var nextPartitionToRead = 0
-
-    override def readNextPartition(): Iterator[Product2[K, C]] = new Iterator[Product2[K, C]] {
-      val myPartition = nextPartitionToRead
-      nextPartitionToRead += 1
-
-      override def hasNext: Boolean = {
-        if (nextItem == null) {
-          nextItem = readNextItem()
-          if (nextItem == null) {
-            return false
-          }
-        }
-        assert(lastPartitionId >= myPartition)
-        // Check that we're still in the right partition; note that readNextItem will have returned
-        // null at EOF above so we would've returned false there
-        lastPartitionId == myPartition
-      }
-
-      override def next(): Product2[K, C] = {
-        if (!hasNext) {
-          throw new NoSuchElementException
-        }
-        val item = nextItem
-        nextItem = null
-        item
-      }
-    }
-
-    // Clean up our open streams and put us in a state where we can't read any more data
-    def cleanup(): Unit = {
-      batchId = batchOffsets.length  // Prevent reading any other batch
-      val ds = deserializeStream
-      deserializeStream = null
-      fileStream = null
-      if (ds != null) {
-        ds.close()
-      }
-      // NOTE: We don't do file.delete() here because that is done in ExternalSorter.stop().
-      // This should also be fixed in ExternalAppendOnlyMap.
-    }
-  }
 
   /**
    * Returns a destructive iterator for iterating over the entries of this map.
@@ -818,15 +584,7 @@ private[spark] class ExternalSorter[K, V, C](
   }
 
   def stop(): Unit = {
-    if (spillHdfsEnabled) {
-      val fileSystem =
-        ShuffleStorageUtils.getFileSystemForPath(spills.head.path.get, hadoopConf)
-      spills.foreach(s => fileSystem.deleteOnExit(s.path.get))
-      forceSpillFiles.foreach(s => fileSystem.deleteOnExit(s.path.get))
-    } else {
-      spills.foreach(s => s.file.delete())
-      forceSpillFiles.foreach(s => s.file.delete())
-    }
+    cleanupSpillFile()
     spills.clear()
     forceSpillFiles.clear()
     if (map != null || buffer != null || readingIterator != null) {
@@ -836,6 +594,25 @@ private[spark] class ExternalSorter[K, V, C](
       releaseMemory()
     }
   }
+
+  def cleanupSpillFile(): Unit = {
+    if (conf.get(config.SHUFFLE_SPILL_REMOTE_ENABLE)) {
+      conf.get(config.SHUFFLE_SPILL_STOREA_TYPE) match {
+        case "disk" =>
+          spills.foreach(s => s.file.delete())
+          forceSpillFiles.foreach(s => s.file.delete())
+        case _ =>
+          val fileSystem =
+            ShuffleStorageUtils.getFileSystemForPath(spills.head.path.get, hadoopConf)
+          spills.foreach(s => fileSystem.deleteOnExit(s.path.get))
+          forceSpillFiles.foreach(s => fileSystem.deleteOnExit(s.path.get))
+      }
+    } else {
+      spills.foreach(s => s.file.delete())
+      forceSpillFiles.foreach(s => s.file.delete())
+    }
+  }
+
 
   /**
    * Given a stream of ((partition, key), combiner) pairs *assumed to be sorted by partition ID*,
@@ -898,19 +675,17 @@ private[spark] class ExternalSorter[K, V, C](
         }
         logInfo(s"Task ${TaskContext.get().taskAttemptId} force spilling in-memory map to disk " +
           s"and it will release ${org.apache.spark.util.Utils.bytesToString(getUsed())} memory")
+        val write =
+          BlockObjectWriterFactory.createBlockObjectWriter(SpillType.OnlyMap, serInstance,
+            fileBufferSize, new ShuffleWriteMetrics, blockManager, context, hadoopConf)
         val spillFile =
-          if (spillHdfsEnabled) {
-            spillMemoryIteratorToHdfs(inMemoryIterator)
-          } else {
-            spillMemoryIteratorToDisk(inMemoryIterator)
-          }
+          write.spillMemoryIteratorToStorage(inMemoryIterator, blockManager.diskBlockManager,
+            numPartitions, _diskBytesSpilled, serializerBatchSize, Some(context))
         forceSpillFiles += spillFile
-        val spillReader: SpillBasedReader =
-          if (spillHdfsEnabled) {
-            new SpillHdfsReader(spillFile)
-          } else {
-            new SpillReader(spillFile)
-          }
+        val spillReaderFactory = new SpillReaderFactory()
+        val spillReader =
+        spillReaderFactory.createSpillReader(spillFile, serializerManager, serInstance,
+          numPartitions, serializerBatchSize, conf, hadoopConf)
         nextUpstream = (0 until numPartitions).iterator.flatMap { p =>
           val iterator = spillReader.readNextPartition()
           iterator.map(cur => ((p, cur._1), cur._2))
@@ -940,237 +715,4 @@ private[spark] class ExternalSorter[K, V, C](
       r
     }
   }
-
-
-  /**
-   * An internal class for reading a hdfs spilled file partition by partition. Expects all the
-   * partitions to be requested in order.
-   */
-  private[this] class SpillHdfsReader(spill: SpilledFile) extends SpillBasedReader {
-    // Serializer batch offsets; size will be batchSize.length + 1
-    val batchOffsets = spill.serializerBatchSizes.scanLeft(0L)(_ + _)
-
-    // Track which partition and which batch stream we're in. These will be the indices of
-    // the next element we will read. We'll also store the last partition read so that
-    // readNextPartition() can figure out what partition that was from.
-    var partitionId = 0
-    var indexInPartition = 0L
-    var batchId = 0
-    var indexInBatch = 0
-    var lastPartitionId = 0
-
-    skipToNextPartition()
-
-    // Intermediate file and deserializer streams that read from exactly one batch
-    // This guards against pre-fetching and other arbitrary behavior of higher level streams
-    var fsDataInputStream: FSDataInputStream = null
-    val shouldCompress =
-      conf.get("spark.spill.data.compress", "false").toBoolean
-    val compressionCodec =
-      if (shouldCompress) {
-        Some(CompressionCodec.createCodec(conf, conf.get(EVENT_LOG_COMPRESSION_CODEC)))
-      } else {
-        None
-      }
-    private var cstream: InputStream = null
-    var deserializeStream = nextBatchStream()  // Also sets fileStream
-
-    var nextItem: (K, C) = null
-    var finished = false
-
-    /** Construct a stream that only reads from the next batch */
-    def nextBatchStream(): DeserializationStream = {
-      // Note that batchOffsets.length = numBatches + 1 since we did a scan above; check whether
-      // we're still in a valid batch.
-      if (batchId < batchOffsets.length - 1) {
-        if (deserializeStream != null) {
-          deserializeStream.close()
-          cstream.close()
-          deserializeStream = null
-          cstream = null
-        }
-
-        val start = batchOffsets(batchId)
-        val fileSystem: FileSystem =
-          ShuffleStorageUtils.getFileSystemForPath(spill.path.get, hadoopConf)
-        fsDataInputStream = fileSystem.open(spill.path.get)
-        cstream = compressionCodec.map(_.compressedContinuousInputStream(fsDataInputStream))
-          .getOrElse(fsDataInputStream)
-        fsDataInputStream.seek(start)
-        batchId += 1
-        val end = batchOffsets(batchId)
-
-        assert(end >= start, "start = " + start + ", end = " + end +
-          ", batchOffsets = " + batchOffsets.mkString("[", ", ", "]"))
-
-        val bufferedStream = new BufferedInputStream(ByteStreams.limit(cstream, end - start))
-
-        val wrappedStream = serializerManager.wrapStream(spill.blockId, bufferedStream)
-        serInstance.deserializeStream(wrappedStream)
-      } else {
-        // No more batches left
-        cleanup()
-        null
-      }
-    }
-
-    /**
-     * Update partitionId if we have reached the end of our current partition, possibly skipping
-     * empty partitions on the way.
-     */
-    private def skipToNextPartition(): Unit = {
-      while (partitionId < numPartitions &&
-        indexInPartition == spill.elementsPerPartition(partitionId)) {
-        partitionId += 1
-        indexInPartition = 0L
-      }
-    }
-
-    /**
-     * Return the next (K, C) pair from the deserialization stream and update partitionId,
-     * indexInPartition, indexInBatch and such to match its location.
-     *
-     * If the current batch is drained, construct a stream for the next batch and read from it.
-     * If no more pairs are left, return null.
-     */
-    private def readNextItem(): (K, C) = {
-      if (finished || deserializeStream == null) {
-        return null
-      }
-      val k = deserializeStream.readKey().asInstanceOf[K]
-      val c = deserializeStream.readValue().asInstanceOf[C]
-      lastPartitionId = partitionId
-      // Start reading the next batch if we're done with this one
-      indexInBatch += 1
-      if (indexInBatch == serializerBatchSize) {
-        indexInBatch = 0
-        deserializeStream = nextBatchStream()
-      }
-      // Update the partition location of the element we're reading
-      indexInPartition += 1
-      skipToNextPartition()
-      // If we've finished reading the last partition, remember that we're done
-      if (partitionId == numPartitions) {
-        finished = true
-        if (deserializeStream != null) {
-          deserializeStream.close()
-        }
-      }
-      (k, c)
-    }
-
-    var nextPartitionToRead = 0
-
-    override def readNextPartition(): Iterator[Product2[K, C]] = new Iterator[Product2[K, C]] {
-      val myPartition = nextPartitionToRead
-      nextPartitionToRead += 1
-
-      override def hasNext: Boolean = {
-        if (nextItem == null) {
-          nextItem = readNextItem()
-          if (nextItem == null) {
-            return false
-          }
-        }
-        assert(lastPartitionId >= myPartition)
-        // Check that we're still in the right partition; note that readNextItem will have returned
-        // null at EOF above so we would've returned false there
-        lastPartitionId == myPartition
-      }
-
-      override def next(): Product2[K, C] = {
-        if (!hasNext) {
-          throw new NoSuchElementException
-        }
-        val item = nextItem
-        nextItem = null
-        item
-      }
-    }
-
-    // Clean up our open streams and put us in a state where we can't read any more data
-    def cleanup(): Unit = {
-      batchId = batchOffsets.length  // Prevent reading any other batch
-      val ds = deserializeStream
-      deserializeStream = null
-      cstream = null
-      if (ds != null) {
-        ds.close()
-      }
-      // NOTE: We don't do file.delete() here because that is done in ExternalSorter.stop().
-      // This should also be fixed in ExternalAppendOnlyMap.
-    }
-  }
-
-  /**
-   * Spill contents of in-memory iterator to a temporary file on hdfs.
-   */
-  private[this] def spillMemoryIteratorToHdfs(inMemoryIterator: WritablePartitionedIterator)
-  : SpilledFile = {
-    val (blockId, path) =
-      diskBlockManager.createTempHdfsShuffleBlock(conf.get("spark.app.id"),
-        conf.get("spark.app.attempt.id"), context.stageId(), context.stageAttemptNumber,
-        context.taskAttemptId, context.attemptNumber, hadoopConf)
-    val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
-    // These variables are reset after each flush
-    var objectsWritten: Long = 0
-    val spillMetrics: ShuffleWriteMetrics = new ShuffleWriteMetrics
-    val writer: HdfsBlockObjectWriter =
-      blockManager.getHdfsWriter(blockId, path, serInstance, fileBufferSize, spillMetrics,
-        hadoopConf, conf)
-
-    // List of batch sizes (bytes) in the order they are written to hdfs
-    val batchSizes = new ArrayBuffer[Long]
-
-    // How many elements we have in each partition
-    val elementsPerPartition = new Array[Long](numPartitions)
-
-    // Flush the hdfs writer's contents to disk, and update relevant variables.
-    // The writer is committed at the end of this process.
-    def flush(): Unit = {
-      val segment = writer.commitAndGet()
-      batchSizes += segment.length
-      _diskBytesSpilled += segment.length
-      objectsWritten = 0
-    }
-
-    var success = false
-    try {
-      while (inMemoryIterator.hasNext) {
-        val partitionId = inMemoryIterator.nextPartition()
-        require(partitionId >= 0 && partitionId < numPartitions,
-          s"partition Id: ${partitionId} should be in the range [0, ${numPartitions})")
-        inMemoryIterator.writeNext(writer)
-        elementsPerPartition(partitionId) += 1
-        objectsWritten += 1
-
-        if (objectsWritten == serializerBatchSize) {
-          flush()
-        }
-      }
-      if (objectsWritten > 0) {
-        flush()
-      } else {
-        writer.revertPartialWritesAndClose()
-      }
-      success = true
-    } finally {
-      if (success) {
-        writer.close()
-      } else {
-        // This code path only happens if an exception was thrown above before we set success;
-        // close our stuff and let the exception be thrown further
-        writer.revertPartialWritesAndClose()
-        if (fileSystem.exists(path)) {
-          if (!fileSystem.delete(path)) {
-            logWarning(s"Error deleting ${path.toString}")
-          }
-        }
-      }
-    }
-
-    SpilledFile(null, blockId, batchSizes.toArray, elementsPerPartition, Some(path))
-  }
-
-
 }
