@@ -106,6 +106,11 @@ class ResolveCatalogs(val catalogManager: CatalogManager)
       }.toSeq
       createAlterTable(nameParts, catalog, tbl, changes)
 
+    case AlterTableSetLifeCycleStatement(
+        nameParts @ NonSessionCatalogAndTable(catalog, tbl), liefCycle) =>
+      val change = Seq(TableChange.setProperty("table.retention.period", liefCycle.toString))
+      createAlterTable(nameParts, catalog, tbl, change)
+
     // TODO: v2 `UNSET TBLPROPERTIES` should respect the ifExists flag.
     case AlterTableUnsetPropertiesStatement(
          nameParts @ NonSessionCatalogAndTable(catalog, tbl), keys, _) =>

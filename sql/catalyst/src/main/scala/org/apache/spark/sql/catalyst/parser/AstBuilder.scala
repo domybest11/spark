@@ -3114,6 +3114,7 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
     checkDuplicateClauses(ctx.commentSpec(), "COMMENT", ctx)
     checkDuplicateClauses(ctx.bucketSpec(), "CLUSTERED BY", ctx)
     checkDuplicateClauses(ctx.locationSpec, "LOCATION", ctx)
+    checkDuplicateClauses(ctx.TBLPROPERTIES, "LIFECYCLE", ctx)
 
     if (ctx.skewSpec.size > 0) {
       operationNotAllowed("CREATE TABLE ... SKEWED BY", ctx)
@@ -3123,7 +3124,15 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
       Option(ctx.partitioning).map(visitPartitionFieldList).getOrElse((Nil, Nil))
     val bucketSpec = ctx.bucketSpec().asScala.headOption.map(visitBucketSpec)
     val properties = Option(ctx.tableProps).map(visitPropertyKeyValues).getOrElse(Map.empty)
-    val cleanedProperties = cleanTableProperties(ctx, properties)
+    val lifeCycleProp = Option(ctx.lifeCycle).map(lifeCycleContext => {
+      val lifeCycle = if (lifeCycleContext.value.INTEGER_VALUE != null) {
+        Integer.valueOf(lifeCycleContext.value.INTEGER_VALUE().getText)
+      } else {
+        throw new ParseException(s"table life cycle format error", ctx)
+      }
+      Map("table.retention.period" -> lifeCycle.toString)
+    }).getOrElse(Map.empty)
+    val cleanedProperties = cleanTableProperties(ctx, properties ++ lifeCycleProp)
     val options = Option(ctx.options).map(visitPropertyKeyValues).getOrElse(Map.empty)
     val location = visitLocationSpecList(ctx.locationSpec())
     val (cleanedOptions, newLocation) = cleanTableOptions(ctx, options, location)
@@ -3599,6 +3608,26 @@ class AstBuilder extends SqlBaseBaseVisitor[AnyRef] with SQLConfHelper with Logg
     } else {
       AlterTableSetPropertiesStatement(identifier, cleanedTableProperties)
     }
+  }
+
+  /**
+   * Parse [[AlterTableSetLifeCycleStatement]] commands.
+   *
+   * For example:
+   * {{{
+   *   ALTER TABLE table SET LIFECYCLE tableLifCycle;
+   * }}}
+   */
+  override def visitSetTableLifeCycle(
+      ctx: SetTableLifeCycleContext): LogicalPlan = withOrigin(ctx) {
+    val identifier = visitMultipartIdentifier(ctx.multipartIdentifier)
+    val value = ctx.tableLifCycle.value
+    val lifeCycleDay = if (value.INTEGER_VALUE != null) {
+      Integer.valueOf(value.INTEGER_VALUE().getText)
+    } else {
+      throw new ParseException(s"table life cycle format error", ctx)
+    }
+    AlterTableSetLifeCycleStatement(identifier, lifeCycleDay)
   }
 
   /**

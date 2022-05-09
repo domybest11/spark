@@ -184,6 +184,19 @@ class ResolveSessionCatalog(
         createAlterTable(nameParts, catalog, tbl, changes)
       }
 
+    case AlterTableSetLifeCycleStatement(
+        nameParts @ SessionCatalogAndTable(catalog, tbl), lifeCycle) =>
+      val props = Map("table.retention.period" -> lifeCycle.toString)
+      loadTable(catalog, tbl.asIdentifier).collect {
+        case v1Table: V1Table =>
+          AlterTableSetPropertiesCommand(tbl.asTableIdentifier, props, isView = false)
+      }.getOrElse {
+        val changes = props.map { case (key, value) =>
+          TableChange.setProperty(key, value)
+        }.toSeq
+        createAlterTable(nameParts, catalog, tbl, changes)
+      }
+
     case AlterTableUnsetPropertiesStatement(
          nameParts @ SessionCatalogAndTable(catalog, tbl), keys, ifExists) =>
       loadTable(catalog, tbl.asIdentifier).collect {

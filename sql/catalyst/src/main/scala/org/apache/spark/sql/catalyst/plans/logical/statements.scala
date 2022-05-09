@@ -277,6 +277,13 @@ case class AlterTableSetPropertiesStatement(
     properties: Map[String, String]) extends ParsedStatement
 
 /**
+ * ALTER TABLE ... SET LIFECYCLE command, as parsed from SQL.
+ */
+case class AlterTableSetLifeCycleStatement(
+     tableName: Seq[String],
+     lifeCycle: Integer) extends ParsedStatement
+
+/**
  * ALTER TABLE ... UNSET TBLPROPERTIES command, as parsed from SQL.
  */
 case class AlterTableUnsetPropertiesStatement(
