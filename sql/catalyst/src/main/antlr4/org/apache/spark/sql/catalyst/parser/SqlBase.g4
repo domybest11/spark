@@ -156,6 +156,8 @@ statement
         RENAME TO to=multipartIdentifier                               #renameTable
     | ALTER (TABLE | VIEW) multipartIdentifier
         SET TBLPROPERTIES tablePropertyList                            #setTableProperties
+    | ALTER TABLE multipartIdentifier
+        SET LIFECYCLE tableLifCycle                                    #setTableLifeCycle
     | ALTER (TABLE | VIEW) multipartIdentifier
         UNSET TBLPROPERTIES (IF EXISTS)? tablePropertyList             #unsetTableProperties
     | ALTER TABLE table=multipartIdentifier
@@ -401,7 +403,8 @@ createTableClauses
      createFileFormat |
      locationSpec |
      commentSpec |
-     (TBLPROPERTIES tableProps=tablePropertyList))*
+     (TBLPROPERTIES tableProps=tablePropertyList) |
+     (LIFECYCLE lifeCycle=tableLifCycle))*
     ;
 
 tablePropertyList
@@ -422,6 +425,14 @@ tablePropertyValue
     | DECIMAL_VALUE
     | booleanValue
     | STRING
+    ;
+
+tableLifCycle
+    : value=tableLicfCycleValue
+    ;
+
+tableLicfCycleValue
+    : INTEGER_VALUE
     ;
 
 constantList
@@ -1730,6 +1741,7 @@ TABLE: 'TABLE';
 TABLES: 'TABLES';
 TABLESAMPLE: 'TABLESAMPLE';
 TBLPROPERTIES: 'TBLPROPERTIES';
+LIFECYCLE: 'LIFECYCLE';
 TEMPORARY: 'TEMPORARY' | 'TEMP';
 TERMINATED: 'TERMINATED';
 THEN: 'THEN';
