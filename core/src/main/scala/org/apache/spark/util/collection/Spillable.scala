@@ -143,8 +143,17 @@ private[spark] abstract class Spillable[C](taskMemoryManager: TaskMemoryManager)
    */
   @inline private def logSpillage(size: Long): Unit = {
     val threadId = Thread.currentThread().getId
-    logInfo("Thread %d spilling in-memory map of %s to disk (%d time%s so far)"
-      .format(threadId, org.apache.spark.util.Utils.bytesToString(size),
-        _spillCount, if (_spillCount > 1) "s" else ""))
+    var storageType = "disk"
+    if (SparkEnv.get.conf.get(SHUFFLE_SPILL_REMOTE_ENABLE)) {
+      SparkEnv.get.conf.get(SHUFFLE_SPILL_STOREA_TYPE) match {
+        case "hdfs" =>
+          storageType = "hdfs"
+        case _ =>
+          storageType = "disk"
+      }
+    }
+    logInfo(s"Thread %d spilling in-memory map of %s to ${storageType} (%d time%s so far)"
+        .format(threadId, org.apache.spark.util.Utils.bytesToString(size),
+            _spillCount, if (_spillCount > 1) "s" else ""))
   }
 }
