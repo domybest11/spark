@@ -21,13 +21,11 @@ import java.io.{File, IOException}
 import java.lang.reflect.{InvocationTargetException, Modifier}
 import java.net.{URI, URL}
 import java.security.PrivilegedExceptionAction
-import java.util.concurrent.{TimeoutException, TimeUnit}
-
+import java.util.concurrent.{TimeUnit, TimeoutException}
 import scala.collection.mutable.HashMap
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
-
 import org.apache.commons.lang3.{StringUtils => ComStrUtils}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.security.UserGroupInformation
@@ -38,7 +36,6 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationAttemptNotFoundException
 import org.apache.hadoop.yarn.server.webproxy.ProxyUriUtils
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
-
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.history.HistoryServer
@@ -53,6 +50,8 @@ import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc._
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, YarnSchedulerBackend}
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
+import org.apache.spark.securitymanager.ExitNumSecurityManager
+import org.apache.spark.securitymanager.ExitNumSecurityManager.ExitException
 import org.apache.spark.util._
 
 /**
@@ -232,6 +231,8 @@ private[spark] class ApplicationMaster(
       } else {
         None
       }
+
+      System.setSecurityManager(new ExitNumSecurityManager(System.getSecurityManager))
 
       new CallerContext(
         "APPMASTER", sparkConf.get(APP_CALLER_CONTEXT),
@@ -738,6 +739,7 @@ private[spark] class ApplicationMaster(
           }
         } catch {
           case e: InvocationTargetException =>
+            System.setSecurityManager(null)
             e.getCause match {
               case _: InterruptedException =>
                 // Reporter thread can interrupt to stop user class
@@ -745,6 +747,15 @@ private[spark] class ApplicationMaster(
                 val msg = s"User application exited with status $exitCode"
                 logError(msg)
                 finish(FinalApplicationStatus.FAILED, exitCode, msg)
+              case ex : ExitException =>
+                val msg = s"User application exited with status ${ex.getStatus}"
+                logInfo(msg)
+                if (ex.getStatus == 0) {
+                  finish(FinalApplicationStatus.SUCCEEDED, ApplicationMaster.EXIT_SUCCESS)
+                } else {
+                  finish(
+                    FinalApplicationStatus.FAILED, ApplicationMaster.EXIT_EXCEPTION_USER_CLASS, msg)
+                }
               case cause: Throwable =>
                 logError("User class threw exception: " + cause, cause)
                 finish(FinalApplicationStatus.FAILED,
