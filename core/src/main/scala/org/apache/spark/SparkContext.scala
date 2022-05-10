@@ -542,8 +542,6 @@ class SparkContext(config: SparkConf) extends Logging {
     // clone the parent's properties.
     _hadoopConfiguration.size()
 
-    SparkEnv.setConf(hadoopConfiguration)
-
     // Add each JAR given through the constructor
     if (jars != null) {
       jars.foreach(jar => addJar(jar, true))

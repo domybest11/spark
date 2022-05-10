@@ -27,6 +27,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.hadoop.conf.Configuration
 
 import org.apache.spark._
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.serializer._
@@ -101,7 +102,7 @@ private[spark] class ExternalSorter[K, V, C](
   with Logging with ShuffleChecksumSupport {
 
   private val conf = SparkEnv.get.conf
-  private val hadoopConf: Configuration = SparkEnv.getConf
+  private val hadoopConf: Configuration = SparkHadoopUtil.get.newConfiguration(conf)
 
   private val numPartitions = partitioner.map(_.numPartitions).getOrElse(1)
   private val shouldPartition = numPartitions > 1

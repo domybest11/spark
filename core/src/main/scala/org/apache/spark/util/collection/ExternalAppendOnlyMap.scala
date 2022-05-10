@@ -29,6 +29,7 @@ import org.apache.hadoop.conf.Configuration
 
 import org.apache.spark.{SparkEnv, TaskContext}
 import org.apache.spark.annotation.DeveloperApi
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.serializer.{Serializer, SerializerManager}
@@ -88,7 +89,7 @@ class ExternalAppendOnlyMap[K, V, C](
   private val spilledMaps = new ArrayBuffer[Iterator[(K, C)]]
   private val sparkConf = SparkEnv.get.conf
   private val diskBlockManager = blockManager.diskBlockManager
-  private val hadoopConf: Configuration = SparkEnv.getConf
+  private val hadoopConf: Configuration = SparkHadoopUtil.get.newConfiguration(sparkConf)
   /**
    * Size of object batches when reading/writing from serializers.
    *

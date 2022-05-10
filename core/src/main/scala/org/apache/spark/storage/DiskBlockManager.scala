@@ -175,10 +175,11 @@ private[spark] class DiskBlockManager(conf: SparkConf, deleteFilesOnStop: Boolea
     val basePath = conf.get(config.SHUFFLE_SPILL_BASE_PATH)
     val dir = s"$appId/${appAttempt}/$stageId/$stageAttempt/$taskId/$taskAttempt"
     var blockId = TempLocalBlockId(UUID.randomUUID())
-    val path = new Path(s"$basePath/$dir/${blockId.name}")
+    var path = new Path(s"$basePath/$dir/${blockId.name}")
     val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
     while (fileSystem.exists(path)) {
       blockId = TempLocalBlockId(UUID.randomUUID())
+      path = new Path(s"$basePath/$dir/${blockId.name}")
     }
     (blockId, path)
   }
@@ -198,10 +199,11 @@ private[spark] class DiskBlockManager(conf: SparkConf, deleteFilesOnStop: Boolea
     val basePath = conf.get(config.SHUFFLE_SPILL_BASE_PATH)
     val dir = s"$appId/${appAttempt}/$stageId/$stageAttempt/$taskId/$taskAttempt"
     var blockId = TempShuffleBlockId(UUID.randomUUID())
-    val path = new Path(s"$basePath/$dir/${blockId.name}")
+    var path = new Path(s"$basePath/$dir/${blockId.name}")
     val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
     while (fileSystem.exists(path)) {
       blockId = TempShuffleBlockId(UUID.randomUUID())
+      path = new Path(s"$basePath/$dir/${blockId.name}")
     }
     (blockId, path)
   }
