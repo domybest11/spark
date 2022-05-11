@@ -17,16 +17,17 @@
 
 package org.apache.spark.storage
 
-import java.io.{BufferedOutputStream, File, FileOutputStream, OutputStream}
-import java.nio.channels.{ClosedByInterruptException, FileChannel}
+import java.io.{BufferedOutputStream, File, OutputStream}
+import java.nio.channels.ClosedByInterruptException
 import java.util.concurrent.atomic.AtomicLong
-import java.util.zip.Checksum
 
 import scala.collection.mutable.ArrayBuffer
 
-import org.apache.spark.TaskContext
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FSDataOutputStream, Path}
+
+import org.apache.spark.{SparkConf, TaskContext}
 import org.apache.spark.internal.Logging
-import org.apache.spark.io.MutableCheckedOutputStream
 import org.apache.spark.serializer.{SerializationStream, SerializerInstance, SerializerManager}
 import org.apache.spark.shuffle.ShuffleWriteMetricsReporter
 import org.apache.spark.util.Utils
@@ -34,29 +35,18 @@ import org.apache.spark.util.collection.{PairsWriter, WritablePartitionedIterato
 
 
 
-/**
- * A class for writing JVM objects directly to a file on disk. This class allows data to be appended
- * to an existing block. For efficiency, it retains the underlying file channel across
- * multiple commits. This channel is kept open until close() is called. In case of faults,
- * callers should instead close with revertPartialWritesAndClose() to atomically revert the
- * uncommitted partial writes.
- *
- * This class does not support concurrent writes. Also, once the writer has been opened it cannot be
- * reopened again.
- */
-private[spark] class DiskBlockObjectWriter (
-    val file: File,
+private[spark] class HdfsBlockObjectWriter (
     serializerManager: SerializerManager,
     serializerInstance: SerializerInstance,
     bufferSize: Int,
-    syncWrites: Boolean,
-    // These write metrics concurrently shared with other active DiskBlockObjectWriters who
-    // are themselves performing writes. All updates must be relative.
     writeMetrics: ShuffleWriteMetricsReporter,
-    val blockId: BlockId = null)
+    val blockId: BlockId = null,
+    path: Path,
+    hadoopConf: Configuration,
+    sparkConf: SparkConf)
   extends OutputStream
-  with Logging
-  with PairsWriter {
+    with Logging
+    with PairsWriter {
 
   /**
    * Guards against close calls, e.g. from a wrapping stream.
@@ -74,74 +64,46 @@ private[spark] class DiskBlockObjectWriter (
     }
   }
 
-  /** The file channel, used for repositioning / truncating the file. */
-  private var channel: FileChannel = null
+  private var fsDataOutputStream: FSDataOutputStream = null
+
   private var mcs: ManualCloseOutputStream = null
   private var bs: OutputStream = null
-  private var fos: FileOutputStream = null
   private var ts: TimeTrackingOutputStream = null
   private var objOut: SerializationStream = null
   private var initialized = false
   private var streamOpen = false
   private var hasBeenClosed = false
+  private var committedPosition: Long = 0
 
-  // checksum related
-  private var checksumEnabled = false
-  private var checksumOutputStream: MutableCheckedOutputStream = _
-  private var checksum: Checksum = _
-
-  /**
-   * Cursors used to represent positions in the file.
-   *
-   * xxxxxxxxxx|----------|-----|
-   *           ^          ^     ^
-   *           |          |    channel.position()
-   *           |        reportedPosition
-   *         committedPosition
-   *
-   * reportedPosition: Position at the time of the last update to the write metrics.
-   * committedPosition: Offset after last committed write.
-   * -----: Current writes to the underlying file.
-   * xxxxx: Committed contents of the file.
-   */
-  private var committedPosition = file.length()
-  private var reportedPosition = committedPosition
-
-  /**
-   * Keep track of number of records written and also use this to periodically
-   * output bytes written since the latter is expensive to do for each record.
-   * And we reset it after every commitAndGet called.
-   */
   private var numRecordsWritten = 0
 
-  /**
-   * Set the checksum that the checksumOutputStream should use
-   */
-  def setChecksum(checksum: Checksum): Unit = {
-    if (checksumOutputStream == null) {
-      this.checksumEnabled = true
-      this.checksum = checksum
-    } else {
-      checksumOutputStream.setChecksum(checksum)
-    }
-  }
-
   private def initialize(): Unit = {
-    fos = new FileOutputStream(file, true)
-    channel = fos.getChannel()
-    ts = new TimeTrackingOutputStream(writeMetrics, fos)
-    if (checksumEnabled) {
-      assert(this.checksum != null, "Checksum is not set")
-      checksumOutputStream = new MutableCheckedOutputStream(ts)
-      checksumOutputStream.setChecksum(checksum)
+    val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
+    if (fileSystem.isFile(path)) {
+      if (hadoopConf.getBoolean("dfs.support.append", true)) {
+        fsDataOutputStream = fileSystem.append(path)
+        committedPosition = fsDataOutputStream.getPos
+      } else {
+        val msg = s"$path exists but append mode is not support!"
+        logError(msg)
+        throw new IllegalStateException(msg)
+      }
+    } else if (fileSystem.isDirectory(path)) {
+      val msg = s"$path is a directory!"
+      logError(msg)
+      throw new IllegalStateException(msg)
+    } else {
+      fsDataOutputStream = fileSystem.create(path)
+      committedPosition = fsDataOutputStream.getPos
     }
+    ts = new TimeTrackingOutputStream(writeMetrics, fsDataOutputStream)
     class ManualCloseBufferedOutputStream
-      extends BufferedOutputStream(if (checksumEnabled) checksumOutputStream else ts, bufferSize)
+      extends BufferedOutputStream(ts, bufferSize)
         with ManualCloseOutputStream
     mcs = new ManualCloseBufferedOutputStream
   }
 
-  def open(): DiskBlockObjectWriter = {
+  def open(): HdfsBlockObjectWriter = {
     if (hasBeenClosed) {
       throw new IllegalStateException("Writer already closed. Cannot be reopened.")
     }
@@ -149,7 +111,6 @@ private[spark] class DiskBlockObjectWriter (
       initialize()
       initialized = true
     }
-
     bs = serializerManager.wrapStream(blockId, mcs)
     objOut = serializerInstance.serializeStream(bs)
     streamOpen = true
@@ -165,10 +126,8 @@ private[spark] class DiskBlockObjectWriter (
       Utils.tryWithSafeFinally {
         mcs.manualClose()
       } {
-        channel = null
         mcs = null
         bs = null
-        fos = null
         ts = null
         objOut = null
         initialized = false
@@ -199,30 +158,20 @@ private[spark] class DiskBlockObjectWriter (
    */
   def commitAndGet(): FileSegment = {
     if (streamOpen) {
-      // NOTE: Because Kryo doesn't flush the underlying stream we explicitly flush both the
-      //       serializer stream and the lower level stream.
       objOut.flush()
       bs.flush()
       objOut.close()
       streamOpen = false
-
-      if (syncWrites) {
-        // Force outstanding writes to disk and track how long it takes
-        val start = System.nanoTime()
-        fos.getFD.sync()
-        writeMetrics.incWriteTime(System.nanoTime() - start)
-      }
-
-      val pos = channel.position()
-      val fileSegment = new FileSegment(file, committedPosition, pos - committedPosition)
+      val pos = fsDataOutputStream.getPos
+      val fileSegment = new FileSegment(null, committedPosition, pos - committedPosition,
+        Some(path))
       committedPosition = pos
       // In certain compression codecs, more bytes are written after streams are closed
-      writeMetrics.incBytesWritten(committedPosition - reportedPosition)
-      reportedPosition = committedPosition
+      writeMetrics.incBytesWritten(pos - committedPosition)
       numRecordsWritten = 0
       fileSegment
     } else {
-      new FileSegment(file, committedPosition, 0)
+      new FileSegment(null, committedPosition, 0, Some(path))
     }
   }
 
@@ -232,40 +181,32 @@ private[spark] class DiskBlockObjectWriter (
    * when there are runtime exceptions. This method will not throw, though it may be
    * unsuccessful in truncating written data.
    *
-   * @return the file that this DiskBlockObjectWriter wrote to.
+   * @return the file that this HdfsBlockObjectWriter wrote to.
    */
   def revertPartialWritesAndClose(): File = {
     // Discard current writes. We do this by flushing the outstanding writes and then
     // truncating the file to its initial position.
     Utils.tryWithSafeFinally {
       if (initialized) {
-        writeMetrics.decBytesWritten(reportedPosition - committedPosition)
+        // writeMetrics.decBytesWritten(reportedPosition - committedPosition)
         writeMetrics.decRecordsWritten(numRecordsWritten)
         streamOpen = false
         closeResources()
       }
     } {
-      var truncateStream: FileOutputStream = null
       try {
-        truncateStream = new FileOutputStream(file, true)
-        truncateStream.getChannel.truncate(committedPosition)
+        val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
+        fileSystem.truncate(path, committedPosition)
       } catch {
-        // ClosedByInterruptException is an excepted exception when kill task,
-        // don't log the exception stack trace to avoid confusing users.
-        // See: SPARK-28340
         case ce: ClosedByInterruptException =>
           logError("Exception occurred while reverting partial writes to file "
-            + file + ", " + ce.getMessage)
+            + path.toUri.getPath + ", " + ce.getMessage)
         case e: Exception =>
-          logError("Uncaught exception while reverting partial writes to file " + file, e)
-      } finally {
-        if (truncateStream != null) {
-          truncateStream.close()
-          truncateStream = null
-        }
+          logError("Uncaught exception while reverting partial writes to file "
+            + path.toUri.getPath, e)
       }
     }
-    file
+    null
   }
 
   /**
@@ -275,27 +216,21 @@ private[spark] class DiskBlockObjectWriter (
     if (!streamOpen) {
       open()
     }
-
     objOut.writeKey(key)
     objOut.writeValue(value)
     recordWritten()
   }
 
   override def spillMemoryIteratorToStorage(inMemoryIterator: WritablePartitionedIterator,
-             diskBlockManager: DiskBlockManager, numPartitions: Int, diskBytesSpilled: AtomicLong,
-             serializerBatchSize: Long, context: Option[TaskContext]): SpilledFile = {
+            diskBlockManager: DiskBlockManager, numPartitions: Int, diskBytesSpilled: AtomicLong,
+             serializerBatchSize: Long, context: Option[TaskContext]):
+  SpilledFile = {
 
-    // These variables are reset after each flush
+    val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
     var objectsWritten: Long = 0
-
-    // List of batch sizes (bytes) in the order they are written to disk
     val batchSizes = new ArrayBuffer[Long]
-
-    // How many elements we have in each partition
     val elementsPerPartition = new Array[Long](numPartitions)
 
-    // Flush the disk writer's contents to disk, and update relevant variables.
-    // The writer is committed at the end of this process.
     def flush(): Unit = {
       val segment = commitAndGet()
       batchSizes += segment.length
@@ -330,18 +265,15 @@ private[spark] class DiskBlockObjectWriter (
       if (success) {
         close()
       } else {
-        // This code path only happens if an exception was thrown above before we set success;
-        // close our stuff and let the exception be thrown further
-       revertPartialWritesAndClose()
-        if (file.exists()) {
-          if (!file.delete()) {
-            logWarning(s"Error deleting ${file}")
+        revertPartialWritesAndClose()
+        if (fileSystem.exists(path)) {
+          if (!fileSystem.delete(path)) {
+            logWarning(s"Error deleting ${path.toString}")
           }
         }
       }
     }
-
-    SpilledFile(file, blockId, batchSizes.toArray, elementsPerPartition)
+    SpilledFile(null, blockId, batchSizes.toArray, elementsPerPartition, Some(path))
   }
 
   override def write(b: Int): Unit = throw new UnsupportedOperationException()
@@ -360,21 +292,9 @@ private[spark] class DiskBlockObjectWriter (
   def recordWritten(): Unit = {
     numRecordsWritten += 1
     writeMetrics.incRecordsWritten(1)
-
-    if (numRecordsWritten % 16384 == 0) {
-      updateBytesWritten()
-    }
   }
 
-  /**
-   * Report the number of bytes written in this writer's shuffle write metrics.
-   * Note that this is only valid before the underlying streams are closed.
-   */
-  private def updateBytesWritten(): Unit = {
-    val pos = channel.position()
-    writeMetrics.incBytesWritten(pos - reportedPosition)
-    reportedPosition = pos
-  }
+
 
   // For testing
   private[spark] override def flush(): Unit = {
@@ -383,15 +303,14 @@ private[spark] class DiskBlockObjectWriter (
   }
 
   override def spillMemoryOnlyMapToStorage(inMemoryIterator: Iterator[(Any, Any)],
-       diskBlockManager: DiskBlockManager, diskBytesSpilled: AtomicLong,
-       serializerBatchSize: Long, context: Option[TaskContext] = None):
+    diskBlockManager: DiskBlockManager, diskBytesSpilled: AtomicLong,
+    serializerBatchSize: Long, context: Option[TaskContext] = None):
   Iterator[(Any, Any)] = {
 
+    val fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf)
     var objectsWritten = 0
-
-    // List of batch sizes (bytes) in the order they are written to disk
+    // List of batch sizes (bytes) in the order they are written to hdfs
     val batchSizes = new ArrayBuffer[Long]
-
     // Flush the disk writer's contents to disk, and update relevant variables
     def flush(): Unit = {
       val segment = commitAndGet()
@@ -426,15 +345,16 @@ private[spark] class DiskBlockObjectWriter (
         // This code path only happens if an exception was thrown above before we set success;
         // close our stuff and let the exception be thrown further
         revertPartialWritesAndClose()
-        if (file.exists()) {
-          if (!file.delete()) {
-            logWarning(s"Error deleting ${file}")
+        if (fileSystem.exists(path)) {
+          if (!fileSystem.delete(path)) {
+            logWarning(s"Error deleting ${path.toString}")
           }
         }
       }
     }
 
-    new DiskMapIterator(file, blockId, batchSizes, serializerManager,
-      serializerInstance, serializerBatchSize, context.get)
+    new HdfsMapIterator(path, blockId, batchSizes, serializerManager, serializerInstance,
+      serializerBatchSize, context.get, hadoopConf)
   }
+
 }

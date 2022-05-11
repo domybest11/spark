@@ -18,7 +18,7 @@
 package org.apache.spark.storage
 
 import java.io._
-import java.lang.ref.{ReferenceQueue => JReferenceQueue, WeakReference}
+import java.lang.ref.{WeakReference, ReferenceQueue => JReferenceQueue}
 import java.nio.ByteBuffer
 import java.nio.channels.Channels
 import java.util.Collections
@@ -32,11 +32,11 @@ import scala.concurrent.duration._
 import scala.reflect.ClassTag
 import scala.util.{Failure, Random, Success, Try}
 import scala.util.control.NonFatal
-
 import com.codahale.metrics.{MetricRegistry, MetricSet}
 import com.google.common.cache.CacheBuilder
 import org.apache.commons.io.IOUtils
-
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.spark._
 import org.apache.spark.executor.DataReadMethod
 import org.apache.spark.internal.Logging
@@ -1348,6 +1348,19 @@ private[spark] class BlockManager(
     val syncWrites = conf.get(config.SHUFFLE_SYNC)
     new DiskBlockObjectWriter(file, serializerManager, serializerInstance, bufferSize,
       syncWrites, writeMetrics, blockId)
+  }
+
+  def getHdfsWriter(
+      blockId: BlockId,
+      path: Path,
+      serializerInstance: SerializerInstance,
+      bufferSize: Int,
+      writeMetrics: ShuffleWriteMetricsReporter,
+      hadoopConf: Configuration,
+      sparkConf: SparkConf): HdfsBlockObjectWriter = {
+    new HdfsBlockObjectWriter(serializerManager, serializerInstance,
+    bufferSize, writeMetrics, blockId, path, hadoopConf: Configuration,
+    sparkConf: SparkConf)
   }
 
   /**
