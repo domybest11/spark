@@ -21,20 +21,17 @@ import java.io.IOException
 import java.lang.reflect.InvocationTargetException
 import java.util
 import java.util.Locale
-
 import scala.collection.mutable
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.metastore.api.hive_metastoreConstants.DDL_TIME
 import org.apache.hadoop.hive.ql.metadata.HiveException
 import org.apache.hadoop.hive.serde.serdeConstants.SERIALIZATION_FORMAT
 import org.apache.thrift.TException
-
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.internal.Logging
-import org.apache.spark.sql.AnalysisException
+import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException
 import org.apache.spark.sql.catalyst.catalog._
@@ -45,6 +42,7 @@ import org.apache.spark.sql.execution.command.DDLUtils
 import org.apache.spark.sql.execution.datasources.{PartitioningUtils, SourceOptions}
 import org.apache.spark.sql.hive.client.HiveClient
 import org.apache.spark.sql.internal.HiveSerDe
+import org.apache.spark.sql.internal.SQLConf.INCLUDE_UN_COMMIT_PART
 import org.apache.spark.sql.internal.StaticSQLConf._
 import org.apache.spark.sql.types.{DataType, StructType}
 
@@ -1070,7 +1068,7 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
       val fs = tablePath.getFileSystem(hadoopConf)
       val newParts = newSpecs.map { spec =>
         val rightPath = renamePartitionDirectory(fs, tablePath, partitionColumnNames, spec)
-        val partition = client.getPartition(db, table, toMetaStorePartitionSpec(spec))
+        val partition = client.getPartition(db, table, toMetaStorePartitionSpec(spec), None)
         partition.copy(storage = partition.storage.copy(locationUri = Some(rightPath.toUri)))
       }
       alterPartitions(db, table, newParts)
@@ -1198,7 +1196,8 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
       db: String,
       table: String,
       spec: TablePartitionSpec): CatalogTablePartition = withClient {
-    val part = client.getPartition(db, table, toMetaStorePartitionSpec(spec))
+    val includeUnCommit = SparkSession.active.conf.get(INCLUDE_UN_COMMIT_PART)
+    val part = client.getPartition(db, table, toMetaStorePartitionSpec(spec), includeUnCommit)
     restorePartitionMetadata(part, getTable(db, table))
   }
 
@@ -1236,7 +1235,8 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
       db: String,
       table: String,
       spec: TablePartitionSpec): Option[CatalogTablePartition] = withClient {
-    client.getPartitionOption(db, table, toMetaStorePartitionSpec(spec)).map { part =>
+    val includeUnCommit = SparkSession.active.conf.get(INCLUDE_UN_COMMIT_PART)
+    client.getPartitionOption(db, table, toMetaStorePartitionSpec(spec), includeUnCommit).map { part =>
       restorePartitionMetadata(part, getTable(db, table))
     }
   }
@@ -1271,7 +1271,8 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
       partialSpec: Option[TablePartitionSpec] = None): Seq[CatalogTablePartition] = withClient {
     val partColNameMap = buildLowerCasePartColNameMap(getTable(db, table))
     val metaStoreSpec = partialSpec.map(toMetaStorePartitionSpec)
-    val res = client.getPartitions(db, table, metaStoreSpec)
+    val includeUnCommit = SparkSession.active.conf.get(INCLUDE_UN_COMMIT_PART)
+    val res = client.getPartitions(db, table, metaStoreSpec, includeUnCommit)
       .map { part => part.copy(spec = restorePartitionSpec(part.spec, partColNameMap))
     }
 
@@ -1298,8 +1299,9 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
 
     val partColNameMap = buildLowerCasePartColNameMap(catalogTable)
 
+    val includeUnCommit = SparkSession.active.conf.get(INCLUDE_UN_COMMIT_PART)
     val clientPrunedPartitions =
-      client.getPartitionsByFilter(rawTable, predicates, timeZoneId).map { part =>
+      client.getPartitionsByFilter(rawTable, predicates, timeZoneId, includeUnCommit).map { part =>
         part.copy(spec = restorePartitionSpec(part.spec, partColNameMap))
       }
     prunePartitionsByFilter(catalogTable, clientPrunedPartitions, predicates, defaultTimeZoneId)
