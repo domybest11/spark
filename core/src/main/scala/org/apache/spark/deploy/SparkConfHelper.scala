@@ -19,6 +19,7 @@ class SparkConfHelper(
 
   private lazy val jobTag = sparkConf.getOption("spark.deploy.jobTag")
   private lazy val metrics = httpClient.getJobHistoryMetric(jobTag.get)
+  private lazy val greyLevel = httpClient.getGreyDeployLevel
 
   private val rules = Seq(
     ExecutorMemoryRule(sparkConf),
@@ -57,6 +58,10 @@ class SparkConfHelper(
 
   def getJobTag(): Option[String] = {
     jobTag
+  }
+
+  def getGreyLevel(): Integer = {
+    greyLevel
   }
 
   def applySparkConf: Unit = {

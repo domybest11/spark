@@ -76,6 +76,7 @@ private[spark] object InternalAccumulator {
     val WRITE_TIME = SHUFFLE_WRITE_METRICS_PREFIX + "writeTime"
     val BLOCKS_NOT_PUSHED = SHUFFLE_PUSH_WRITE_METRICS_PREFIX + "blocksNotPushed"
     val BLOCKS_PUSHED = SHUFFLE_PUSH_WRITE_METRICS_PREFIX + "blocksPushed"
+    val AVG_PUSHED_BLOCK_SIZE = SHUFFLE_PUSH_WRITE_METRICS_PREFIX + "avgPushedBlockSize"
     val BLOCKS_TOO_LATE = SHUFFLE_PUSH_WRITE_METRICS_PREFIX + "blocksTooLate"
     val BLOCKS_COLLIDED = SHUFFLE_PUSH_WRITE_METRICS_PREFIX + "blocksCollided"
   }

@@ -21,11 +21,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 import org.apache.spark.{ExceptionFailure, JobExecutionStatus, SPARK_VERSION, SparkContext, Success, TaskCommitDenied, TaskEndReason, TaskFailedReason, TaskKilled}
 import org.apache.spark.internal.Logging
-import org.apache.spark.internal.config.PUSH_BASED_SHUFFLE_ENABLED
 import org.apache.spark.scheduler.{JobFailed, JobSucceeded, SparkListener, SparkListenerBlockManagerAdded, SparkListenerBlockManagerRemoved, SparkListenerBlockUpdated, SparkListenerEnvironmentUpdate, SparkListenerEvent, SparkListenerExecutorAdded, SparkListenerExecutorExcluded, SparkListenerExecutorExcludedForStage, SparkListenerExecutorMetricsUpdate, SparkListenerExecutorRemoved, SparkListenerExecutorReportInfo, SparkListenerExecutorUnexcluded, SparkListenerJobEnd, SparkListenerJobStart, SparkListenerNodeExcluded, SparkListenerNodeExcludedForStage, SparkListenerNodeUnexcluded, SparkListenerResourceProfileAdded, SparkListenerSpeculativeTaskSubmitted, SparkListenerStageCompleted, SparkListenerStageExecutorMetrics, SparkListenerStageSubmitted, SparkListenerTaskEnd, SparkListenerTaskGettingResult, SparkListenerTaskStart, SparkListenerUnpersistRDD, SparkListenerUnschedulableTaskSetAdded, SparkListenerUnschedulableTaskSetRemoved, StageInfo}
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.sql.execution.ui.{SparkListenerDriverAccumUpdates, SparkListenerSQLExecutionEnd, SparkListenerSQLExecutionStart}
 import org.apache.spark.status.api.v1
+import org.apache.spark.status.api.v1.TaskMetricDistributions
 import org.apache.spark.util.{AccumulatorContext, ExceptionRecord, ExecutionDataRecord, JobDataRecord, KafkaProducerUtil, StageDataRecord, TaskAvgMetrics, TaskMaxMetrics, Utils}
 import org.apache.spark.util.ExceptionType.SHUFFLE_FAIL
 
@@ -90,7 +90,7 @@ class SqlMarioListener(sc: SparkContext,
       stage.status.name(),
       stageSubmitted.stageInfo.numTasks,
       submissionTime = stageSubmitted.stageInfo.submissionTime.getOrElse(0),
-      isPushBasedShuffleEnabled = sc.conf.get(PUSH_BASED_SHUFFLE_ENABLED),
+      isPushBasedShuffleEnabled = Utils.getPushBasedShuffleType(sc.conf),
       details = stageSubmitted.stageInfo.details)
     )
 
@@ -162,7 +162,10 @@ class SqlMarioListener(sc: SparkContext,
             tmaxMetrics.schedulerDelay, tmaxMetrics.maxShuffleReadBytes
           )
         }
-
+        val metrics: Option[TaskMetricDistributions] = kvstore.taskSummary(
+          stageData.stageId, stageData.attemptId, Array(0, 0.25, 0.5, 0.75, 1.0))
+        val shuffleAvgPushedBlockSize =
+          metrics.get.shuffleWriteMetrics.pushBased.shuffleAvgPushedBlockSize(2)
         KafkaProducerUtil.report(new StageDataRecord(
             appName,
             appId,
@@ -218,6 +221,7 @@ class SqlMarioListener(sc: SparkContext,
             stageData.shuffleRemoteReqsDuration,
             stageData.shuffleMergedRemoteReqsDuration,
             stageData.shuffleBlocksPushed,
+            shuffleAvgPushedBlockSize,
             stageData.shuffleBlocksNotPushed,
             stageData.shuffleBlocksCollided,
             stageData.shuffleBlocksTooLate,

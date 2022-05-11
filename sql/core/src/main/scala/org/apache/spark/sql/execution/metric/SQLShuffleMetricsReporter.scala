@@ -177,6 +177,8 @@ class SQLShuffleWriteMetricsReporter(
     metrics(SQLShuffleWriteMetricsReporter.SHUFFLE_WRITE_TIME)
   private[this] val _blocksPushed =
     metrics(SQLShuffleWriteMetricsReporter.BLOCKS_PUSHED)
+  private[this] val _avgPushedBlockSize =
+    metrics(SQLShuffleWriteMetricsReporter.AVG_PUSHED_BLOCK_SIZE)
   private[this] val _blocksNotPushed =
     metrics(SQLShuffleWriteMetricsReporter.BLOCKS_NOT_PUSHED)
   private[this] val _blocksTooLate =
@@ -210,6 +212,11 @@ class SQLShuffleWriteMetricsReporter(
     _blocksPushed.add(v)
   }
 
+  override def incAvgPushedBlockSize(v: Long): Unit = {
+    metricsReporter.incAvgPushedBlockSize(v)
+    _avgPushedBlockSize.add(v)
+  }
+
   override def incBlocksNotPushed(v: Long): Unit = {
     metricsReporter.incBlocksNotPushed(v)
     _blocksNotPushed.add(v)
@@ -231,6 +238,7 @@ object SQLShuffleWriteMetricsReporter {
   val SHUFFLE_RECORDS_WRITTEN = "shuffleRecordsWritten"
   val SHUFFLE_WRITE_TIME = "shuffleWriteTime"
   val BLOCKS_PUSHED = "blocksPushed"
+  val AVG_PUSHED_BLOCK_SIZE = "avgPushedBlockSize"
   val BLOCKS_NOT_PUSHED = "blocksNotPushed"
   val BLOCKS_TOO_LATE = "blocksTooLate"
   val BLOCKS_COLLIDED = "blocksCollided"
@@ -247,6 +255,8 @@ object SQLShuffleWriteMetricsReporter {
       SQLMetrics.createNanoTimingMetric(sc, "shuffle write time"),
     BLOCKS_PUSHED ->
       SQLMetrics.createMetric(sc, "blocks pushed"),
+    AVG_PUSHED_BLOCK_SIZE ->
+      SQLMetrics.createMetric(sc, "avg pushed block size"),
     BLOCKS_NOT_PUSHED ->
       SQLMetrics.createMetric(sc, "blocks not pushed"),
     BLOCKS_TOO_LATE ->

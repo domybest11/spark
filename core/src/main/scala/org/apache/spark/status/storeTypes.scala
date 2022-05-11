@@ -139,6 +139,7 @@ private[spark] object TaskIndexNames {
   final val SHUFFLE_WRITE_SIZE = "sws"
   final val SHUFFLE_WRITE_TIME = "swt"
   final val SHUFFLE_BLOCKS_PUSHED = "sbp"
+  final val SHUFFLE_AVG_PUSHED_BLOCK_SIZE = "sapbs"
   final val SHUFFLE_BLOCKS_NOT_PUSHED = "sbnp"
   final val SHUFFLE_BLOCKS_COLLIDED = "sbc"
   final val SHUFFLE_BLOCKS_TOO_LATE = "sbtl"
@@ -278,6 +279,9 @@ private[spark] class TaskDataWrapper(
     val shuffleRecordsWritten: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_BLOCKS_PUSHED, parent = TaskIndexNames.STAGE)
     val shuffleBlocksPushed: Long,
+    @KVIndexParam(value = TaskIndexNames.SHUFFLE_AVG_PUSHED_BLOCK_SIZE,
+      parent = TaskIndexNames.STAGE)
+    val shuffleAvgPushedBlockSize: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_BLOCKS_NOT_PUSHED, parent = TaskIndexNames.STAGE)
     val shuffleBlocksNotPushed: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_BLOCKS_COLLIDED, parent = TaskIndexNames.STAGE)
@@ -341,6 +345,7 @@ private[spark] class TaskDataWrapper(
           getMetricValue(shuffleRecordsWritten),
           new ShufflePushWriteMetrics(
             getMetricValue(shuffleBlocksPushed),
+            getMetricValue(shuffleAvgPushedBlockSize),
             getMetricValue(shuffleBlocksNotPushed),
             getMetricValue(shuffleBlocksCollided),
             getMetricValue(shuffleBlocksTooLate)))))
@@ -583,6 +588,7 @@ private[spark] class CachedQuantile(
     val shuffleWriteRecords: Double,
     val shuffleWriteTime: Double,
     val shuffleBlocksPushed: Double,
+    val shuffleAvgPushedBlockSize: Double,
     val shuffleBlocksNotPushed: Double,
     val shuffleBlocksCollided: Double,
     val shuffleBlocksTooLate: Double) {

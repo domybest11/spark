@@ -33,6 +33,7 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
   private[executor] val _recordsWritten = new LongAccumulator
   private[executor] val _writeTime = new LongAccumulator
   private[executor] val _blocksPushed = new LongAccumulator
+  private[executor] val _avgPushedBlockSize = new LongAccumulator
   private[executor] val _blocksNotPushed = new LongAccumulator
   private[executor] val _blocksTooLate = new LongAccumulator
   private[executor] val _blocksCollided = new LongAccumulator
@@ -47,6 +48,8 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
   def blocksNotPushed: Long = _blocksNotPushed.sum
 
   def blocksPushed: Long = _blocksPushed.sum
+
+  def avgPushedBlockSize: Long = _avgPushedBlockSize.sum
 
   /**
    * Number of blocks that didn't get merged because the shuffle merge was already finalized.
@@ -77,6 +80,8 @@ class ShuffleWriteMetrics private[spark] () extends ShuffleWriteMetricsReporter 
   }
 
   private[spark] override def incBlocksPushed(v: Long): Unit = _blocksPushed.add(v)
+
+  private[spark] override def incAvgPushedBlockSize(v: Long): Unit = _avgPushedBlockSize.add(v)
 
   private[spark] override def incBlocksNotPushed(v: Long): Unit = _blocksNotPushed.add(v)
 

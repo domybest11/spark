@@ -400,7 +400,8 @@ case class ConvertStatement(
 
 case class MergeTableStatement(
     table: LogicalPlan,
-    query: LogicalPlan) extends ParsedStatement {
+    query: LogicalPlan,
+    staticPartitions: TablePartitionSpec = Map.empty) extends ParsedStatement {
 
   override def children: Seq[LogicalPlan] = query :: Nil
 }

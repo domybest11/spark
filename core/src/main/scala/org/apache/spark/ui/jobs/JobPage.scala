@@ -338,6 +338,7 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
           shuffleWriteTime = 0L,
           shuffleWriteRecords = 0L,
           shuffleBlocksPushed = 0L,
+          shuffleAvgPushedBlockSize = 0L,
           shuffleBlocksNotPushed = 0L,
           shuffleBlocksCollided = 0L,
           shuffleBlocksTooLate = 0L,
@@ -354,7 +355,7 @@ private[ui] class JobPage(parent: JobsTab, store: AppStatusStore) extends WebUIP
           killedTasksSummary = Map(),
           ResourceProfile.UNKNOWN_RESOURCE_PROFILE_ID,
           peakExecutorMetrics = None,
-          isPushBasedShuffleEnabled = false,
+          isPushBasedShuffleEnabled = 0,
           shuffleMergersCount = 0)
       }
     }

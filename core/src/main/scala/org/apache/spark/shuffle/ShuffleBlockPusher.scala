@@ -434,9 +434,12 @@ private[spark] class ShuffleBlockPusher(conf: SparkConf, shuffleWriteMetrics: Sh
     val numMergers = mergerLocs.length
     val requests = new ArrayBuffer[PushRequest]
     var blocks = new ArrayBuffer[(BlockId, Int)]
+    shuffleWriteMetrics.incAvgPushedBlockSize(
+      math.floor(partitionLengths.sum * 1.0 / partitionLengths.length)
+        .asInstanceOf[Long])
     for (reduceId <- 0 until numPartitions) {
       val blockSize = partitionLengths(reduceId)
-      logDebug(
+      logInfo(
         s"Block ${ShufflePushBlockId(shuffleId, shuffleMergeId, partitionId,
           reduceId)} is of size $blockSize")
       // Skip 0-length blocks and blocks that are large enough

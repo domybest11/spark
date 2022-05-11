@@ -27,6 +27,7 @@ import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.collection.JavaConverters._
 import scala.collection.immutable.{Map => IMap}
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, ListBuffer, Map}
+import scala.util.control.Breaks._
 import scala.util.control.NonFatal
 
 import com.google.common.base.Objects
@@ -1172,7 +1173,11 @@ private[spark] class Client(
       logApplicationReport: Boolean = true,
       interval: Long = sparkConf.get(REPORT_INTERVAL)): YarnAppReport = {
     var lastState: YarnApplicationState = null
-    while (true) {
+    val maxRetry = sparkConf.get("spark.yarn.getApplicationReport.maxRetry", "3").toInt
+    val SLEEP_TIME_SECS = sparkConf.get("spark.yarn.getApplicationReport.sleep", "5").toInt
+    var retryCount = 0
+    while (retryCount < maxRetry) {
+      breakable {
       Thread.sleep(interval)
       val report: ApplicationReport =
         try {
@@ -1183,11 +1188,17 @@ private[spark] class Client(
             cleanupStagingDir()
             return YarnAppReport(YarnApplicationState.KILLED, FinalApplicationStatus.KILLED, None)
           case NonFatal(e) if !e.isInstanceOf[InterruptedIOException] =>
-            val msg = s"Failed to contact YARN for application $appId."
-            logError(msg, e)
-            // Don't necessarily clean up staging dir because status is unknown
-            return YarnAppReport(YarnApplicationState.FAILED, FinalApplicationStatus.FAILED,
-              Some(msg))
+            retryCount = retryCount + 1
+            if (retryCount < maxRetry) {
+              Thread.sleep(SLEEP_TIME_SECS * 1000L)
+              break()
+            } else {
+              val msg = s"Failed to contact YARN for application $appId."
+              logError(msg, e)
+              // Don't necessarily clean up staging dir because status is unknown
+              return YarnAppReport(YarnApplicationState.FAILED, FinalApplicationStatus.FAILED,
+                Some(msg))
+            }
         }
       val state = report.getYarnApplicationState
 
@@ -1239,6 +1250,7 @@ private[spark] class Client(
         appMaster = startApplicationMasterService(report)
       }
       lastState = state
+     }
     }
 
     // Never reached, but keeps compiler happy

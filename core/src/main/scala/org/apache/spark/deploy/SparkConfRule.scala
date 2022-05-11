@@ -150,20 +150,40 @@ case class DataSourceGrayScaleRelease(sparkConf: SparkConf) extends SparkConfRul
 
 case class PushShuffleRule(sparkConf: SparkConf) extends SparkConfRule {
   private[spark] val SHUFFLE_RULE = "pushBasedShuffleRule"
-
-  private[spark] val ENABLE_PUSH_SHUFFLE = "pushShuffleEnabled"
   private[spark] val IS_PUSH_SHUFFLE = "isPushShuffle"
+  private[spark] val PUSH_SHUFFLE_TYPE = "pushShuffleType"
+  private[spark] val ADAPT_PUSH_BLOCK_SIZE = "adaptPushBlockSize"
+  private[spark] val MB = 1L << 20
 
   override def doApply(helper: SparkConfHelper): Unit = {
     if (enabled(sparkConf) && helper.getJobTag().isDefined) {
       val isPushShuffle = helper.getMetricByKey(IS_PUSH_SHUFFLE)
       if (isPushShuffle.isDefined && isPushShuffle.map(String.valueOf(_)).get.toBoolean) {
-        val enablePushShuffle = helper.getMetricByKey(ENABLE_PUSH_SHUFFLE)
-        if (enablePushShuffle.isDefined &&
-          enablePushShuffle.map(String.valueOf(_)).get.toBoolean) {
-          helper.setConf("spark.shuffle.push.enabled", "true")
-          helper.addEffectiveRules(SHUFFLE_RULE)
-          logInfo("Push-based shuffle rule has taken effect.")
+        val shuffleTypeMetric = helper.getMetricByKey(PUSH_SHUFFLE_TYPE)
+        val pushBlockSizeMetric = helper.getMetricByKey(ADAPT_PUSH_BLOCK_SIZE)
+        if (shuffleTypeMetric.isDefined) {
+          val shuffleType = shuffleTypeMetric.map(String.valueOf(_)).get.toInt
+          if (shuffleType > 0) {
+            shuffleType match {
+              case 1 =>
+                helper.setConf("spark.shuffle.push.enabled", "true")
+              case 2 =>
+                helper.setConf("spark.shuffle.push.enabled", "true")
+                helper.setConf("spark.shuffle.remote.service.enabled", "true")
+                helper.setConf("spark.shuffle.remote.service.master.port", "10032")
+                helper.setConf("spark.shuffle.remote.service.master.host",
+                  "remote.master.bilibili.co")
+              case _ =>
+            }
+            if (pushBlockSizeMetric.isDefined) {
+             val pushBlockSize = pushBlockSizeMetric.map(String.valueOf(_)).get.toLong
+              if (pushBlockSize > MB) {
+                helper.setConf("spark.shuffle.push.maxBlockSizeToPush", s"$pushBlockSize")
+              }
+            }
+            helper.addEffectiveRules(SHUFFLE_RULE)
+            logInfo("Push-based shuffle rule has taken effect.")
+          }
         }
       }
     }
@@ -177,6 +197,15 @@ case class RackResolveRule(sparkConf: SparkConf) extends SparkConfRule {
     if (!sparkConf.contains("spark.hadoop.rackAware.skip") && ("jscs".equals(dcInfo) ||
       "/etc/hadoop-jscs".equals(hadoopConf) || "/etc/hadoop-jscs/".equals(hadoopConf))) {
       helper.setConf("spark.hadoop.rackAware.skip", "true")
+    } else {
+      val grayLevel = helper.getGreyLevel()
+      val appName = sparkConf.getOption("spark.app.name")
+      if (enabled(sparkConf) && grayLevel > 0 && appName.getOrElse("").startsWith("a_h")) {
+        val jobId = appName.get.split("_")(3)
+        if (jobId.toLong % 100 < grayLevel) {
+          helper.setConf("spark.hadoop.rackAware.skip", "true")
+        }
+      }
     }
   }
 }

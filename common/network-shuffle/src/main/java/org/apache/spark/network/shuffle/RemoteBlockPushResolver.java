@@ -32,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.codahale.metrics.Timer;
@@ -135,10 +136,17 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
           return new ShuffleIndexInformation(file);
         }
       };
-    indexCache = CacheBuilder.newBuilder()
-      .maximumWeight(conf.mergedIndexCacheSize())
-      .weigher((Weigher<File, ShuffleIndexInformation>) (file, indexInfo) -> indexInfo.getSize())
-      .build(indexCacheLoader);
+    CacheBuilder cacheBuilder = CacheBuilder.newBuilder()
+            .maximumWeight(conf.mergedIndexCacheSize())
+            .weigher((Weigher<String, ShuffleIndexInformation>)
+                    (filePath, indexInfo) -> indexInfo.getSize());
+    int expireTimeSeconds = conf.shuffleIndexCacheExpireTimeSeconds();
+    if (expireTimeSeconds > 0) {
+      indexCache = cacheBuilder.expireAfterAccess(expireTimeSeconds, TimeUnit.SECONDS)
+              .build(indexCacheLoader);
+    } else {
+      indexCache = cacheBuilder.build(indexCacheLoader);
+    }
   }
 
   @VisibleForTesting

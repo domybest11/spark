@@ -19,13 +19,15 @@ package org.apache.spark.sql.execution.datasources
 
 import org.apache.spark.sql.{AnalysisException, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.{DataWritingCommand, MergeTableBaseCommand}
 
 case class MergeDataSourceTableCommand(
     catalogTable: CatalogTable,
     query: LogicalPlan,
-    relation: Option[HadoopFsRelation] = None) extends MergeTableBaseCommand {
+    relation: Option[HadoopFsRelation] = None,
+    staticPartitions: TablePartitionSpec = Map.empty) extends MergeTableBaseCommand {
 
   override def getWritingCommand(session: SparkSession): DataWritingCommand = {
     if (!isHiveTable) {
@@ -37,7 +39,7 @@ case class MergeDataSourceTableCommand(
 
     InsertIntoHadoopFsRelationCommand(
       hadoopFsRelation.location.rootPaths.head,
-      Map.empty[String, String],
+      staticPartitions,
       ifPartitionNotExists = false,
       partitionSchema,
       hadoopFsRelation.bucketSpec,

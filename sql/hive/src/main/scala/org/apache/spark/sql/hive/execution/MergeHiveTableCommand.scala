@@ -19,6 +19,7 @@ package org.apache.spark.sql.hive.execution
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.command.{DataWritingCommand, MergeTableBaseCommand}
 import org.apache.spark.sql.execution.datasources.HadoopFsRelation
@@ -26,13 +27,15 @@ import org.apache.spark.sql.execution.datasources.HadoopFsRelation
 case class MergeHiveTableCommand(
     catalogTable: CatalogTable,
     query: LogicalPlan,
-    relation: Option[HadoopFsRelation] = None) extends MergeTableBaseCommand {
+    relation: Option[HadoopFsRelation] = None,
+    staticPartitions: TablePartitionSpec = Map.empty) extends MergeTableBaseCommand {
 
   override def getWritingCommand(session: SparkSession): DataWritingCommand = {
 
     InsertIntoHiveTable(
       catalogTable,
-      catalogTable.partitionColumnNames.map(colName => (colName, None)).toMap,
+      catalogTable.partitionColumnNames.map(colName =>
+        (colName, staticPartitions.get(colName))).toMap,
       query,
       overwrite = true,
       ifPartitionNotExists = false,

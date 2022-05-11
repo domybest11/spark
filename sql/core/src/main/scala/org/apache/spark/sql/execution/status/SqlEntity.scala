@@ -144,6 +144,7 @@ private class SqlTask(
         metrics.shuffleWriteMetrics.writeTime,
         metrics.shuffleWriteMetrics.recordsWritten,
         metrics.shuffleWriteMetrics.blocksPushed,
+        metrics.shuffleWriteMetrics.avgPushedBlockSize,
         metrics.shuffleWriteMetrics.blocksNotPushed,
         metrics.shuffleWriteMetrics.blocksCollided,
         metrics.shuffleWriteMetrics.blocksTooLate)
