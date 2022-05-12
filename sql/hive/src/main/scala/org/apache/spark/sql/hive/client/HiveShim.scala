@@ -528,14 +528,14 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
       classOf[Hive],
       "getAllPartitionsOf",
       classOf[Table],
-      classOf[Boolean])
+      JBoolean.TYPE)
   private lazy val getPartitionsByFilterMethod =
     findMethod(
       classOf[Hive],
       "getPartitionsByFilter",
       classOf[Table],
       classOf[String],
-      classOf[Boolean])
+      JBoolean.TYPE)
   private lazy val getCommandProcessorMethod =
     findStaticMethod(
       classOf[CommandProcessorFactory],
@@ -583,8 +583,11 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
   }
 
   override def getAllPartitions(hive: Hive, table: Table,
-                                includeUnCommit: Option[Boolean] = None): Seq[Partition] =
-    getAllPartitionsMethod.invoke(hive, table, includeUnCommit).asInstanceOf[JSet[Partition]].asScala.toSeq
+                                includeUnCommit: Option[Boolean] = None): Seq[Partition] = {
+    val c: Boolean = includeUnCommit.getOrElse(false)
+    getAllPartitionsMethod.invoke(hive, table, c: JBoolean)
+      .asInstanceOf[JSet[Partition]].asScala.toSeq
+  }
 
   private def toHiveFunction(f: CatalogFunction, db: String): HiveFunction = {
     val resourceUris = f.resources.map { resource =>
@@ -927,8 +930,9 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
           // Hive may throw an exception when calling this method in some circumstances, such as
           // when filtering on a non-string partition column when the hive config key
           // hive.metastore.try.direct.sql is false
-          hive.getPartitionsByFilter(table, filter, includeUnCommit.getOrElse(false))
-//          getPartitionsByFilterMethod.invoke(hive, table, filter, includeUnCommit.getOrElse(false)).asInstanceOf[JArrayList[Partition]]
+          val c: Boolean = includeUnCommit.getOrElse(false)
+          getPartitionsByFilterMethod
+            .invoke(hive, table, filter, c: JBoolean).asInstanceOf[JArrayList[Partition]]
         } catch {
           case ex: InvocationTargetException if ex.getCause.isInstanceOf[MetaException] &&
               !tryDirectSql =>
@@ -975,7 +979,9 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
     if (!SQLConf.get.metastorePartitionPruningFastFallback ||
         predicates.isEmpty ||
         predicates.exists(hasTimeZoneAwareExpression)) {
-      getAllPartitionsMethod.invoke(hive, table, includeUnCommit).asInstanceOf[JSet[Partition]]
+      val c: Boolean = includeUnCommit.getOrElse(false)
+      getAllPartitionsMethod.invoke(hive, table, c: JBoolean)
+        .asInstanceOf[JSet[Partition]]
     } else {
       try {
         val partitionSchema = CharVarcharUtils.replaceCharVarcharWithStringInSchema(
@@ -1005,7 +1011,9 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
         case ex: InvocationTargetException if ex.getCause.isInstanceOf[MetaException] =>
           logWarning("Caught Hive MetaException attempting to get partition metadata by " +
             "filter from client side. Falling back to fetching all partition metadata", ex)
-          getAllPartitionsMethod.invoke(hive, table, includeUnCommit).asInstanceOf[JSet[Partition]]
+          val c: Boolean = includeUnCommit.getOrElse(false)
+          getAllPartitionsMethod.invoke(hive, table, c: JBoolean)
+            .asInstanceOf[JSet[Partition]]
       }
     }
   }
