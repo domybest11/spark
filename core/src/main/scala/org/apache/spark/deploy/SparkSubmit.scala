@@ -287,6 +287,7 @@ private[spark] class SparkSubmit extends Logging {
         error("Cluster deploy mode is not compatible with master \"local\"")
       case (_, CLUSTER) if isShell(args.primaryResource) =>
         error("Cluster deploy mode is not applicable to Spark shells.")
+      case (YARN, CLUSTER) if isSqlShell(args.mainClass) =>
       case (_, CLUSTER) if isSqlShell(args.mainClass) =>
         error("Cluster deploy mode is not applicable to Spark SQL shell.")
       case (_, CLUSTER) if isThriftServer(args.mainClass) =>
