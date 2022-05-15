@@ -147,4 +147,8 @@ private[spark] object CoarseGrainedClusterMessages {
 
   // The message to check if `CoarseGrainedSchedulerBackend` thinks the executor is alive or not.
   case class IsExecutorAlive(executorId: String) extends CoarseGrainedClusterMessage
+
+  case class RequestQueryLog(fetchSize: Int) extends CoarseGrainedClusterMessage
+
+  case class RequestQueryStdout(fetchSize: Int) extends CoarseGrainedClusterMessage
 }

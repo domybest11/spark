@@ -1,13 +1,18 @@
 package org.apache.spark.securitymanager;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.security.Permission;
 
 public class ExitNumSecurityManager extends SecurityManager {
+    private final static Logger LOGGER = LoggerFactory.getLogger(ExitNumSecurityManager.class);
 
     public SecurityManager parentSecurityManager;
 
     public ExitNumSecurityManager(SecurityManager parent) {
         super();
+        LOGGER.info("parentSecurityManager is {}", parent);
         parentSecurityManager = parent;
     }
 
