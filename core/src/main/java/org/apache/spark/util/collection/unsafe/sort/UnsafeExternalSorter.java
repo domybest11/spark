@@ -25,7 +25,15 @@ import java.util.Queue;
 import java.util.function.Supplier;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.Optional;
+import org.apache.spark.deploy.SparkHadoopUtil;
+import org.apache.spark.internal.config.package$;
 import org.apache.spark.memory.SparkOutOfMemoryError;
+import org.apache.spark.storage.ShuffleStorageUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +90,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
    */
   private final LinkedList<MemoryBlock> allocatedPages = new LinkedList<>();
 
-  private final LinkedList<UnsafeSorterSpillWriter> spillWriters = new LinkedList<>();
+  private final LinkedList<UnsafeSpillWriter> spillWriters = new LinkedList<>();
 
   // These variables are reset after spilling:
   @Nullable private volatile UnsafeInMemorySorter inMemSorter;
@@ -93,6 +101,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
   private long totalSpillBytes = 0L;
   private long totalSortTimeNanos = 0L;
   private volatile SpillableIterator readingIterator = null;
+  private final SparkConf conf = new SparkConf();
 
   public static UnsafeExternalSorter createWithExistingInMemorySorter(
       TaskMemoryManager taskMemoryManager,
@@ -146,6 +155,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
       @Nullable UnsafeInMemorySorter existingInMemorySorter,
       boolean canUseRadixSort) {
     super(taskMemoryManager, pageSizeBytes, taskMemoryManager.getTungstenMemoryMode());
+    Utils.loadDefaultSparkProperties(conf, null);
     this.taskMemoryManager = taskMemoryManager;
     this.blockManager = blockManager;
     this.serializerManager = serializerManager;
@@ -221,9 +231,9 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
 
     ShuffleWriteMetrics writeMetrics = new ShuffleWriteMetrics();
 
-    final UnsafeSorterSpillWriter spillWriter =
-      new UnsafeSorterSpillWriter(blockManager, fileBufferSizeBytes, writeMetrics,
-        inMemSorter.numRecords());
+    UnsafeSpillWriter spillWriter =
+            UnsafeSorterSpillWriterFactory.createUnsafeSorterSpillWriter(conf, blockManager,
+            fileBufferSizeBytes, writeMetrics, inMemSorter.numRecords(), taskContext);
     spillWriters.add(spillWriter);
     spillIterator(inMemSorter.getSortedIterator(), spillWriter);
 
@@ -314,11 +324,24 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
    * Deletes any spill files created by this sorter.
    */
   private void deleteSpillFiles() {
-    for (UnsafeSorterSpillWriter spill : spillWriters) {
-      File file = spill.getFile();
-      if (file != null && file.exists()) {
-        if (!file.delete()) {
-          logger.error("Was unable to delete spill file {}", file.getAbsolutePath());
+    for (UnsafeSpillWriter spill : spillWriters) {
+      if (spill instanceof UnsafeSorterSpillWriter) {
+        File file = ((UnsafeSorterSpillWriter) spill).getFile();
+        if (file != null && file.exists()) {
+          if (!file.delete()) {
+            logger.error("Was unable to delete spill file {}", file.getAbsolutePath());
+          }
+        }
+      } else {
+        Path path = ((UnsafeSorterHdfsSpillWriter) spill).getPath();
+        Configuration hadoopConf = new SparkHadoopUtil().newConfiguration(conf);
+        try {
+          FileSystem fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf);
+            if (!fileSystem.deleteOnExit(path)) {
+              logger.error("Was unable to delete spill file {}", path.toUri().getPath());
+            }
+        } catch (IOException e) {
+          logger.error("Was unable to delete spill file {}", e.getMessage());
         }
       }
     }
@@ -519,7 +542,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     } else {
       final UnsafeSorterSpillMerger spillMerger = new UnsafeSorterSpillMerger(
         recordComparatorSupplier.get(), prefixComparator, spillWriters.size());
-      for (UnsafeSorterSpillWriter spillWriter : spillWriters) {
+      for (UnsafeSpillWriter spillWriter : spillWriters) {
         spillMerger.addSpillIfNotEmpty(spillWriter.getReader(serializerManager));
       }
       if (inMemSorter != null) {
@@ -535,7 +558,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
   }
 
   private static void spillIterator(UnsafeSorterIterator inMemIterator,
-      UnsafeSorterSpillWriter spillWriter) throws IOException {
+           UnsafeSpillWriter spillWriter) throws IOException {
     while (inMemIterator.hasNext()) {
       inMemIterator.loadNext();
       final Object baseObject = inMemIterator.getBaseObject();
@@ -586,8 +609,9 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
         ShuffleWriteMetrics writeMetrics = new ShuffleWriteMetrics();
         if (numRecords > 0) {
           // Iterate over the records that have not been returned and spill them.
-          final UnsafeSorterSpillWriter spillWriter = new UnsafeSorterSpillWriter(
-                  blockManager, fileBufferSizeBytes, writeMetrics, numRecords);
+          UnsafeSpillWriter spillWriter =
+          UnsafeSorterSpillWriterFactory.createUnsafeSorterSpillWriter(conf, blockManager,
+                  fileBufferSizeBytes, writeMetrics, inMemSorter.numRecords(), taskContext);
           spillIterator(upstream, spillWriter);
           spillWriters.add(spillWriter);
           upstream = spillWriter.getReader(serializerManager);
@@ -711,7 +735,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
     } else {
       LinkedList<UnsafeSorterIterator> queue = new LinkedList<>();
       int i = 0;
-      for (UnsafeSorterSpillWriter spillWriter : spillWriters) {
+      for (UnsafeSpillWriter spillWriter : spillWriters) {
         if (i + spillWriter.recordsSpilled() > startIndex) {
           UnsafeSorterIterator iter = spillWriter.getReader(serializerManager);
           moveOver(iter, startIndex - i);

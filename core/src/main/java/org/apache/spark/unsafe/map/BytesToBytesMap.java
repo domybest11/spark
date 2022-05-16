@@ -25,6 +25,16 @@ import java.util.LinkedList;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Closeables;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.spark.SparkConf;
+import org.apache.spark.TaskContext;
+import org.apache.spark.api.java.Optional;
+import org.apache.spark.deploy.SparkHadoopUtil;
+import org.apache.spark.storage.ShuffleStorageUtils;
+import org.apache.spark.util.Utils;
+import org.apache.spark.util.collection.unsafe.sort.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,8 +51,6 @@ import org.apache.spark.unsafe.array.ByteArrayMethods;
 import org.apache.spark.unsafe.array.LongArray;
 import org.apache.spark.unsafe.hash.Murmur3_x86_32;
 import org.apache.spark.unsafe.memory.MemoryBlock;
-import org.apache.spark.util.collection.unsafe.sort.UnsafeSorterSpillReader;
-import org.apache.spark.util.collection.unsafe.sort.UnsafeSorterSpillWriter;
 
 /**
  * An append-only hash map where keys and values are contiguous regions of bytes.
@@ -169,7 +177,8 @@ public final class BytesToBytesMap extends MemoryConsumer {
   private final BlockManager blockManager;
   private final SerializerManager serializerManager;
   private volatile MapIterator destructiveIterator = null;
-  private LinkedList<UnsafeSorterSpillWriter> spillWriters = new LinkedList<>();
+  private LinkedList<UnsafeSpillWriter> spillWriters = new LinkedList<>();
+  private final SparkConf conf = new SparkConf();
 
   public BytesToBytesMap(
       TaskMemoryManager taskMemoryManager,
@@ -179,6 +188,7 @@ public final class BytesToBytesMap extends MemoryConsumer {
       double loadFactor,
       long pageSizeBytes) {
     super(taskMemoryManager, pageSizeBytes, taskMemoryManager.getTungstenMemoryMode());
+    Utils.loadDefaultSparkProperties(conf, null);
     this.taskMemoryManager = taskMemoryManager;
     this.blockManager = blockManager;
     this.serializerManager = serializerManager;
@@ -219,6 +229,28 @@ public final class BytesToBytesMap extends MemoryConsumer {
    */
   public int numKeys() { return numKeys; }
 
+  private void cleanSpillWriterFile() {
+    UnsafeSpillWriter unsafeSpillWriter = spillWriters.removeFirst();
+    if (unsafeSpillWriter instanceof UnsafeSorterSpillWriter) {
+      File file = ((UnsafeSorterSpillWriter) unsafeSpillWriter).getFile();
+      if (file != null && file.exists() && !file.delete()) {
+        logger.error("Was unable to delete spill file {}", file.getAbsolutePath());
+      }
+    } else {
+      Path path = ((UnsafeSorterHdfsSpillWriter) unsafeSpillWriter).getPath();
+      Configuration hadoopConf = new SparkHadoopUtil().newConfiguration(conf);
+      try {
+        FileSystem fileSystem = ShuffleStorageUtils.getFileSystemForPath(path, hadoopConf);
+        if (!fileSystem.deleteOnExit(path)) {
+          logger.error("Was unable to delete spill file {}", path.toUri().getPath());
+        }
+      } catch (IOException e) {
+        logger.error("Was unable to delete spill file {}", e.getMessage());
+      }
+    }
+  }
+
+
   /**
    * Returns the number of values defined in the map. A key could have multiple values.
    */
@@ -234,10 +266,11 @@ public final class BytesToBytesMap extends MemoryConsumer {
     private Object pageBaseObject;
     private long offsetInPage;
 
+
     // If this iterator destructive or not. When it is true, it frees each page as it moves onto
     // next one.
     private boolean destructive = false;
-    private UnsafeSorterSpillReader reader = null;
+    private UnsafeSorterIterator reader = null;
 
     private MapIterator(int numRecords, Location loc, boolean destructive) {
       this.numRecords = numRecords;
@@ -281,7 +314,11 @@ public final class BytesToBytesMap extends MemoryConsumer {
               handleFailedDelete();
             }
             try {
-              Closeables.close(reader, /* swallowIOException = */ false);
+              if (reader instanceof UnsafeSorterSpillReader) {
+                Closeables.close((UnsafeSorterSpillReader) reader, false);
+              } else {
+                Closeables.close((UnsafeSorterHdfsSpillReader)reader, false);
+              }
               reader = spillWriters.getFirst().getReader(serializerManager);
               recordsInPage = -1;
             } catch (IOException e) {
@@ -329,7 +366,11 @@ public final class BytesToBytesMap extends MemoryConsumer {
           reader.loadNext();
         } catch (IOException e) {
           try {
-            reader.close();
+            if (reader instanceof UnsafeSorterSpillReader) {
+              ((UnsafeSorterSpillReader) reader).close();
+            } else {
+              ((UnsafeSorterHdfsSpillReader) reader).close();
+            }
           } catch(IOException e2) {
             logger.error("Error while closing spill reader", e2);
           }
@@ -364,8 +405,9 @@ public final class BytesToBytesMap extends MemoryConsumer {
         int numRecords = UnsafeAlignedOffset.getSize(base, offset);
         int uaoSize = UnsafeAlignedOffset.getUaoSize();
         offset += uaoSize;
-        final UnsafeSorterSpillWriter writer =
-                new UnsafeSorterSpillWriter(blockManager, 32 * 1024, writeMetrics, numRecords);
+        final UnsafeSpillWriter writer =
+        UnsafeSorterSpillWriterFactory.createUnsafeSorterSpillWriter(conf, blockManager,
+                32 * 1024, writeMetrics, numRecords, TaskContext.get());
         while (numRecords > 0) {
           int length = UnsafeAlignedOffset.getSize(base, offset);
           writer.write(base, offset + uaoSize, length, 0);
@@ -392,13 +434,11 @@ public final class BytesToBytesMap extends MemoryConsumer {
       throw new UnsupportedOperationException();
     }
 
+
     private void handleFailedDelete() {
       if (spillWriters.size() > 0) {
         // remove the spill file from disk
-        File file = spillWriters.removeFirst().getFile();
-        if (file != null && file.exists() && !file.delete()) {
-          logger.error("Was unable to delete spill file {}", file.getAbsolutePath());
-        }
+        cleanSpillWriterFile();
       }
     }
   }
@@ -895,12 +935,7 @@ public final class BytesToBytesMap extends MemoryConsumer {
     assert(dataPages.isEmpty());
 
     while (!spillWriters.isEmpty()) {
-      File file = spillWriters.removeFirst().getFile();
-      if (file != null && file.exists()) {
-        if (!file.delete()) {
-          logger.error("Was unable to delete spill file {}", file.getAbsolutePath());
-        }
-      }
+      cleanSpillWriterFile();
     }
   }
 

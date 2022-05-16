@@ -20,6 +20,7 @@ package org.apache.spark.util.collection.unsafe.sort;
 import java.io.File;
 import java.io.IOException;
 
+import org.apache.spark.util.Utils;
 import scala.Tuple2;
 
 import org.apache.spark.SparkConf;
@@ -38,7 +39,7 @@ import org.apache.spark.internal.config.package$;
  *
  *   [# of records (int)] [[len (int)][prefix (long)][data (bytes)]...]
  */
-public final class UnsafeSorterSpillWriter {
+public final class UnsafeSorterSpillWriter extends UnsafeSpillWriter {
 
   private final SparkConf conf = new SparkConf();
 
@@ -65,6 +66,7 @@ public final class UnsafeSorterSpillWriter {
       int fileBufferSize,
       ShuffleWriteMetrics writeMetrics,
       int numRecordsToWrite) throws IOException {
+    Utils.loadDefaultSparkProperties(conf, null);
     final Tuple2<TempLocalBlockId, File> spilledFileInfo =
       blockManager.diskBlockManager().createTempLocalBlock();
     this.file = spilledFileInfo._2();
