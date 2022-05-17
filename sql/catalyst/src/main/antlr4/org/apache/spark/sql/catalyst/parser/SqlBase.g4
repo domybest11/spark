@@ -1147,6 +1147,7 @@ ansiNonReserved
     | LOAD
     | LOCAL
     | LOCATION
+    | LIFECYCLE
     | LOCK
     | LOCKS
     | LOGICAL
@@ -1396,6 +1397,7 @@ nonReserved
     | LOAD
     | LOCAL
     | LOCATION
+    | LIFECYCLE
     | LOCK
     | LOCKS
     | LOGICAL
