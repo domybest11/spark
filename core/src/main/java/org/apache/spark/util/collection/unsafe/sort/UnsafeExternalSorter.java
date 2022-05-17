@@ -223,9 +223,18 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
       return 0L;
     }
 
-    logger.info("Thread {} spilling sort data of {} to disk ({} {} so far)",
+    String storageType = "disk";
+    if ((boolean) conf.get(package$.MODULE$.SHUFFLE_SPILL_REMOTE_ENABLE())) {
+      String storageTypeConf = conf.get(package$.MODULE$.SHUFFLE_SPILL_STOREA_TYPE());
+      if(storageTypeConf.equals("hdfs")) {
+        storageType = "hdfs";
+      }
+    }
+
+    logger.info("Thread {} spilling sort data of {} to {} ({} {} so far)",
       Thread.currentThread().getId(),
       Utils.bytesToString(getMemoryUsage()),
+      storageType,
       spillWriters.size(),
       spillWriters.size() > 1 ? " times" : " time");
 
