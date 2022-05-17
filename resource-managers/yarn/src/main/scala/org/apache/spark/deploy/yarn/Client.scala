@@ -18,7 +18,7 @@
 package org.apache.spark.deploy.yarn
 
 import java.io.{FileSystem => _, _}
-import java.net.{InetAddress, UnknownHostException, URI}
+import java.net.{InetAddress, URI, UnknownHostException}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.{Calendar, Locale, Properties, UUID}
@@ -29,7 +29,6 @@ import scala.collection.immutable.{Map => IMap}
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, ListBuffer, Map}
 import scala.util.control.Breaks._
 import scala.util.control.NonFatal
-
 import com.google.common.base.Objects
 import com.google.common.io.Files
 import org.apache.hadoop.conf.Configuration
@@ -37,13 +36,13 @@ import org.apache.hadoop.fs._
 import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hadoop.io.Text
 import org.apache.hadoop.mapreduce.MRJobConfig
+import org.apache.hadoop.ipc.RPC
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.util.StringUtils
-import org.apache.hadoop.ipc.RPC
 import org.apache.hadoop.yarn.api._
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment
 import org.apache.hadoop.yarn.api.protocolrecords._
-import org.apache.hadoop.yarn.api.records._
+import org.apache.hadoop.yarn.api.records.{ApplicationId, _}
 import org.apache.hadoop.yarn.client.ClientRMProxy
 import org.apache.hadoop.yarn.client.api.{YarnClient, YarnClientApplication}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
@@ -210,6 +209,41 @@ private[spark] class Client(
       // Finally, submit and monitor the application
       logInfo(s"Submitting application $appId to ResourceManager")
       yarnClient.submitApplication(appContext)
+      val clusterId = getClusterId(appId)
+      if (clusterId.nonEmpty && clusterId.equals("encode-jssz")) {
+        val rss3Master = sparkConf.get(SHUFFLE_RSS3_MASTER)
+        sparkConf.set(SHUFFLE_SERVICE_ENABLED, false)
+        sparkConf.set(SHUFFLE_DISK_DEGRADE_ENABLED, false)
+        sparkConf.set(DYN_ALLOCATION_SHUFFLE_TRACKING_ENABLED, true)
+        sparkConf.set("spark.rss.push.data.replicate", "true")
+        sparkConf.set("spark.rss.shuffle.writer.mode", "hash")
+        sparkConf.set(SHUFFLE_MANAGER, "org.apache.spark.shuffle.rss.RssShuffleManager")
+        sparkConf.set(SERIALIZER, "org.apache.spark.serializer.KryoSerializer")
+        sparkConf.set(SHUFFLE_RSS3_MASTER, rss3Master)
+        sparkConf.set("spark.sql.adaptive.enabled", "true")
+        sparkConf.set("spark.sql.adaptive.localShuffleReader.enabled", "false")
+        sparkConf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+      } else {
+        val remoteEnabled = sparkConf.get(SHUFFLE_REMOTE_SERVICE_ENABLED)
+        if (remoteEnabled) {
+          val remoteMastersUrls = sparkConf.get("spark.shuffle.remote.service.master.urls",
+            "jssz:remote.master.bilibili.co,jscs:remote.jscs.master.bilibili.co")
+          val remoteMasters = remoteMastersUrls.split(",").map(uri => {
+            val iterm = uri.split(":")
+            (iterm(0), iterm(1))
+          }).toMap
+          if (clusterId.nonEmpty) {
+            val remoteMaster = remoteMasters.getOrElse(clusterId, "")
+            if (remoteMaster.nonEmpty) {
+              sparkConf.set(SHUFFLE_REMOTE_SERVICE_MASTER_HOST, remoteMaster)
+            } else {
+              sparkConf.set(SHUFFLE_REMOTE_SERVICE_ENABLED, false)
+            }
+          } else {
+            sparkConf.set(SHUFFLE_REMOTE_SERVICE_ENABLED, false)
+          }
+        }
+      }
       launcherBackend.setAppId(appId.toString)
       reportLauncherState(SparkAppHandle.State.SUBMITTED)
       val traceId = sparkConf.get("spark.trace.id", "")
@@ -224,6 +258,24 @@ private[spark] class Client(
         }
         throw e
     }
+  }
+
+  def getClusterId(appId: ApplicationId): String = {
+    val maxRetry = sparkConf.get("spark.yarn.getClusterId.maxRetry", "3").toInt
+    val SLEEP_TIME_SECS = sparkConf.get("spark.yarn.getClusterId.sleep", "1").toInt
+    var retryCount = 0
+    var clusterId = ""
+    while(clusterId.isEmpty && retryCount < maxRetry) {
+      val appReport = yarnClient.getApplicationReport(appId)
+      clusterId = appReport.getRMClusterId
+      if (clusterId.isEmpty) {
+        retryCount = retryCount + 1
+        if (retryCount < maxRetry) {
+          Thread.sleep(SLEEP_TIME_SECS * 1000L)
+        }
+      }
+    }
+    clusterId
   }
 
   def printQueueInfo(conf: Configuration, traceId: String, queueName: String,

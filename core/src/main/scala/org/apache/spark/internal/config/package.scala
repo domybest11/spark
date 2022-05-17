@@ -767,6 +767,15 @@ package object config {
       .booleanConf
       .createWithDefault(false)
 
+
+  private[spark] val SHUFFLE_RSS3_MASTER =
+    ConfigBuilder("spark.rss.master.address")
+      .doc("The configured of RSS3 master.")
+      .version("3.0.0")
+      .stringConf
+      .createWithDefault("")
+
+
   private[spark] val SHUFFLE_DISK_DEGRADE_THRESHOLD =
     ConfigBuilder("spark.shuffle.disk.degrade.threshold")
     .doc("Check whether the disk usage exceeds the threshold.")
