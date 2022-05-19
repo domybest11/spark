@@ -36,6 +36,7 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationAttemptNotFoundException
 import org.apache.hadoop.yarn.server.webproxy.ProxyUriUtils
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
+import org.apache.log4j.{AppenderSkeleton, Level, LogManager}
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.history.HistoryServer
@@ -747,6 +748,9 @@ private[spark] class ApplicationMaster(
   private def startUserApplication(): Thread = {
     logInfo("Starting the user application in a separate Thread")
 
+    LogManager.getRootLogger.getAppender("console")
+      .asInstanceOf[AppenderSkeleton]
+      .setThreshold(Level.WARN)
     var userArgs = args.userArgs
     if (args.primaryPyFile != null && args.primaryPyFile.endsWith(".py")) {
       // When running pyspark, the app is run using PythonRunner. The second argument is the list

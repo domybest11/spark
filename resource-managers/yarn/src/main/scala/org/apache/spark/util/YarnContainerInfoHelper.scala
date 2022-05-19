@@ -29,7 +29,7 @@ import org.apache.spark.internal.Logging
 
 private[spark] object YarnContainerInfoHelper extends Logging {
 
-  private[this] val DRIVER_LOG_FILE_NAMES = Seq("stdout", "stderr", "gclog")
+  private[this] val DRIVER_LOG_FILE_NAMES = Seq("stdout", "stderr", "gclog", "detail")
   private[this] val DRIVER_LOG_START_OFFSET = -4096
 
   def getLogUrlsFromBaseUrl(baseUrl: String): Map[String, String] = {
