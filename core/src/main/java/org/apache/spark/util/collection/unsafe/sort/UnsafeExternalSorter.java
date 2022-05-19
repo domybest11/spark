@@ -29,7 +29,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.Optional;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.deploy.SparkHadoopUtil;
 import org.apache.spark.internal.config.package$;
 import org.apache.spark.memory.SparkOutOfMemoryError;
@@ -101,7 +101,7 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
   private long totalSpillBytes = 0L;
   private long totalSortTimeNanos = 0L;
   private volatile SpillableIterator readingIterator = null;
-  private final SparkConf conf = new SparkConf();
+  private final SparkConf conf = SparkEnv.get().conf();
 
   public static UnsafeExternalSorter createWithExistingInMemorySorter(
       TaskMemoryManager taskMemoryManager,
@@ -155,7 +155,6 @@ public final class UnsafeExternalSorter extends MemoryConsumer {
       @Nullable UnsafeInMemorySorter existingInMemorySorter,
       boolean canUseRadixSort) {
     super(taskMemoryManager, pageSizeBytes, taskMemoryManager.getTungstenMemoryMode());
-    Utils.loadDefaultSparkProperties(conf, null);
     this.taskMemoryManager = taskMemoryManager;
     this.blockManager = blockManager;
     this.serializerManager = serializerManager;

@@ -2,7 +2,6 @@ package org.apache.spark.util.collection.unsafe.sort;
 
 import org.apache.spark.SparkConf;
 import org.apache.spark.TaskContext;
-import org.apache.spark.api.java.Optional;
 import org.apache.spark.executor.ShuffleWriteMetrics;
 import org.apache.spark.internal.config.package$;
 import org.apache.spark.storage.BlockManager;

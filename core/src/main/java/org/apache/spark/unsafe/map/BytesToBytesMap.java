@@ -178,7 +178,7 @@ public final class BytesToBytesMap extends MemoryConsumer {
   private final SerializerManager serializerManager;
   private volatile MapIterator destructiveIterator = null;
   private LinkedList<UnsafeSpillWriter> spillWriters = new LinkedList<>();
-  private final SparkConf conf = new SparkConf();
+  private final SparkConf conf = SparkEnv.get().conf();
 
   public BytesToBytesMap(
       TaskMemoryManager taskMemoryManager,
@@ -188,7 +188,6 @@ public final class BytesToBytesMap extends MemoryConsumer {
       double loadFactor,
       long pageSizeBytes) {
     super(taskMemoryManager, pageSizeBytes, taskMemoryManager.getTungstenMemoryMode());
-    Utils.loadDefaultSparkProperties(conf, null);
     this.taskMemoryManager = taskMemoryManager;
     this.blockManager = blockManager;
     this.serializerManager = serializerManager;

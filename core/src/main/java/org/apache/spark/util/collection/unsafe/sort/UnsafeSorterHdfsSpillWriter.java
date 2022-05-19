@@ -21,6 +21,7 @@ import java.io.IOException;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
+import org.apache.spark.SparkEnv;
 import org.apache.spark.TaskContext;
 import org.apache.spark.deploy.SparkHadoopUtil;
 import org.apache.spark.storage.*;
@@ -40,7 +41,7 @@ import org.apache.spark.internal.config.package$;
  */
 public final class UnsafeSorterHdfsSpillWriter extends UnsafeSpillWriter {
 
-    private final SparkConf conf = new SparkConf();
+    private final SparkConf conf = SparkEnv.get().conf();
 
     private final int diskWriteBufferSize =
             (int) (long) conf.get(package$.MODULE$.SHUFFLE_DISK_WRITE_BUFFER_SIZE());
