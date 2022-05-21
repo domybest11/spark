@@ -193,12 +193,13 @@ spark_client_build:
           "fileName":"'"$DEST_FILE_NAME"'",
            "replica": 100
         }'
-    - mv dest/*tgz dest/spark-3.1-client.tgz
+    - cp dest/*tgz dest/spark-3.1-client.tgz
     - export DEST_FILE_NAME=spark-3.1-client.tgz
     - export DEST_FILE_LOCAL_PATH=dest/spark-3.1-client.tgz
     - export DEST_FILE_REMOTE_PATH=$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
     - export DEST_FILE_MD5=`alterctl md5 $DEST_FILE_LOCAL_PATH`
     - alterctl fs upload dest/$DEST_FILE_NAME $CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
+    - rm -rf dest/spark-3.1-client.tgz
     - |
       curl -v -X POST 'http://alter.bilibili.co/api/alter/metadata/pack/ci/open/add/one' \
         --header 'Content-Type: application/json' \
