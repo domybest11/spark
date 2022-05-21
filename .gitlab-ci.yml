@@ -193,9 +193,9 @@ spark_client_build:
           "fileName":"'"$DEST_FILE_NAME"'",
            "replica": 100
         }'
-    - mv dest/$DEST_FILE_NAME dest/spark-3.1-client.zip
-    - export DEST_FILE_NAME=spark-3.1-client.zip
-    - export DEST_FILE_LOCAL_PATH=dest/spark-3.1-client.zip
+    - mv dest/*tgz dest/spark-3.1-client.tgz
+    - export DEST_FILE_NAME=spark-3.1-client.tgz
+    - export DEST_FILE_LOCAL_PATH=dest/spark-3.1-client.tgz
     - export DEST_FILE_REMOTE_PATH=$CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
     - export DEST_FILE_MD5=`alterctl md5 $DEST_FILE_LOCAL_PATH`
     - alterctl fs upload dest/$DEST_FILE_NAME $CI_PROJECT_PATH/$CI_BUILD_ID/$DEST_FILE_NAME
