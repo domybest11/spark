@@ -52,7 +52,7 @@ import org.apache.hadoop.yarn.exceptions.ApplicationNotFoundException
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier
 import org.apache.hadoop.yarn.util.Records
 
-import org.apache.spark.{SecurityManager, SparkConf, SparkException}
+import org.apache.spark.{SecurityManager, SparkConf, SparkEnv, SparkException}
 import org.apache.spark.api.python.PythonUtils
 import org.apache.spark.deploy.{SparkApplication, SparkHadoopUtil}
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
@@ -64,6 +64,7 @@ import org.apache.spark.internal.config.Python._
 import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle, YarnCommandBuilderUtils}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc.RpcEnv
+import org.apache.spark.shuffle.ShuffleManager
 import org.apache.spark.util.{CallerContext, TraceReporter, Utils, YarnContainerInfoHelper}
 
 private[spark] class Client(
@@ -214,7 +215,6 @@ private[spark] class Client(
       yarnClient.submitApplication(appContext)
       val clusterId = getClusterId(appId)
       if (clusterId.nonEmpty && clusterId.equals("encode-jssz")) {
-        val rss3Master = sparkConf.get(SHUFFLE_RSS3_MASTER)
         sparkConf.set(SHUFFLE_SERVICE_ENABLED, false)
         sparkConf.set(SHUFFLE_DISK_DEGRADE_ENABLED, false)
         sparkConf.set(DYN_ALLOCATION_SHUFFLE_TRACKING_ENABLED, true)
@@ -222,10 +222,18 @@ private[spark] class Client(
         sparkConf.set("spark.rss.shuffle.writer.mode", "hash")
         sparkConf.set(SHUFFLE_MANAGER, "org.apache.spark.shuffle.rss.RssShuffleManager")
         sparkConf.set(SERIALIZER, "org.apache.spark.serializer.KryoSerializer")
-        sparkConf.set(SHUFFLE_RSS3_MASTER, rss3Master)
+        sparkConf.set(SHUFFLE_RSS3_MASTER, sparkConf.get(SHUFFLE_RSS3_MASTER))
         sparkConf.set("spark.sql.adaptive.enabled", "true")
         sparkConf.set("spark.sql.adaptive.localShuffleReader.enabled", "false")
         sparkConf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+        val shortShuffleMgrNames = Map(
+          "sort" -> classOf[org.apache.spark.shuffle.sort.SortShuffleManager].getName,
+          "tungsten-sort" -> classOf[org.apache.spark.shuffle.sort.SortShuffleManager].getName)
+        val shuffleMgrName = sparkConf.get(SHUFFLE_MANAGER)
+        val shuffleMgrClass =
+          shortShuffleMgrNames.getOrElse(shuffleMgrName.toLowerCase(Locale.ROOT), shuffleMgrName)
+        SparkEnv.get.shuffleManager =
+          instantiateClass[ShuffleManager](shuffleMgrClass, sparkConf, true)
       } else {
         val remoteEnabled = sparkConf.get(SHUFFLE_REMOTE_SERVICE_ENABLED)
         if (remoteEnabled) {
@@ -260,6 +268,23 @@ private[spark] class Client(
           cleanupStagingDir()
         }
         throw e
+    }
+  }
+
+  def instantiateClass[T](className: String, conf: SparkConf, isDriver: Boolean): T = {
+    val cls = Utils.classForName(className)
+    try {
+      cls.getConstructor(classOf[SparkConf], java.lang.Boolean.TYPE)
+        .newInstance(conf, java.lang.Boolean.valueOf(isDriver))
+        .asInstanceOf[T]
+    } catch {
+      case _: NoSuchMethodException =>
+        try {
+          cls.getConstructor(classOf[SparkConf]).newInstance(conf).asInstanceOf[T]
+        } catch {
+          case _: NoSuchMethodException =>
+            cls.getConstructor().newInstance().asInstanceOf[T]
+        }
     }
   }
 
