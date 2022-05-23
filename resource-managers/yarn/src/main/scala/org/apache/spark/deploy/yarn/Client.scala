@@ -237,8 +237,9 @@ private[spark] class Client(
       } else {
         val remoteEnabled = sparkConf.get(SHUFFLE_REMOTE_SERVICE_ENABLED)
         if (remoteEnabled) {
+          sparkConf.set(SHUFFLE_REMOTE_SERVICE_ENABLED, true)
           val remoteMastersUrls = sparkConf.get("spark.shuffle.remote.service.master.urls",
-            "jssz:remote.master.bilibili.co,jscs:remote.jscs.master.bilibili.co")
+            "resource-jssz:remote.master.bilibili.co,resource-jscs:remote.jscs.master.bilibili.co")
           val remoteMasters = remoteMastersUrls.split(",").map(uri => {
             val iterm = uri.split(":")
             (iterm(0), iterm(1))
