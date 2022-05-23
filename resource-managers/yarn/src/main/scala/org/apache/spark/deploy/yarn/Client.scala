@@ -1244,7 +1244,9 @@ private[spark] class Client(
               logInfo(queryStdoutAck)
             }
           } catch {
-            case e: Exception => logInfo("Fail to print query log, user usually can ignore it")
+            case e: Exception =>
+              logInfo("There is a little log on client.")
+              logInfo(s"More log goto ${report.getTrackingUrl}. And see <detail> log on <Executors> Tab")
           }
         }
 
