@@ -109,6 +109,37 @@ private[hive] object SparkSQLCLIDriver extends Logging {
       System.exit(2)
     }
 
+    // Pretreatment and checks for yarn cluster mode.
+    // This is after the command line options parsing is complete.
+    val deployMode = sparkConf.getOption("spark.submit.deployMode").getOrElse("client")
+    if (deployMode == "cluster") {
+      logDebug(s"SQL file path: ${sessionState.fileName}")
+      // Change file name to use distributed sql file.
+      if (sessionState.fileName != null) {
+        sessionState.fileName = new File(sessionState.fileName).getName
+      }
+      val sqlString = sessionState.execString
+      val sqlFile = sessionState.fileName
+      val distFiles = sparkConf.getOption("spark.files").getOrElse(
+        sparkConf.getOption("spark.yarn.dist.files").orNull)
+      logDebug(s"SQL file name: $sqlFile")
+      logDebug(s"Distributed files: $distFiles")
+      val isUploadedSqlFile =
+        if (sqlFile == null) {
+          false
+        } else if (distFiles == null) {
+          false
+        } else {
+          distFiles.split(',').map(_.trim).filter(_.nonEmpty).map(new File(_).getName)
+            .contains(sqlFile)
+        }
+      if (sqlString == null && (sqlFile == null || !isUploadedSqlFile)) {
+        logError("Spark SQL CLI cluster mode requires \"-e <string>\" or " +
+          "\"--files <file> -f <file>\" options.")
+        System.exit(3)
+      }
+    }
+
     // Set all properties specified via command line.
     val conf: HiveConf = sessionState.getConf
     // Hive 2.0.0 onwards HiveConf.getClassLoader returns the UDFClassLoader (created by Hive).

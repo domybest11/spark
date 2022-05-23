@@ -18,18 +18,16 @@
 package org.apache.spark.deploy.yarn
 
 import java.io.{FileSystem => _, _}
-import java.net.{InetAddress, UnknownHostException, URI}
+import java.net.{InetAddress, URI, UnknownHostException}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.{Calendar, Locale, Properties, UUID}
 import java.util.zip.{ZipEntry, ZipOutputStream}
-
 import scala.collection.JavaConverters._
 import scala.collection.immutable.{Map => IMap}
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, ListBuffer, Map}
 import scala.util.control.Breaks._
 import scala.util.control.NonFatal
-
 import com.google.common.base.Objects
 import com.google.common.io.Files
 import org.apache.hadoop.conf.Configuration
@@ -61,8 +59,12 @@ import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.Python._
 import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle, YarnCommandBuilderUtils}
 import org.apache.spark.resource.ResourceProfile
-import org.apache.spark.rpc.RpcEnv
-import org.apache.spark.util.{CallerContext, TraceReporter, Utils, YarnContainerInfoHelper}
+import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef, RpcEnv}
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RequestQueryLog, RequestQueryLogRegister, RequestQueryStdout}
+import org.apache.spark.util.{CallerContext, ThreadUtils, TraceReporter, Utils, YarnContainerInfoHelper}
+
+import scala.concurrent.duration.DurationLong
+import scala.language.postfixOps
 
 private[spark] class Client(
     val args: ClientArguments,
@@ -77,6 +79,9 @@ private[spark] class Client(
   private val hadoopConf = new YarnConfiguration(SparkHadoopUtil.newConfiguration(sparkConf))
   private var credentials: Credentials = null
   private val isClusterMode = sparkConf.get(SUBMIT_DEPLOY_MODE) == "cluster"
+
+  private val isQueryLogEnable = isClusterMode &&
+    args.userClass == "org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver";
 
   private val isClientUnmanagedAMEnabled = sparkConf.get(YARN_UNMANAGED_AM) && !isClusterMode
   private var appMaster: ApplicationMaster = _
@@ -1175,6 +1180,15 @@ private[spark] class Client(
     var lastState: YarnApplicationState = null
     val maxRetry = sparkConf.get("spark.yarn.getApplicationReport.maxRetry", "3").toInt
     val SLEEP_TIME_SECS = sparkConf.get("spark.yarn.getApplicationReport.sleep", "5").toInt
+    val queryLogWaitTime = sparkConf.get(QUERY_LOG_CLIENT_WAIT_TIME)
+    var queryLogEndPointRef: RpcEndpointRef = null
+    var amInitialized = false
+    var amHost: String = "N/A"
+    var amPort: Int = -1
+    val clientRpcEnv = RpcEnv
+      .create("client", Utils.localHostName(), 0,
+        sparkConf, new SecurityManager(sparkConf), clientMode = true)
+
     var retryCount = 0
     while (retryCount < maxRetry) {
       breakable {
@@ -1201,6 +1215,38 @@ private[spark] class Client(
             }
         }
       val state = report.getYarnApplicationState
+
+        if (isClusterMode && isQueryLogEnable &&
+          !report.getHost.equals(amHost) && report.getRpcPort != amPort) {
+          amInitialized = false
+          if (report.getRpcPort > 0) {
+            amHost = report.getHost
+            amPort = report.getRpcPort
+            queryLogEndPointRef =
+              clientRpcEnv.setupEndpointRef(RpcAddress(amHost, amPort),"QueryLog")
+            queryLogEndPointRef.send(RequestQueryLogRegister(Utils.localHostName()))
+            logInfo(s"App Query log connect to host: $amHost port:$amPort")
+            amInitialized = true
+          }
+        }
+
+        if (isQueryLogEnable && amInitialized) {
+          try {
+            val queryLogFuture = queryLogEndPointRef.ask[String](RequestQueryLog(200))
+            val queryLogAck = ThreadUtils.awaitResult(queryLogFuture, queryLogWaitTime seconds)
+            if (queryLogAck.nonEmpty) {
+              logInfo(queryLogAck)
+            }
+
+            val queryStdoutFuture = queryLogEndPointRef.ask[String](RequestQueryStdout(200))
+            val queryStdoutAck = ThreadUtils.awaitResult(queryStdoutFuture, queryLogWaitTime seconds)
+            if (queryStdoutAck.nonEmpty) {
+              logInfo(queryStdoutAck)
+            }
+          } catch {
+            case e: Exception => logInfo("Fail to print query log, user usually can ignore it")
+          }
+        }
 
       if (logApplicationReport) {
         logInfo(s"Application report for $appId (state: $state)")

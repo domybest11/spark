@@ -1,5 +1,6 @@
 package org.apache.spark.util.log;
 
+import org.apache.log4j.ConsoleAppender;
 import org.apache.log4j.Layout;
 import org.apache.log4j.Level;
 import org.apache.log4j.RollingFileAppender;
@@ -12,7 +13,7 @@ import org.apache.spark.util.Utils;
 import java.io.IOException;
 import java.util.Properties;
 
-public class CustomRollingFileAppender extends RollingFileAppender {
+public class CustomRollingFileAppender extends ConsoleAppender {
 
   private Properties setting = System.getProperties();
   private String threadName = "driver-logError-task";
@@ -27,14 +28,13 @@ public class CustomRollingFileAppender extends RollingFileAppender {
   }
 
 
-  public CustomRollingFileAppender(Layout layout, String filename, boolean append)
-      throws IOException {
-    super(layout, filename, append);
+  public CustomRollingFileAppender(Layout layout) {
+    super(layout);
     failureJobCollector.setPOISON_PILL(new LogErrorWrapEvent());
     failureJobCollector.start();
   }
-  public CustomRollingFileAppender(Layout layout, String filename) throws IOException {
-    super(layout, filename);
+  public CustomRollingFileAppender(Layout layout, String target) {
+    super(layout, target);
     failureJobCollector.setPOISON_PILL(new LogErrorWrapEvent());
     failureJobCollector.start();
   }
