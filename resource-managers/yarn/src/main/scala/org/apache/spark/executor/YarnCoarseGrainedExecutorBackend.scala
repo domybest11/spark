@@ -59,6 +59,9 @@ private[spark] class YarnCoarseGrainedExecutorBackend(
   override def extractLogUrls: Map[String, String] = {
     YarnContainerInfoHelper.getLogUrls(hadoopConfiguration, container = None)
       .getOrElse(Map())
+      .filterNot(kv => {
+        "detail".equals(kv._1)
+      })
   }
 
   override def extractAttributes: Map[String, String] = {

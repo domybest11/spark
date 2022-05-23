@@ -18,6 +18,7 @@
 package org.apache.spark.sql
 
 import org.apache.spark.annotation.Stable
+import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config.{ConfigEntry, OptionalConfigEntry}
 import org.apache.spark.sql.internal.SQLConf
 
@@ -29,7 +30,7 @@ import org.apache.spark.sql.internal.SQLConf
  * @since 2.0.0
  */
 @Stable
-class RuntimeConfig private[sql](sqlConf: SQLConf = new SQLConf) {
+class RuntimeConfig private[sql](sqlConf: SQLConf = new SQLConf) extends Logging{
 
   /**
    * Sets the given Spark runtime configuration property.
@@ -37,8 +38,9 @@ class RuntimeConfig private[sql](sqlConf: SQLConf = new SQLConf) {
    * @since 2.0.0
    */
   def set(key: String, value: String): Unit = {
-    requireNonStaticConf(key)
-    sqlConf.setConfString(key, value)
+    if (requireNonStaticConf(key)){
+      sqlConf.setConfString(key, value)
+    }
   }
 
   /**
@@ -125,8 +127,9 @@ class RuntimeConfig private[sql](sqlConf: SQLConf = new SQLConf) {
    * @since 2.0.0
    */
   def unset(key: String): Unit = {
-    requireNonStaticConf(key)
-    sqlConf.unsetConf(key)
+    if (requireNonStaticConf(key)) {
+      sqlConf.unsetConf(key)
+    }
   }
 
   /**
@@ -147,13 +150,16 @@ class RuntimeConfig private[sql](sqlConf: SQLConf = new SQLConf) {
     sqlConf.contains(key)
   }
 
-  private def requireNonStaticConf(key: String): Unit = {
+  private def requireNonStaticConf(key: String): Boolean = {
     if (SQLConf.staticConfKeys.contains(key)) {
-      throw new AnalysisException(s"Cannot modify the value of a static config: $key")
+      logWarning(s"ignore a static config: $key")
+      return false
     }
     if (sqlConf.setCommandRejectsSparkCoreConfs &&
         ConfigEntry.findEntry(key) != null && !SQLConf.sqlConfEntries.containsKey(key)) {
-      throw new AnalysisException(s"Cannot modify the value of a Spark config: $key")
+      logWarning(s"ignore a Spark config: $key")
+      return false
     }
+    true
   }
 }

@@ -55,7 +55,10 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.UI._
 import org.apache.spark.launcher.SparkLauncher
+import org.apache.spark.network.util.{ByteUnit, JavaUtils}
 import org.apache.spark.util._
+
+import scala.util.control.Breaks.{break, breakable}
 
 /**
  * Whether to submit, kill, or request the status of an application.
@@ -287,6 +290,7 @@ private[spark] class SparkSubmit extends Logging {
         error("Cluster deploy mode is not compatible with master \"local\"")
       case (_, CLUSTER) if isShell(args.primaryResource) =>
         error("Cluster deploy mode is not applicable to Spark shells.")
+      case (YARN, CLUSTER) if isSqlShell(args.mainClass) =>
       case (_, CLUSTER) if isSqlShell(args.mainClass) =>
         error("Cluster deploy mode is not applicable to Spark SQL shell.")
       case (_, CLUSTER) if isThriftServer(args.mainClass) =>
@@ -879,6 +883,17 @@ private[spark] class SparkSubmit extends Logging {
     val end = System.currentTimeMillis()
     logInfo("Execute HBO rule cost time: " + (end - start) + "ms")
 
+    if (isSqlShell(args.mainClass)) {
+      sqlSetConf(childArgs, sparkConf, isYarnCluster)
+      if (isYarnCluster) {
+        sparkConf.set[Int](DRIVER_CORES, math.max(sparkConf.get(DRIVER_CORES), 4))
+        sparkConf.set[Long](DRIVER_MEMORY,
+          math.max(sparkConf.get(DRIVER_MEMORY), JavaUtils.byteStringAs("10G", ByteUnit.MiB)))
+        sparkConf.set[Long](DRIVER_MEMORY_OVERHEAD,
+          math.max(sparkConf.get(DRIVER_MEMORY_OVERHEAD).getOrElse(0L),
+            JavaUtils.byteStringAs("2G", ByteUnit.MiB)))
+      }
+    }
     (childArgs.toSeq, childClasspath.toSeq, sparkConf, childMainClass)
   }
 
@@ -903,6 +918,59 @@ private[spark] class SparkSubmit extends Logging {
       }
     Thread.currentThread.setContextClassLoader(loader)
     loader
+  }
+
+  private def sqlSetConf(childArgs: ArrayBuffer[String], sparkConf: SparkConf, cLusterMode: Boolean): Unit = {
+    if (childArgs.indexOf("-f") >= 0) {
+      val file = childArgs(childArgs.indexOf("-f") + {if (cLusterMode) 2 else 1})
+      val reader = new BufferedReader(new FileReader(file))
+      var line: String = null
+      breakable {
+        while ({line = reader.readLine(); line != null}) {
+          if (!line.trim.equals("")) {
+            val end = parseLineConf(line, sparkConf)
+            if (end) { break }
+          }
+        }
+      }
+    } else if (childArgs.indexOf("-e") >= 0) {
+      val sql = childArgs(childArgs.indexOf("-e") + 1)
+      val lines = sql.split("\n")
+      breakable {
+        for (idx <- 0 until lines.length) {
+          if (!lines(idx).trim.equals("")) {
+            val end = parseLineConf(lines(idx), sparkConf)
+            if (end) { break }
+          }
+        }
+      }
+    }
+  }
+
+  private def parseLineConf(_line: String, sparkConf: SparkConf): Boolean = {
+    def parseLineConfInt(_line: String): Unit = {
+      if (_line.contains("=")) {
+        val line = if (_line.endsWith(";")) {
+          _line.substring(0, _line.length - 1)
+        } else {
+          _line
+        }
+        val kv = line.substring(3).split("=", 2)
+        val (k, v) = (kv(0).trim, kv(1).trim)
+        sparkConf.set(k, v)
+      }
+    }
+
+    val line = _line.trim
+    if (line.startsWith("--")) {
+      false
+    } else {
+      val end = !line.startsWith("set")
+      if (!end) {
+        parseLineConfInt(line)
+      }
+      end
+    }
   }
 
   /**

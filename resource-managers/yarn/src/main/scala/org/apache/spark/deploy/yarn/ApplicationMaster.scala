@@ -17,17 +17,15 @@
 
 package org.apache.spark.deploy.yarn
 
-import java.io.{File, IOException}
+import java.io.{BufferedReader, File, FileInputStream, IOException, InputStreamReader}
 import java.lang.reflect.{InvocationTargetException, Modifier}
 import java.net.{URI, URL}
 import java.security.PrivilegedExceptionAction
-import java.util.concurrent.{TimeoutException, TimeUnit}
-
-import scala.collection.mutable.HashMap
+import java.util.concurrent.{CountDownLatch, TimeUnit, TimeoutException}
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
-
 import org.apache.commons.lang3.{StringUtils => ComStrUtils}
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.security.UserGroupInformation
@@ -38,7 +36,7 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationAttemptNotFoundException
 import org.apache.hadoop.yarn.server.webproxy.ProxyUriUtils
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
-
+import org.apache.log4j.{AppenderSkeleton, Level, LogManager}
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.history.HistoryServer
@@ -52,8 +50,14 @@ import org.apache.spark.metrics.{MetricsSystem, MetricsSystemInstances}
 import org.apache.spark.resource.ResourceProfile
 import org.apache.spark.rpc._
 import org.apache.spark.scheduler.cluster.{CoarseGrainedSchedulerBackend, YarnSchedulerBackend}
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RequestQueryLog, RequestQueryStdout, _}
+import org.apache.spark.securitymanager.ExitNumSecurityManager
+import org.apache.spark.securitymanager.ExitNumSecurityManager.ExitException
 import org.apache.spark.util._
+
+import java.util.{Timer, TimerTask}
+import scala.collection.mutable
+import scala.util.control.Breaks.{break, breakable}
 
 /**
  * Common application master functionality for Spark on Yarn.
@@ -74,6 +78,11 @@ private[spark] class ApplicationMaster(
     }
 
   private val isClusterMode = args.userClass != null
+
+  private val isSqlMode =
+    "org.apache.spark.sql.hive.thriftserver.SparkSQLCLIDriver".equals(args.userClass)
+
+  private val waitClientConnectedLatch = new CountDownLatch(1)
 
   private val securityMgr = new SecurityManager(sparkConf)
 
@@ -127,6 +136,7 @@ private[spark] class ApplicationMaster(
 
   @volatile private var reporterThread: Thread = _
   @volatile private var allocator: YarnAllocator = _
+  @volatile private var queryLog: QueryLogEndpoint = _
 
   // A flag to check whether user has initialized spark context
   @volatile private var registered = false
@@ -152,6 +162,8 @@ private[spark] class ApplicationMaster(
 
   // In cluster mode, used to tell the AM when the user's SparkContext has been initialized.
   private val sparkContextPromise = Promise[SparkContext]()
+
+  private val exitNumSecurityManager = new ExitNumSecurityManager(System.getSecurityManager)
 
   /**
    * Load the list of localized files set by the client, used when launching executors. This should
@@ -259,7 +271,16 @@ private[spark] class ApplicationMaster(
 
         if (!unregistered) {
           // we only want to unregister if we don't want the RM to retry
-          if (finalStatus == FinalApplicationStatus.SUCCEEDED || isLastAttempt) {
+          if (finalStatus == FinalApplicationStatus.SUCCEEDED
+            || isLastAttempt
+            || (finalStatus == FinalApplicationStatus.FAILED &&
+                exitCode == ApplicationMaster.EXIT_EXCEPTION_USER_CLASS)
+            || (finalStatus == FinalApplicationStatus.FAILED &&
+                exitCode == ApplicationMaster.EXIT_CLIENT_NOT_CONNECTED_ON_STARTUP)
+            || (finalStatus == FinalApplicationStatus.FAILED &&
+                exitCode == ApplicationMaster.EXIT_CLIENT_HEARTBEAT_LOST)
+            || (finalStatus == FinalApplicationStatus.FAILED &&
+                exitCode == ApplicationMaster.EXIT_CLIENT_NETWORK_ERROR_OR_DISCONNECTED)) {
             unregister(finalStatus, finalMsg)
             cleanupStagingDir(new Path(System.getenv("SPARK_YARN_STAGING_DIR")))
           }
@@ -517,6 +538,17 @@ private[spark] class ApplicationMaster(
           RpcAddress(host, port),
           YarnSchedulerBackend.ENDPOINT_NAME)
         createAllocator(driverRef, userConf, rpcEnv, appAttemptId, distCacheConf)
+        if (isSqlMode) {
+          queryLog = new QueryLogEndpoint(rpcEnv)
+          rpcEnv.setupEndpoint("QueryLog", queryLog)
+          val waitTime = sparkConf.get(SPARK_YARN_AM_WAIT_CLIENT_CONNECTION_TIME)
+          val connected = waitClientConnectedLatch.await(waitTime, TimeUnit.SECONDS)
+          if (!connected) {
+            finish(
+              FinalApplicationStatus.FAILED, ApplicationMaster.EXIT_CLIENT_NOT_CONNECTED_ON_STARTUP,
+              s"Client connect to application master timeout")
+          }
+        }
       } else {
         // Sanity check; should never happen in normal operation, since sc should only be null
         // if the user app did not create a SparkContext.
@@ -534,6 +566,11 @@ private[spark] class ApplicationMaster(
           "Timed out waiting for SparkContext.")
     } finally {
       resumeDriver()
+    }
+
+    if (isSqlMode) {
+      val queryLogWaitTime = sparkConf.get(QUERY_LOG_AM_WAIT_TIME)
+      Thread.sleep(queryLogWaitTime * 1000)
     }
   }
 
@@ -711,6 +748,9 @@ private[spark] class ApplicationMaster(
   private def startUserApplication(): Thread = {
     logInfo("Starting the user application in a separate Thread")
 
+    LogManager.getRootLogger.getAppender("console")
+      .asInstanceOf[AppenderSkeleton]
+      .setThreshold(Level.WARN)
     var userArgs = args.userArgs
     if (args.primaryPyFile != null && args.primaryPyFile.endsWith(".py")) {
       // When running pyspark, the app is run using PythonRunner. The second argument is the list
@@ -725,6 +765,10 @@ private[spark] class ApplicationMaster(
     val mainMethod = userClassLoader.loadClass(args.userClass)
       .getMethod("main", classOf[Array[String]])
 
+    if (isSqlMode) {
+      System.setSecurityManager(exitNumSecurityManager)
+    }
+
     val userThread = new Thread {
       override def run(): Unit = {
         try {
@@ -738,6 +782,9 @@ private[spark] class ApplicationMaster(
           }
         } catch {
           case e: InvocationTargetException =>
+            if (isSqlMode) {
+              System.setSecurityManager(exitNumSecurityManager.parentSecurityManager)
+            }
             e.getCause match {
               case _: InterruptedException =>
                 // Reporter thread can interrupt to stop user class
@@ -745,6 +792,15 @@ private[spark] class ApplicationMaster(
                 val msg = s"User application exited with status $exitCode"
                 logError(msg)
                 finish(FinalApplicationStatus.FAILED, exitCode, msg)
+              case ex : ExitException =>
+                val msg = s"User application exited with status ${ex.getStatus}"
+                logInfo(msg)
+                if (ex.getStatus == 0) {
+                  finish(FinalApplicationStatus.SUCCEEDED, ApplicationMaster.EXIT_SUCCESS)
+                } else {
+                  finish(
+                    FinalApplicationStatus.FAILED, ApplicationMaster.EXIT_EXCEPTION_USER_CLASS, msg)
+                }
               case cause: Throwable =>
                 logError("User class threw exception: " + cause, cause)
                 finish(FinalApplicationStatus.FAILED,
@@ -753,6 +809,9 @@ private[spark] class ApplicationMaster(
             }
             sparkContextPromise.tryFailure(e.getCause())
         } finally {
+          if (isSqlMode) {
+            System.setSecurityManager(exitNumSecurityManager.parentSecurityManager)
+          }
           // Notify the thread waiting for the SparkContext, in case the application did not
           // instantiate one. This will do nothing when the user code instantiates a SparkContext
           // (with the correct master), or when the user code throws an exception (due to the
@@ -770,6 +829,97 @@ private[spark] class ApplicationMaster(
   private def resetAllocatorInterval(): Unit = allocatorLock.synchronized {
     nextAllocationInterval = initialAllocationInterval
     allocatorLock.notifyAll()
+  }
+
+  private class QueryLogEndpoint(override val rpcEnv: RpcEnv)
+    extends ThreadSafeRpcEndpoint with Logging {
+    var logReader: BufferedReader = _
+    var stdoutReader: BufferedReader = _
+    val clients = new mutable.HashSet[String]
+
+    var lastConnectedTime: Long = Long.MaxValue
+    val timer: Timer = new Timer
+    val timerTask: TimerTask = new TimerTask {
+      override def run(): Unit = {
+        if (lastConnectedTime < Long.MaxValue) {
+          val elapsed = System.currentTimeMillis() - lastConnectedTime
+          if (elapsed > sparkConf.get(REPORT_INTERVAL) * 5) {
+            finish(FinalApplicationStatus.FAILED,
+              ApplicationMaster.EXIT_CLIENT_HEARTBEAT_LOST,
+              s"Client heartbeat lost, last heartbeat ${lastConnectedTime}")
+            System.exit(3)
+          }
+        }
+      }
+    }
+
+    override def onNetworkError(cause: Throwable, remoteAddress: RpcAddress): Unit = {
+      if (clients.contains(remoteAddress.host)) {
+        logError(s"Error connecting to client ($remoteAddress). Cause was: $cause")
+        finish(FinalApplicationStatus.FAILED,
+          ApplicationMaster.EXIT_CLIENT_NETWORK_ERROR_OR_DISCONNECTED,
+          s"Client $remoteAddress network error")
+      }
+    }
+
+    override def onStart(): Unit = {
+      val containerLog = System.getProperty("spark.yarn.app.container.log.dir")
+      logReader = new BufferedReader(
+        new InputStreamReader(new FileInputStream(
+          new File(containerLog + "/stderr")
+        ))
+      )
+      stdoutReader = new BufferedReader(
+        new InputStreamReader(new FileInputStream(
+          new File(containerLog + "/stdout")
+        ))
+      )
+      waitClientConnectedLatch.countDown()
+      timer.schedule(timerTask, sparkConf.get(REPORT_INTERVAL), sparkConf.get(REPORT_INTERVAL))
+    }
+
+    override def onStop(): Unit = {
+      if (null != logReader) {
+        logReader.close()
+      }
+      if (null != stdoutReader) {
+        stdoutReader.close()
+      }
+      timer.cancel()
+    }
+
+    override def receive: PartialFunction[Any, Unit] = {
+      case RequestQueryLogRegister(client) =>
+        logInfo(s"connected with $client")
+        lastConnectedTime = System.currentTimeMillis()
+    }
+
+    override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
+      case RequestQueryLog(fetchSize) =>
+        lastConnectedTime = System.currentTimeMillis()
+        val lines = getLog(logReader, fetchSize)
+        context.reply(lines.mkString("\n"))
+      case RequestQueryStdout(fetchSize) =>
+        lastConnectedTime = System.currentTimeMillis()
+        val lines = getLog(stdoutReader, fetchSize)
+        context.reply(lines.mkString("\n"))
+    }
+
+    private def getLog(reader: BufferedReader, fetchSize: Int): ArrayBuffer[String] = {
+      val lines = new ArrayBuffer[String]
+      var line: String = null
+      breakable {
+        for (_ <- 0 until fetchSize) {
+          line = reader.readLine()
+          if (line == null) {
+            break
+          } else {
+            lines += line
+          }
+        }
+      }
+      lines
+    }
   }
 
   /**
@@ -846,6 +996,9 @@ object ApplicationMaster extends Logging {
   private val EXIT_SECURITY = 14
   private val EXIT_EXCEPTION_USER_CLASS = 15
   private val EXIT_EARLY = 16
+  private val EXIT_CLIENT_NOT_CONNECTED_ON_STARTUP = 17
+  private val EXIT_CLIENT_NETWORK_ERROR_OR_DISCONNECTED = 18
+  private val EXIT_CLIENT_HEARTBEAT_LOST = 19
 
   private var master: ApplicationMaster = _
 

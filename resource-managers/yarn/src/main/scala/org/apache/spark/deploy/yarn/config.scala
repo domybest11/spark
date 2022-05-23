@@ -193,6 +193,21 @@ package object config extends Logging {
     .timeConf(TimeUnit.MILLISECONDS)
     .createWithDefaultString("1s")
 
+  private[spark] val QUERY_LOG_CLIENT_WAIT_TIME =
+    ConfigBuilder("spark.yarn.query.log.client.waitTime")
+      .timeConf(TimeUnit.SECONDS)
+      .createWithDefaultString("10s")
+
+  private[spark] val QUERY_LOG_AM_WAIT_TIME =
+    ConfigBuilder("spark.yarn.query.log.am.waitTime")
+      .timeConf(TimeUnit.SECONDS)
+      .createWithDefaultString("10s")
+
+  private[spark] val SPARK_YARN_AM_WAIT_CLIENT_CONNECTION_TIME =
+    ConfigBuilder("spark.yarn.am.wait.client.connection.time")
+      .timeConf(TimeUnit.SECONDS)
+      .createWithDefaultString("20s")
+
   private[spark] val CLIENT_LAUNCH_MONITOR_INTERVAL =
     ConfigBuilder("spark.yarn.clientLaunchMonitorInterval")
       .doc("Interval between requests for status the client mode AM when starting the app.")
