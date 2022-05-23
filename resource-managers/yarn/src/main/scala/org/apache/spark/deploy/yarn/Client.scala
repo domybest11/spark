@@ -30,25 +30,27 @@ import scala.util.control.Breaks._
 import scala.util.control.NonFatal
 import com.google.common.base.Objects
 import com.google.common.io.Files
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs._
 import org.apache.hadoop.fs.permission.FsPermission
 import org.apache.hadoop.io.Text
+import org.apache.hadoop.ipc.RPC
 import org.apache.hadoop.mapreduce.MRJobConfig
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.util.StringUtils
-import org.apache.hadoop.ipc.RPC
 import org.apache.hadoop.yarn.api._
 import org.apache.hadoop.yarn.api.ApplicationConstants.Environment
 import org.apache.hadoop.yarn.api.protocolrecords._
-import org.apache.hadoop.yarn.api.records._
+import org.apache.hadoop.yarn.api.records.{ApplicationId, _}
 import org.apache.hadoop.yarn.client.ClientRMProxy
 import org.apache.hadoop.yarn.client.api.{YarnClient, YarnClientApplication}
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationNotFoundException
 import org.apache.hadoop.yarn.security.AMRMTokenIdentifier
 import org.apache.hadoop.yarn.util.Records
-import org.apache.spark.{SecurityManager, SparkConf, SparkException}
+
+import org.apache.spark.{SecurityManager, SparkConf, SparkEnv, SparkException}
 import org.apache.spark.api.python.PythonUtils
 import org.apache.spark.deploy.{SparkApplication, SparkHadoopUtil}
 import org.apache.spark.deploy.security.HadoopDelegationTokenManager
@@ -59,6 +61,7 @@ import org.apache.spark.internal.config._
 import org.apache.spark.internal.config.Python._
 import org.apache.spark.launcher.{LauncherBackend, SparkAppHandle, YarnCommandBuilderUtils}
 import org.apache.spark.resource.ResourceProfile
+import org.apache.spark.shuffle.ShuffleManager
 import org.apache.spark.rpc.{RpcAddress, RpcEndpointRef, RpcEnv}
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RequestQueryLog, RequestQueryLogRegister, RequestQueryStdout}
 import org.apache.spark.util.{CallerContext, ThreadUtils, TraceReporter, Utils, YarnContainerInfoHelper}
@@ -215,6 +218,49 @@ private[spark] class Client(
       // Finally, submit and monitor the application
       logInfo(s"Submitting application $appId to ResourceManager")
       yarnClient.submitApplication(appContext)
+      val clusterId = getClusterId(appId)
+      if (clusterId.nonEmpty && clusterId.equals("encode-jssz")) {
+        sparkConf.set(SHUFFLE_SERVICE_ENABLED, false)
+        sparkConf.set(SHUFFLE_DISK_DEGRADE_ENABLED, false)
+        sparkConf.set(DYN_ALLOCATION_SHUFFLE_TRACKING_ENABLED, true)
+        sparkConf.set("spark.rss.push.data.replicate", "true")
+        sparkConf.set("spark.rss.shuffle.writer.mode", "hash")
+        sparkConf.set(SHUFFLE_MANAGER, "org.apache.spark.shuffle.rss.RssShuffleManager")
+        sparkConf.set(SERIALIZER, "org.apache.spark.serializer.KryoSerializer")
+        sparkConf.set(SHUFFLE_RSS3_MASTER, sparkConf.get(SHUFFLE_RSS3_MASTER))
+        sparkConf.set("spark.sql.adaptive.enabled", "true")
+        sparkConf.set("spark.sql.adaptive.localShuffleReader.enabled", "false")
+        sparkConf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+        val shortShuffleMgrNames = Map(
+          "sort" -> classOf[org.apache.spark.shuffle.sort.SortShuffleManager].getName,
+          "tungsten-sort" -> classOf[org.apache.spark.shuffle.sort.SortShuffleManager].getName)
+        val shuffleMgrName = sparkConf.get(SHUFFLE_MANAGER)
+        val shuffleMgrClass =
+          shortShuffleMgrNames.getOrElse(shuffleMgrName.toLowerCase(Locale.ROOT), shuffleMgrName)
+        SparkEnv.get.shuffleManager =
+          instantiateClass[ShuffleManager](shuffleMgrClass, sparkConf, true)
+      } else {
+        val remoteEnabled = sparkConf.get(SHUFFLE_REMOTE_SERVICE_ENABLED)
+        if (remoteEnabled) {
+          sparkConf.set(SHUFFLE_REMOTE_SERVICE_ENABLED, true)
+          val remoteMastersUrls = sparkConf.get("spark.shuffle.remote.service.master.urls",
+            "resource-jssz:remote.master.bilibili.co,resource-jscs:remote.jscs.master.bilibili.co")
+          val remoteMasters = remoteMastersUrls.split(",").map(uri => {
+            val iterm = uri.split(":")
+            (iterm(0), iterm(1))
+          }).toMap
+          if (clusterId.nonEmpty) {
+            val remoteMaster = remoteMasters.getOrElse(clusterId, "")
+            if (remoteMaster.nonEmpty) {
+              sparkConf.set(SHUFFLE_REMOTE_SERVICE_MASTER_HOST, remoteMaster)
+            } else {
+              sparkConf.set(SHUFFLE_REMOTE_SERVICE_ENABLED, false)
+            }
+          } else {
+            sparkConf.set(SHUFFLE_REMOTE_SERVICE_ENABLED, false)
+          }
+        }
+      }
       launcherBackend.setAppId(appId.toString)
       reportLauncherState(SparkAppHandle.State.SUBMITTED)
       val traceId = sparkConf.get("spark.trace.id", "")
@@ -229,6 +275,41 @@ private[spark] class Client(
         }
         throw e
     }
+  }
+
+  def instantiateClass[T](className: String, conf: SparkConf, isDriver: Boolean): T = {
+    val cls = Utils.classForName(className)
+    try {
+      cls.getConstructor(classOf[SparkConf], java.lang.Boolean.TYPE)
+        .newInstance(conf, java.lang.Boolean.valueOf(isDriver))
+        .asInstanceOf[T]
+    } catch {
+      case _: NoSuchMethodException =>
+        try {
+          cls.getConstructor(classOf[SparkConf]).newInstance(conf).asInstanceOf[T]
+        } catch {
+          case _: NoSuchMethodException =>
+            cls.getConstructor().newInstance().asInstanceOf[T]
+        }
+    }
+  }
+
+  def getClusterId(appId: ApplicationId): String = {
+    val maxRetry = sparkConf.get("spark.yarn.getClusterId.maxRetry", "3").toInt
+    val SLEEP_TIME_SECS = sparkConf.get("spark.yarn.getClusterId.sleep", "1").toInt
+    var retryCount = 0
+    var clusterId = ""
+    while(clusterId.isEmpty && retryCount < maxRetry) {
+      val appReport = yarnClient.getApplicationReport(appId)
+      clusterId = appReport.getRMClusterId
+      if (clusterId.isEmpty) {
+        retryCount = retryCount + 1
+        if (retryCount < maxRetry) {
+          Thread.sleep(SLEEP_TIME_SECS * 1000L)
+        }
+      }
+    }
+    clusterId
   }
 
   def printQueueInfo(conf: Configuration, traceId: String, queueName: String,
