@@ -884,7 +884,7 @@ private[spark] class SparkSubmit extends Logging {
     logInfo("Execute HBO rule cost time: " + (end - start) + "ms")
 
     if (isSqlShell(args.mainClass)) {
-      sqlSetConf(childArgs, sparkConf)
+      sqlSetConf(childArgs, sparkConf, isYarnCluster)
       if (isYarnCluster) {
         sparkConf.set[Int](DRIVER_CORES, math.max(sparkConf.get(DRIVER_CORES), 4))
         sparkConf.set[Long](DRIVER_MEMORY,
@@ -920,9 +920,9 @@ private[spark] class SparkSubmit extends Logging {
     loader
   }
 
-  private def sqlSetConf(childArgs: ArrayBuffer[String], sparkConf: SparkConf): Unit = {
+  private def sqlSetConf(childArgs: ArrayBuffer[String], sparkConf: SparkConf, cLusterMode: Boolean): Unit = {
     if (childArgs.indexOf("-f") >= 0) {
-      val file = childArgs(childArgs.indexOf("-f") + 1)
+      val file = childArgs(childArgs.indexOf("-f") + {if (cLusterMode) 2 else 1})
       val reader = new BufferedReader(new FileReader(file))
       var line: String = null
       breakable {
