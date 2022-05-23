@@ -20,6 +20,8 @@ package org.apache.spark.util.collection.unsafe.sort;
 import java.io.File;
 import java.io.IOException;
 
+import org.apache.spark.SparkEnv;
+
 import scala.Tuple2;
 
 import org.apache.spark.SparkConf;
@@ -38,9 +40,9 @@ import org.apache.spark.internal.config.package$;
  *
  *   [# of records (int)] [[len (int)][prefix (long)][data (bytes)]...]
  */
-public final class UnsafeSorterSpillWriter {
+public final class UnsafeSorterSpillWriter extends UnsafeSpillWriter {
 
-  private final SparkConf conf = new SparkConf();
+  private final SparkConf conf = SparkEnv.get().conf();
 
   /**
    * The buffer size to use when writing the sorted records to an on-disk file, and

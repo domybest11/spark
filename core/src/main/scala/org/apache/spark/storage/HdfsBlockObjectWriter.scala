@@ -165,9 +165,9 @@ private[spark] class HdfsBlockObjectWriter (
       val pos = fsDataOutputStream.getPos
       val fileSegment = new FileSegment(null, committedPosition, pos - committedPosition,
         Some(path))
-      committedPosition = pos
       // In certain compression codecs, more bytes are written after streams are closed
       writeMetrics.incBytesWritten(pos - committedPosition)
+      committedPosition = pos
       numRecordsWritten = 0
       fileSegment
     } else {
