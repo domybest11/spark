@@ -282,7 +282,7 @@ public class ExternalBlockHandler extends RpcHandler
       MergedBlockMeta mergedMeta =
         mergeManager.getMergedBlockMeta(metaRequest.appId, metaRequest.shuffleId,
           metaRequest.shuffleMergeId, metaRequest.reduceId, client);
-      logger.debug(
+      logger.info(
         "Merged block chunks appId {} shuffleId {} reduceId {} num-chunks : {} ",
           metaRequest.appId, metaRequest.shuffleId, metaRequest.reduceId,
           mergedMeta.getNumChunks());
@@ -770,7 +770,7 @@ public class ExternalBlockHandler extends RpcHandler
   public void channelActive(TransportClient client) {
     metrics.activeConnections.inc();
     super.channelActive(client);
-    logger.info("active connections is {} when host {} connected.",
+    logger.debug("active connections is {} when host {} connected.",
             metrics.activeConnections.getCount(),
             getRemoteAddress(client.getChannel()));
   }
@@ -779,7 +779,7 @@ public class ExternalBlockHandler extends RpcHandler
   public void channelInactive(TransportClient client) {
     metrics.activeConnections.dec();
     super.channelInactive(client);
-    logger.info("active connections is {} when host {} leaving.",
+    logger.debug("active connections is {} when host {} leaving.",
             metrics.activeConnections.getCount(),
             getRemoteAddress(client.getChannel()));
   }
