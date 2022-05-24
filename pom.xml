@@ -208,7 +208,7 @@
     <!-- org.fusesource.leveldbjni will be used except on arm64 platform. -->
     <leveldbjni.group>org.fusesource.leveldbjni</leveldbjni.group>
 
-    <javax.servlet-api.name>javax.servlet-api</javax.servlet-api.name>
+    <javax.servlet-api.name>servlet-api</javax.servlet-api.name>
 
     <test.java.home>${java.home}</test.java.home>
 
@@ -1102,6 +1102,10 @@
       <version>${hadoop.version}</version>
       <scope>${hadoop.deps.scope}</scope>
         <exclusions>
+          <exclusion>
+            <artifactId>${javax.servlet-api.name}</artifactId>
+            <groupId>javax.servlet</groupId>
+          </exclusion>
           <exclusion>
             <artifactId>netty</artifactId>
             <groupId>org.jboss.netty</groupId>
