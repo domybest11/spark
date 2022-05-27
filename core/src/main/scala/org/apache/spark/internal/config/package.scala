@@ -1626,7 +1626,7 @@ package object config {
       .doc("the base path of the spill data")
       .version("1.4.0")
       .stringConf
-      .createWithDefault("/spill/data")
+      .createWithDefault("hdfs://jssz-bigdata-proxy-ns2/tmp/spark/spillData")
 
   private[spark] val SHUFFLE_SORT_USE_RADIXSORT =
     ConfigBuilder("spark.shuffle.sort.useRadixSort")
