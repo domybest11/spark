@@ -575,6 +575,10 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
           try {
             // This can throw IOException which will marks this shuffle partition as not merged.
             partition.finalizePartition();
+            boolean isConsistency = partition.dataFilePos == partition.lastChunkOffset;
+            if (!isConsistency) {
+              throw new ConsistencyException("dataSize and lastChunkOffset are inconsistent");
+            }
             if (partition.mapTracker.getCardinality() > 0) {
               bitmaps.add(partition.mapTracker);
               reduceIds.add(partition.reduceId);
@@ -589,6 +593,12 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
             logger.warn("{} attempt {} shuffle {} shuffleMerge {}: exception while " +
                             "finalizing shuffle partition {} from host {}", msg.appId, msg.appAttemptId, msg.shuffleId,
                     msg.shuffleMergeId, partition.reduceId, getRemoteAddress(client.getChannel()));
+          } catch (ConsistencyException ce) {
+            logger.warn("{} attempt {} shuffle {} shuffleMerge {}: finalization results " +
+                            "added for partition {} lastChunkOffset {} data size {}.",
+                    msg.appId, msg.appAttemptId, msg.shuffleId,
+                    msg.shuffleMergeId, partition.reduceId, partition.getLastChunkOffset(),
+                    partition.dataFile.length());
           } finally {
             partition.closeAllFilesAndDeleteIfNeeded(false);
           }
