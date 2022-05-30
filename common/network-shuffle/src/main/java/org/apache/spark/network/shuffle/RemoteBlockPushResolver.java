@@ -542,23 +542,23 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
                   msg.shuffleId, msg.shuffleMergeId,
                   ErrorHandler.BlockPushErrorHandler.STALE_SHUFFLE_FINALIZE_SUFFIX));
                 } else if (msg.shuffleMergeId > mergePartitionsInfo.shuffleMergeId) {
-          // If no blocks pushed for the finalizeShuffleMerge shuffleMergeId then return
-          // empty MergeStatuses but cleanup the older shuffleMergeId files.
-          mergedShuffleCleaner.execute(() ->
+                   // If no blocks pushed for the finalizeShuffleMerge shuffleMergeId then return
+                   // empty MergeStatuses but cleanup the older shuffleMergeId files.
+                  mergedShuffleCleaner.execute(() ->
                   closeAndDeletePartitionFiles(mergePartitionsInfo.shuffleMergePartitions));
-        } else {
+               } else {
                   // This block covers:
                   //  1. finalization of determinate stage
                   //  2. finalization of indeterminate stage if the shuffleMergeId related to it is the one
                   //  for which the message is received.
                   shuffleMergePartitionsRef.set(mergePartitionsInfo.shuffleMergePartitions);
-        }
+                }
               }
-      // Even when the mergePartitionsInfo is null, we mark the shuffle as finalized but the results
-      // sent to the driver will be empty. This cam happen when the service didn't receive any
-      // blocks for the shuffle yet and the driver didn't wait for enough time to finalize the
-      // shuffle.
-      return new AppShuffleMergePartitionsInfo(msg.shuffleMergeId, true);
+             // Even when the mergePartitionsInfo is null, we mark the shuffle as finalized but the results
+             // sent to the driver will be empty. This cam happen when the service didn't receive any
+             // blocks for the shuffle yet and the driver didn't wait for enough time to finalize the
+             // shuffle.
+            return new AppShuffleMergePartitionsInfo(msg.shuffleMergeId, true);
     });
     Map<Integer, AppShufflePartitionInfo> shuffleMergePartitions = shuffleMergePartitionsRef.get();
     MergeStatuses mergeStatuses;
