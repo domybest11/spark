@@ -879,11 +879,25 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {
         Some(s"$value != $name")
 
       case op @ SpecialBinaryComparison(Cast(child@StringType(), _: IntegralType, _),
-          ExtractableLiteral(value)) if child.isInstanceOf[AttributeReference] =>
+          ExtractableLiteral(value)) if {
+            if (!child.isInstanceOf[AttributeReference])
+              false
+            else {
+              val attr = child.asInstanceOf[AttributeReference]
+              attr.name.equals("log_date") && value.length == 8
+            }
+          }  =>
         Some(s"${child.asInstanceOf[AttributeReference].name} ${op.symbol} ${quoteStringLiteral(value)}")
 
       case op @ SpecialBinaryComparison(ExtractableLiteral(value),
-          Cast(child@StringType(), _: IntegralType, _)) if child.isInstanceOf[AttributeReference] =>
+          Cast(child@StringType(), _: IntegralType, _)) if {
+            if (!child.isInstanceOf[AttributeReference])
+              false
+            else {
+              val attr = child.asInstanceOf[AttributeReference]
+              attr.name.equals("log_date") && value.length == 8
+            }
+          } =>
         val name = child.asInstanceOf[AttributeReference].name
         Some(s"${child.asInstanceOf[AttributeReference].name} ${op.symbol} ${quoteStringLiteral(value)}")
 
