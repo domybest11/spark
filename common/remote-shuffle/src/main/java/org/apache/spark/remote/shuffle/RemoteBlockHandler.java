@@ -27,6 +27,7 @@ import org.apache.spark.network.TransportContext;
 import org.apache.spark.network.client.*;
 import org.apache.spark.network.server.NoOpRpcHandler;
 import org.apache.spark.network.shuffle.ExternalBlockHandler;
+import org.apache.spark.network.shuffle.ExternalShuffleBlockResolver;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.PushBlockStream;
@@ -67,6 +68,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
     private final int MAX_ATTEMPTS = 3;
     private DiskManager diskManager;
     private final long heartbeatInterval;
+    private final long cleanInterval;
     private final WorkerMetrics workerMetrics;
 
     //meta
@@ -80,6 +82,11 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                             .setNameFormat("remote-shuffle-worker-heartbeat")
                             .build());
 
+    private ScheduledExecutorService cleanScheduler =  Executors.newSingleThreadScheduledExecutor(
+            new ThreadFactoryBuilder()
+                    .setDaemon(true)
+                    .setNameFormat("rss-meta-cleaner")
+                    .build());
 
     public RemoteBlockHandler(int localPort, String masterHost, int masterPort, TransportConf conf, File registeredExecutorFile) throws IOException {
         super(conf, registeredExecutorFile);
@@ -89,8 +96,32 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         this.masterPort = masterPort;
         this.transportConf = conf;
         this.heartbeatInterval = JavaUtils.timeStringAsSec(conf.get("spark.shuffle.remote.worker.interval", "60s"));
+        this.cleanInterval = JavaUtils.timeStringAs(conf.get("spark.shuffle.service.clean.interval", "1h"), TimeUnit.SECONDS);
         this.workerMetrics = new WorkerMetrics();
         init();
+    }
+
+    public void checkAndCleanShuffleMeta() {
+        long startTime = System.currentTimeMillis();
+        Map<String, String[]> appIdToLocalDirs = new HashMap<>();
+        int cleanedApps = 0;
+        ConcurrentMap<ExternalShuffleBlockResolver.AppExecId, ExecutorShuffleInfo> executors =
+                getBlockManager().getExecutors();
+        for (Map.Entry<ExternalShuffleBlockResolver.AppExecId, ExecutorShuffleInfo> entry : executors.entrySet()) {
+            String appId = entry.getKey().appId;
+            String[] localDirs = entry.getValue().localDirs;
+            appIdToLocalDirs.putIfAbsent(appId, localDirs);
+        }
+        for (String appId : appIdToLocalDirs.keySet()) {
+            boolean localDirsExists = getBlockManager().checkLocalDirsExists(appIdToLocalDirs.get(appId));
+            if (!localDirsExists) {
+                logger.info("Cleaning up rss meta for application {}", appId);
+                mergeManager.applicationRemoved(appId, true);
+                cleanedApps++;
+            }
+        }
+        logger.info("Cleaning up rss meta of {}/{} app(s) cost {} ms", cleanedApps, appIdToLocalDirs.size(),
+                System.currentTimeMillis() - startTime);
     }
 
     private void init() throws IOException {
@@ -110,8 +141,8 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 NetworkTracker.collectNetworkInfo(workerMetrics, monitorInterval);
                 IOStatusTracker.collectIOInfo(diskManager.workDirs, monitorInterval);
             }, 0, monitorInterval, TimeUnit.SECONDS);
-            heartbeatThread.scheduleAtFixedRate(
-                new Heartbeat(), 10, heartbeatInterval, TimeUnit.SECONDS);
+            heartbeatThread.scheduleAtFixedRate(new Heartbeat(), 10, heartbeatInterval, TimeUnit.SECONDS);
+            cleanScheduler.scheduleAtFixedRate(this::checkAndCleanShuffleMeta, cleanInterval, cleanInterval, TimeUnit.SECONDS);
             registerRemoteShuffleWorker();
         } catch (InterruptedException e) {
             throw new IOException(e);
@@ -192,6 +223,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             applicationRemoved(cleanApplication.getAppId(), true);
             String appKey = cleanApplication.getAppId() + "_" + cleanApplication.getAttempt();
             appStageMap.remove(appKey);
+            mergeManager.applicationRemoved(appKey, true);
             diskManager.cleanApplication(cleanApplication.getAppId(), cleanApplication.getAttempt());
         } else if (msgObj instanceof RegisterExecutor) {
             final Timer.Context responseDelayContext =
