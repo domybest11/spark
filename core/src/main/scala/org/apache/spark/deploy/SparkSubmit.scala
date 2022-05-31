@@ -965,7 +965,7 @@ private[spark] class SparkSubmit extends Logging {
     if (line.startsWith("--")) {
       false
     } else {
-      val end = !line.startsWith("set")
+      val end = !line.substring(0, 3).equalsIgnoreCase("set")
       if (!end) {
         parseLineConfInt(line)
       }
