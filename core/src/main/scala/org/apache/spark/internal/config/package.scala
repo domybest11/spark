@@ -2392,4 +2392,10 @@ package object config {
         "rules are specified by their rule names and separated by comma. ")
       .stringConf
       .createOptional
+
+  val PARSE_SET_BEFORE =
+    ConfigBuilder("spark.app.parse.set.before")
+      .doc("parse set config in sql file before launch driver.")
+      .booleanConf
+      .createWithDefault(false)
 }
