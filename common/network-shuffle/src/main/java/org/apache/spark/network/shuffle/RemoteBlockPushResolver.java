@@ -316,10 +316,13 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
       // use the file length to determine the size of the merged shuffle block.
       ShuffleIndexInformation shuffleIndexInformation = indexCache.get(indexFilePath);
       ShuffleIndexRecord shuffleIndexRecord = shuffleIndexInformation.getIndex(chunkId);
-      logger.info("geted merged block for {} shuffleId {} shuffleMergeId {} reduceId {} chunkId {} from host {}",
-              appId, shuffleId, shuffleMergeId, reduceId, chunkId, getRemoteAddress(client.getChannel()));
-      return new FileSegmentManagedBuffer(
-        conf, dataFile, shuffleIndexRecord.getOffset(), shuffleIndexRecord.getLength());
+      long dataOffset = shuffleIndexRecord.getOffset();
+      long dataLength = shuffleIndexRecord.getLength();
+      logger.info("geted merged block for {} shuffleId {} shuffleMergeId {} reduceId {} chunkId {} " +
+                      "offset {} length {} total size {} from host {}",
+              appId, shuffleId, shuffleMergeId, reduceId, chunkId, dataOffset, dataLength, dataFile.length(),
+              getRemoteAddress(client.getChannel()));
+      return new FileSegmentManagedBuffer(conf, dataFile, dataOffset, dataLength);
     } catch (ExecutionException e) {
       throw new RuntimeException(String.format(
         "Failed to open merged shuffle index file %s", indexFilePath), e);
@@ -584,9 +587,9 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
               reduceIds.add(partition.reduceId);
               sizes.add(partition.getLastChunkOffset());
               logger.info("{} attempt {} shuffle {} shuffleMerge {}: finalization results " +
-                              "added for partition {} data size {} index size {} meta size {}",
+                              "added for partition {} lastChunkOffset {} data size {} index size {} meta size {}",
                       msg.appId, msg.appAttemptId, msg.shuffleId,
-                      msg.shuffleMergeId, partition.reduceId, partition.getLastChunkOffset(),
+                      msg.shuffleMergeId, partition.reduceId, partition.getLastChunkOffset(), partition.dataFile.length(),
                       partition.indexFile.getPos(), partition.metaFile.getPos());
             }
           } catch (IOException ioe) {
@@ -594,8 +597,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
                             "finalizing shuffle partition {} from host {}", msg.appId, msg.appAttemptId, msg.shuffleId,
                     msg.shuffleMergeId, partition.reduceId, getRemoteAddress(client.getChannel()));
           } catch (ConsistencyException ce) {
-            logger.warn("{} attempt {} shuffle {} shuffleMerge {}: finalization results " +
-                            "added for partition {} lastChunkOffset {} data size {}.",
+            logger.warn("inconsistent: {} attempt {} shuffle {} shuffleMerge {}: finalization results "
+                            + "added for partition {} lastChunkOffset {} data size {}.",
                     msg.appId, msg.appAttemptId, msg.shuffleId,
                     msg.shuffleMergeId, partition.reduceId, partition.getLastChunkOffset(),
                     partition.dataFile.length());
@@ -608,8 +611,9 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
         bitmaps.toArray(new RoaringBitmap[bitmaps.size()]), Ints.toArray(reduceIds),
         Longs.toArray(sizes));
     }
-    logger.info("{} attempt {} shuffle {} shuffleMerge {}: finalization of shuffle merge completed from host {}.",
-            msg.appId, msg.appAttemptId, msg.shuffleId, msg.shuffleMergeId, getRemoteAddress(client.getChannel()));
+    logger.info("{} attempt {} shuffle {} shuffleMerge {}: finalization of shuffle merge completed {} from host {}.",
+            msg.appId, msg.appAttemptId, msg.shuffleId, msg.shuffleMergeId, mergeStatuses.toString(),
+            getRemoteAddress(client.getChannel()));
     return mergeStatuses;
   }
 

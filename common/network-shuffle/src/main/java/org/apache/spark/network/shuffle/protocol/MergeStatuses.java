@@ -86,10 +86,25 @@ public class MergeStatuses extends BlockTransferMessage {
 
   @Override
   public String toString() {
+    StringBuilder bitmapsSB = new StringBuilder();
+    StringBuilder reduceIdsSB = new StringBuilder();
+    StringBuilder sizeSB = new StringBuilder();
+    for (RoaringBitmap bitmap : bitmaps) {
+      bitmapsSB.append(bitmap.toString()+ ",");
+    }
+    for (int reduceId : reduceIds) {
+      bitmapsSB.append(reduceId+ ",");
+    }
+    for (long size : sizes) {
+      bitmapsSB.append(size+ ",");
+    }
     return new ToStringBuilder(this, ToStringStyle.SHORT_PREFIX_STYLE)
       .append("shuffleId", shuffleId)
       .append("shuffleMergeId", shuffleMergeId)
       .append("reduceId size", reduceIds.length)
+      .append("bitmaps", bitmapsSB.toString())
+      .append("reduceIds", reduceIdsSB.toString())
+      .append("size", sizeSB.toString())
       .toString();
   }
 
