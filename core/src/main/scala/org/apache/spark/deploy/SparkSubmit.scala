@@ -884,7 +884,8 @@ private[spark] class SparkSubmit extends Logging {
     logInfo("Execute HBO rule cost time: " + (end - start) + "ms")
 
     if (isSqlShell(args.mainClass)) {
-      sqlSetConf(childArgs, sparkConf, isYarnCluster)
+      if (sparkConf.get(PARSE_SET_BEFORE))
+        sqlSetConf(childArgs, sparkConf, isYarnCluster)
       if (isYarnCluster) {
         sparkConf.set[Int](DRIVER_CORES, math.max(sparkConf.get(DRIVER_CORES), 4))
         sparkConf.set[Long](DRIVER_MEMORY,
