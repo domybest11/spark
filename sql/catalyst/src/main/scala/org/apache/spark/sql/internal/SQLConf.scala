@@ -3313,6 +3313,11 @@ object SQLConf {
     .booleanConf
     .createWithDefault(false)
 
+  val TABLE_META_CONVERT = buildConf("spark.sql.tableMeta.convert")
+    .booleanConf
+    .createWithDefault(false)
+
+
 
   /**
    * Holds information about keys that have been deprecated.
@@ -4017,6 +4022,9 @@ class SQLConf extends Serializable with Logging {
     ZorderBuildStrategy.withName(getConf(SQLConf.LAYOUT_OPTIMIZE_ZORDER_STRATEGY))
 
   def datasourceForceConvert: Boolean = getConf(SQLConf.DATASOURCE_FORCE_CONVERT)
+
+  def tableMetaConvert: Boolean = getConf(SQLConf.TABLE_META_CONVERT)
+
 
   /** ********************** SQLConf functionality methods ************ */
 
