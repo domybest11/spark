@@ -151,7 +151,13 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
     masterMetricsSystem.start()
     if (cleanEnable && cleanInterval > 0) {
       val cleanScheduler = ThreadUtils.newDaemonSingleThreadScheduledExecutor("ess-meta-cleaner")
-      cleanScheduler.scheduleWithFixedDelay(() => blockHandler.cleanShuffleMeta(),
+      cleanScheduler.scheduleWithFixedDelay(() =>
+        blockHandler match {
+          case handler: RemoteBlockHandler =>
+            handler.checkAndCleanShuffleMeta()
+          case _ =>
+            blockHandler.cleanShuffleMeta()
+        },
         cleanInterval, cleanInterval, TimeUnit.SECONDS)
       logInfo("Shuffle meta cleaner already started")
     }

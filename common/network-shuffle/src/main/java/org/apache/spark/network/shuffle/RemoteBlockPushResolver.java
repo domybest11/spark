@@ -39,18 +39,16 @@ import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.Weigher;
-import com.google.common.collect.Maps;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
-import org.apache.commons.lang3.builder.ToStringBuilder;
-import org.apache.commons.lang3.builder.ToStringStyle;
+
 import org.apache.spark.network.client.TransportClient;
 import org.roaringbitmap.RoaringBitmap;
 import org.slf4j.Logger;
@@ -611,8 +609,8 @@ public class RemoteBlockPushResolver implements MergedShuffleFileManager {
         bitmaps.toArray(new RoaringBitmap[bitmaps.size()]), Ints.toArray(reduceIds),
         Longs.toArray(sizes));
     }
-    logger.info("{} attempt {} shuffle {} shuffleMerge {}: finalization of shuffle merge completed {} from host {}.",
-            msg.appId, msg.appAttemptId, msg.shuffleId, msg.shuffleMergeId, mergeStatuses.toString(),
+    logger.info("{} attempt {} shuffle {} shuffleMerge {}: finalization of shuffle merge completed from host {}.",
+            msg.appId, msg.appAttemptId, msg.shuffleId, msg.shuffleMergeId,
             getRemoteAddress(client.getChannel()));
     return mergeStatuses;
   }
