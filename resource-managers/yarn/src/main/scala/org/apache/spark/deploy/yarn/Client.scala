@@ -1297,17 +1297,26 @@ private[spark] class Client(
         }
       val state = report.getYarnApplicationState
 
-        if (isClusterMode && isQueryLogEnable &&
-          !report.getHost.equals(amHost) && report.getRpcPort != amPort) {
+        if (isQueryLogEnable &&
+          (!amInitialized || !report.getHost.equals(amHost) || report.getRpcPort != amPort)) {
           amInitialized = false
           if (report.getRpcPort > 0) {
             amHost = report.getHost
             amPort = report.getRpcPort
-            queryLogEndPointRef =
-              clientRpcEnv.setupEndpointRef(RpcAddress(amHost, amPort),"QueryLog")
-            queryLogEndPointRef.send(RequestQueryLogRegister(Utils.localHostName()))
-            logInfo(s"App Query log connect to host: $amHost port:$amPort")
-            amInitialized = true
+            var retryTimes: Int = 5
+            while (!amInitialized && retryTimes > 0) {
+              try {
+                queryLogEndPointRef =
+                  clientRpcEnv.setupEndpointRef(RpcAddress(amHost, amPort),"QueryLog")
+                queryLogEndPointRef.send(RequestQueryLogRegister(Utils.localHostName()))
+                logInfo(s"App Query log connect to host: $amHost port:$amPort")
+                amInitialized = true
+              } catch {
+                case _: Throwable =>
+                  retryTimes = retryTimes - 1
+                  Thread.sleep(500)
+              }
+            }
           }
         }
 
