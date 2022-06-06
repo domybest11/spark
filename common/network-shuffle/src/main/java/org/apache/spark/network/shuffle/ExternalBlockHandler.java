@@ -323,7 +323,7 @@ public class ExternalBlockHandler extends RpcHandler
     ConcurrentHashMap<Long, StreamState> streams = streamManager.getStreams();
     for (Map.Entry<Long, StreamState> entry: streams.entrySet()) {
       StreamState state = entry.getValue();
-      if (state.getAppId().equals(appId)) {
+      if (state !=null && state.getAppId().equals(appId)) {
         logger.warn("Found finished app: {} , " +
             "but streamState is still in memory, clean it now", appId);
         streams.remove(entry.getKey());
