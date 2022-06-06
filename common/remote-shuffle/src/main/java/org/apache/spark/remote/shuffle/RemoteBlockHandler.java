@@ -93,30 +93,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
         init();
     }
 
-    public void checkAndCleanShuffleMeta() {
-        long startTime = System.currentTimeMillis();
-        Map<String, String[]> appIdToLocalDirs = new HashMap<>();
-        int cleanedApps = 0;
-        ConcurrentMap<ExternalShuffleBlockResolver.AppExecId, ExecutorShuffleInfo> executors =
-                getBlockManager().getExecutors();
-        for (Map.Entry<ExternalShuffleBlockResolver.AppExecId, ExecutorShuffleInfo> entry : executors.entrySet()) {
-            String appId = entry.getKey().appId;
-            String[] localDirs = entry.getValue().localDirs;
-            appIdToLocalDirs.putIfAbsent(appId, localDirs);
-        }
-        for (String appId : appIdToLocalDirs.keySet()) {
-            boolean localDirsExists = getBlockManager().checkLocalDirsExists(appIdToLocalDirs.get(appId));
-            if (!localDirsExists) {
-                logger.info("Cleaning up rss meta for application {}", appId);
-                blockManager.applicationRemoved(appId, false);
-                mergeManager.applicationRemoved(appId, true);
-                cleanedApps++;
-            }
-        }
-        logger.info("Cleaning up rss meta of {}/{} app(s) cost {} ms", cleanedApps, appIdToLocalDirs.size(),
-                System.currentTimeMillis() - startTime);
-    }
-
     private void init() throws IOException {
         TransportContext context = new TransportContext(
                 transportConf, new NoOpRpcHandler(), true, true);
