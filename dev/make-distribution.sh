@@ -166,19 +166,19 @@ echo "Spark $VERSION$GITREVSTRING built for Hadoop $SPARK_HADOOP_VERSION" > "$DI
 echo "Build flags: $@" >> "$DISTDIR/RELEASE"
 
 # Download rss3 jar
-wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/spark-3.1/rss-shuffle-manager-1.0.0-shaded.jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/  http://bazel-cabin.bilibili.co/spark-sdk/spark-3.1/rss-shuffle-manager-1.0.0-shaded.jar
 
 # Download hudi jar
-wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/hudi/hudi-spark-bundle_2.12-0.9.0.jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://bazel-cabin.bilibili.co/spark-sdk/hudi/hudi-spark-bundle_2.12-0.9.0.jar
 
 # Download iceberg jar
 wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://nexus.bilibili.co/content/repositories/releases/org/apache/iceberg/iceberg-spark3-runtime/0.11.1-bili-0.5.8/iceberg-spark3-runtime-0.11.1-bili-0.5.8.jar
 
 # Download lineage jar
-wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/spark-3.1/SparkLineageCollector-1.0-SNAPSHOT.jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/  http://bazel-cabin.bilibili.co/spark-sdk/spark-3.1/SparkLineageCollector-1.0-SNAPSHOT.jar
 
 # Download hive contrib jar to support MultiDelimitSerDe
-wget -P "$SPARK_HOME"/assembly/target/scala*/jars/ http://cypress.bilibili.co/sdk/spark-3.1/hive-contrib-2.3.4.jar
+wget -P "$SPARK_HOME"/assembly/target/scala*/jars/  http://bazel-cabin.bilibili.co/spark-sdk/spark-3.1/hive-contrib-2.3.4.jar
 
 # Copy jar
 cp "$SPARK_HOME"/assembly/target/scala*/jars/* "$DISTDIR/jars/"
