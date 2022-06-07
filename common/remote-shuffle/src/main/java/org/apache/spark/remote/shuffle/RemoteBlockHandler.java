@@ -27,6 +27,7 @@ import org.apache.spark.network.TransportContext;
 import org.apache.spark.network.client.*;
 import org.apache.spark.network.server.NoOpRpcHandler;
 import org.apache.spark.network.shuffle.ExternalBlockHandler;
+import org.apache.spark.network.shuffle.ExternalShuffleBlockResolver;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
 import org.apache.spark.network.shuffle.protocol.PushBlockStream;
@@ -80,7 +81,6 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                             .setNameFormat("remote-shuffle-worker-heartbeat")
                             .build());
 
-
     public RemoteBlockHandler(int localPort, String masterHost, int masterPort, TransportConf conf, File registeredExecutorFile) throws IOException {
         super(conf, registeredExecutorFile);
         this.localPort = localPort;
@@ -110,8 +110,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
                 NetworkTracker.collectNetworkInfo(workerMetrics, monitorInterval);
                 IOStatusTracker.collectIOInfo(diskManager.workDirs, monitorInterval);
             }, 0, monitorInterval, TimeUnit.SECONDS);
-            heartbeatThread.scheduleAtFixedRate(
-                new Heartbeat(), 10, heartbeatInterval, TimeUnit.SECONDS);
+            heartbeatThread.scheduleAtFixedRate(new Heartbeat(), 10, heartbeatInterval, TimeUnit.SECONDS);
             registerRemoteShuffleWorker();
         } catch (InterruptedException e) {
             throw new IOException(e);
@@ -192,6 +191,7 @@ public class RemoteBlockHandler extends ExternalBlockHandler {
             applicationRemoved(cleanApplication.getAppId(), true);
             String appKey = cleanApplication.getAppId() + "_" + cleanApplication.getAttempt();
             appStageMap.remove(appKey);
+            mergeManager.applicationRemoved(appKey, true);
             diskManager.cleanApplication(cleanApplication.getAppId(), cleanApplication.getAttempt());
         } else if (msgObj instanceof RegisterExecutor) {
             final Timer.Context responseDelayContext =

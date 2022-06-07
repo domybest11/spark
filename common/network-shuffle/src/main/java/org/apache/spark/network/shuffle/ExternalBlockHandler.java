@@ -25,6 +25,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -38,7 +39,7 @@ import com.codahale.metrics.Counter;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
-import org.apache.spark.network.shuffle.protocol.remote.*;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,7 +85,6 @@ public class ExternalBlockHandler extends RpcHandler
   private final OneForOneStreamManager streamManager;
   protected static ShuffleMetrics metrics = new ShuffleMetrics();
   protected final MergedShuffleFileManager mergeManager;
-
 
   public ExternalBlockHandler(TransportConf conf, File registeredExecutorFile)
     throws IOException {
@@ -282,7 +282,7 @@ public class ExternalBlockHandler extends RpcHandler
       MergedBlockMeta mergedMeta =
         mergeManager.getMergedBlockMeta(metaRequest.appId, metaRequest.shuffleId,
           metaRequest.shuffleMergeId, metaRequest.reduceId, client);
-      logger.debug(
+      logger.info(
         "Merged block chunks appId {} shuffleId {} reduceId {} num-chunks : {} ",
           metaRequest.appId, metaRequest.shuffleId, metaRequest.reduceId,
           mergedMeta.getNumChunks());
@@ -323,7 +323,7 @@ public class ExternalBlockHandler extends RpcHandler
     ConcurrentHashMap<Long, StreamState> streams = streamManager.getStreams();
     for (Map.Entry<Long, StreamState> entry: streams.entrySet()) {
       StreamState state = entry.getValue();
-      if (state.getAppId().equals(appId)) {
+      if (state !=null && state.getAppId().equals(appId)) {
         logger.warn("Found finished app: {} , " +
             "but streamState is still in memory, clean it now", appId);
         streams.remove(entry.getKey());
@@ -336,6 +336,30 @@ public class ExternalBlockHandler extends RpcHandler
     }
     blockManager.applicationRemoved(appId, cleanupLocalDirs);
     mergeManager.applicationRemoved(appId, cleanupLocalDirs);
+  }
+
+  public void checkAndCleanShuffleMeta() {
+    long startTime = System.currentTimeMillis();
+    Map<String, String[]> appIdToLocalDirs = new HashMap<>();
+    int cleanedApps = 0;
+    ConcurrentMap<AppExecId, ExecutorShuffleInfo> executors =
+            getBlockManager().getExecutors();
+    for (Map.Entry<ExternalShuffleBlockResolver.AppExecId, ExecutorShuffleInfo> entry : executors.entrySet()) {
+      String appId = entry.getKey().appId;
+      String[] localDirs = entry.getValue().localDirs;
+      appIdToLocalDirs.putIfAbsent(appId, localDirs);
+    }
+    for (String appId : appIdToLocalDirs.keySet()) {
+      boolean localDirsExists = getBlockManager().checkLocalDirsExists(appIdToLocalDirs.get(appId));
+      if (!localDirsExists) {
+        logger.info("Cleaning up rss meta for application {}", appId);
+        blockManager.applicationRemoved(appId, false);
+        mergeManager.applicationRemoved(appId, true);
+        cleanedApps++;
+      }
+    }
+    logger.info("Cleaning up rss meta of {}/{} app(s) cost {} ms", cleanedApps, appIdToLocalDirs.size(),
+            System.currentTimeMillis() - startTime);
   }
 
   public void cleanShuffleMeta() {
@@ -770,7 +794,7 @@ public class ExternalBlockHandler extends RpcHandler
   public void channelActive(TransportClient client) {
     metrics.activeConnections.inc();
     super.channelActive(client);
-    logger.info("active connections is {} when host {} connected.",
+    logger.debug("active connections is {} when host {} connected.",
             metrics.activeConnections.getCount(),
             getRemoteAddress(client.getChannel()));
   }
@@ -779,7 +803,7 @@ public class ExternalBlockHandler extends RpcHandler
   public void channelInactive(TransportClient client) {
     metrics.activeConnections.dec();
     super.channelInactive(client);
-    logger.info("active connections is {} when host {} leaving.",
+    logger.debug("active connections is {} when host {} leaving.",
             metrics.activeConnections.getCount(),
             getRemoteAddress(client.getChannel()));
   }
