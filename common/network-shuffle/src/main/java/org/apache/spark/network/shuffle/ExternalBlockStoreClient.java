@@ -233,7 +233,7 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
       int reduceId,
       MergedBlocksMetaListener listener) {
     checkInit();
-    logger.debug("Get merged blocks meta from {}:{} for shuffleId {} shuffleMergeId {}"
+    logger.info("Get merged blocks meta from {}:{} for shuffleId {} shuffleMergeId {}"
       + " reduceId {}", host, port, shuffleId, shuffleMergeId, reduceId);
     try {
       TransportClient client = clientFactory.createClient(host, port);
@@ -241,7 +241,7 @@ public class ExternalBlockStoreClient extends BlockStoreClient {
         new MergedBlockMetaResponseCallback() {
           @Override
           public void onSuccess(int numChunks, ManagedBuffer buffer) {
-            logger.trace("Successfully got merged block meta for shuffleId {} shuffleMergeId {}"
+            logger.info("Successfully got merged block meta for shuffleId {} shuffleMergeId {}"
               + " reduceId {}", shuffleId, shuffleMergeId, reduceId);
             listener.onSuccess(shuffleId, shuffleMergeId, reduceId,
               new MergedBlockMeta(numChunks, buffer));

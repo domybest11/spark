@@ -72,7 +72,9 @@ abstract class ConvertTableBaseCommand extends DataWritingCommand {
     } else {
       updatePartitions.map(p => p.parameters.getOrElse("totalSize", "0").toLong).sum
     }
-    session.sessionState.catalog.alterTable(catalogTable)
+    if (session.sessionState.conf.tableMetaConvert) {
+      session.sessionState.catalog.alterTable(catalogTable)
+    }
     command.run(session, child)
 
     val curSize = if (catalogTable.partitionColumnNames.isEmpty) {

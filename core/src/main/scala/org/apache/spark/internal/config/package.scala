@@ -1626,7 +1626,7 @@ package object config {
       .doc("the base path of the spill data")
       .version("1.4.0")
       .stringConf
-      .createWithDefault("/spill/data")
+      .createWithDefault("hdfs://jssz-bigdata-proxy-ns2/tmp/spark/spillData")
 
   private[spark] val SHUFFLE_SORT_USE_RADIXSORT =
     ConfigBuilder("spark.shuffle.sort.useRadixSort")
@@ -2392,4 +2392,10 @@ package object config {
         "rules are specified by their rule names and separated by comma. ")
       .stringConf
       .createOptional
+
+  val PARSE_SET_BEFORE =
+    ConfigBuilder("spark.app.parse.set.before")
+      .doc("parse set config in sql file before launch driver.")
+      .booleanConf
+      .createWithDefault(false)
 }

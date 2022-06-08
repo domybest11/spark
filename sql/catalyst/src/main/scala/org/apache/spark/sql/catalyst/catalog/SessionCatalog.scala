@@ -353,9 +353,28 @@ class SessionCatalog(
         new Path(table.storage.locationUri.getOrElse(defaultTablePath(table.identifier)))
       val fs = tableLocation.getFileSystem(hadoopConf)
 
-      if (fs.exists(tableLocation) && fs.listStatus(tableLocation).nonEmpty) {
-        throw new AnalysisException(s"Can not create the managed table('${table.identifier}')" +
-          s". The associated location('${tableLocation.toString}') already exists.")
+      if (fs.exists(tableLocation)) {
+        val fileStatusList = fs.listStatus(tableLocation)
+        if (fileStatusList.nonEmpty) {
+          if (fileStatusList.exists {
+            fileStatus => !fileStatus.getPath.getName.startsWith(".merge-temp")
+          }) {
+            throw new AnalysisException(s"Can not create the managed table('${table.identifier}')" +
+              s". The associated location('${tableLocation.toString}') already exists.")
+          } else {
+            fileStatusList.foreach {
+              fileStatus =>
+                val path = fileStatus.getPath
+                if (path.getName.startsWith(".merge-temp")) {
+                  fs.delete(fileStatus.getPath, true)
+                  if (fs.listStatus(tableLocation).nonEmpty) {
+                    throw new AnalysisException(s"Can not create the managed table('${table.identifier}')" +
+                      s". The associated location('${tableLocation.toString}') already exists.")
+                  }
+                }
+            }
+          }
+        }
       }
     }
   }

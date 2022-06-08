@@ -263,7 +263,7 @@ final class ShuffleBlockFetcherIterator(
   }
 
   private[this] def sendRequest(req: FetchRequest): Unit = {
-    logDebug("Sending request for %d blocks (%s) from %s".format(
+    logInfo("Sending request for %d blocks (%s) from %s".format(
       req.blocks.size, Utils.bytesToString(req.size), req.address.hostPort))
     bytesInFlight += req.size
     reqsInFlight += 1
@@ -427,7 +427,7 @@ final class ShuffleBlockFetcherIterator(
         val (_, timeCost) = Utils.timeTakenMs[Unit] {
           collectFetchRequests(address, blockInfos, collectedRemoteRequests)
         }
-        logDebug(s"Collected remote fetch requests for $address in $timeCost ms")
+        logInfo(s"Collected remote fetch requests for $address in $timeCost ms")
       }
     }
     val (remoteBlockBytes, numRemoteBlocks) =
@@ -459,7 +459,7 @@ final class ShuffleBlockFetcherIterator(
       blocks: Seq[FetchBlockInfo],
       address: BlockManagerId,
       forMergedMetas: Boolean): FetchRequest = {
-    logDebug(s"Creating fetch request of ${blocks.map(_.size).sum} at $address "
+    logInfo(s"Creating fetch request of ${blocks.map(_.size).sum} at $address "
       + s"with ${blocks.size} blocks")
     FetchRequest(address, blocks, forMergedMetas)
   }
@@ -562,7 +562,7 @@ final class ShuffleBlockFetcherIterator(
    */
   private[this] def fetchLocalBlocks(
       localBlocks: mutable.LinkedHashSet[(BlockId, Int)]): Unit = {
-    logDebug(s"Start fetching local blocks: ${localBlocks.mkString(", ")}")
+    logInfo(s"Start fetching local blocks: ${localBlocks.mkString(", ")}")
     val iter = localBlocks.iterator
     while (iter.hasNext) {
       val (blockId, mapIndex) = iter.next()
@@ -1145,7 +1145,7 @@ final class ShuffleBlockFetcherIterator(
       val request = fetchRequests.dequeue()
       val remoteAddress = request.address
       if (isRemoteAddressMaxedOut(remoteAddress, request)) {
-        logDebug(s"Deferring fetch request for $remoteAddress with ${request.blocks.size} blocks")
+        logInfo(s"Deferring fetch request for $remoteAddress with ${request.blocks.size} blocks")
         val defReqQueue = deferredFetchRequests.getOrElse(remoteAddress, new Queue[FetchRequest]())
         defReqQueue.enqueue(request)
         deferredFetchRequests(remoteAddress) = defReqQueue
